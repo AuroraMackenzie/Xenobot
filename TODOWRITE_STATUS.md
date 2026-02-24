@@ -10,7 +10,7 @@
 - 替换(合法安全): 原任务与合法安全边界冲突，改为合法安全替代项, 需要最终变为质量和效果极致完美状态。
 
 ## 1. 项目设置和基础设施
-- 1.1 检查并补全所有空文件和空目录: 完成
+- 1.1 检查并补全所有空文件和空目录: 完成(并清理前端`public/images`中未被引用的历史遗留素材`chatlab.svg`、`intro_en.png`、`intro_zh.png`，降低参考项目痕迹与仓库体积)
 - 1.2 配置Cargo.toml文件，确保所有依赖项正确: 完成
 - 1.3 设置构建脚本和开发环境: 进行中(已强化沙箱受限环境运行路径：`api start`支持TCP失败自动回退UDS；当TCP+UDS都被拒绝时自动切换到文件网关IPC模式，无需端口监听；`api smoke`可用于纯进程内健康校验；新增`api gateway-stress`并发压测入口用于文件网关稳定性验证；已执行安全构建垃圾清理：删除`target/debug/{deps,incremental,build}`历史缓存后从约30GB降到<1GB，再在重编译回归后稳定在约4.6GB；已统一Rust crates许可证为`AGPL-3.0-only`并补齐仓库地址`https://github.com/AuroraMackenzie/Xenobot.git`)
 - 1.4 配置Metal MPS GPU加速支持: 进行中
