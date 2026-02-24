@@ -1916,16 +1916,24 @@ async fn run_merged_import_batch(
     file_paths: &[String],
     merged_session_name: Option<&str>,
 ) -> Result<serde_json::Value, ApiError> {
+    let pool = crate::database::get_pool()
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?;
+    let repo = crate::database::Repository::new(pool.clone());
+
     let mut parsed_sources: Vec<ParsedBatchSource> = Vec::new();
     let mut platform_votes: HashMap<String, usize> = HashMap::new();
     let mut group_chat_count = 0usize;
     let mut private_chat_count = 0usize;
     let mut source_results: Vec<serde_json::Value> = Vec::with_capacity(file_paths.len());
+    let mut failed_files = 0usize;
+    let mut skipped_files = 0usize;
 
     for file_path in file_paths {
         let source_fingerprint = match build_source_checkpoint_fingerprint(file_path) {
             Ok(fp) => fp,
             Err(_) => {
+                failed_files = failed_files.saturating_add(1);
                 source_results.push(serde_json::json!({
                     "filePath": file_path,
                     "success": false,
@@ -1935,9 +1943,43 @@ async fn run_merged_import_batch(
             }
         };
 
+        let unchanged = repo
+            .source_checkpoint_is_unchanged(
+                "api-import-batch-merged",
+                file_path.as_str(),
+                source_fingerprint.fingerprint.as_str(),
+            )
+            .await
+            .map_err(|e| ApiError::Database(e.to_string()))?;
+        if unchanged {
+            skipped_files = skipped_files.saturating_add(1);
+            source_results.push(serde_json::json!({
+                "filePath": file_path,
+                "success": true,
+                "checkpointSkipped": true
+            }));
+            continue;
+        }
+
         match parse_import_file(file_path, None).await {
             Ok((_detected, payload, _stats)) => {
                 if payload.messages.is_empty() {
+                    failed_files = failed_files.saturating_add(1);
+                    let platform_hint = infer_platform_from_path(file_path);
+                    let _ = upsert_source_checkpoint(
+                        &repo,
+                        "api-import-batch-merged",
+                        file_path.as_str(),
+                        &source_fingerprint,
+                        Some(platform_hint.as_str()),
+                        None,
+                        None,
+                        0,
+                        0,
+                        "failed",
+                        Some("error.no_messages".to_string()),
+                    )
+                    .await;
                     source_results.push(serde_json::json!({
                         "filePath": file_path,
                         "success": false,
@@ -1960,6 +2002,22 @@ async fn run_merged_import_batch(
                 });
             }
             Err(_) => {
+                failed_files = failed_files.saturating_add(1);
+                let platform_hint = infer_platform_from_path(file_path);
+                let _ = upsert_source_checkpoint(
+                    &repo,
+                    "api-import-batch-merged",
+                    file_path.as_str(),
+                    &source_fingerprint,
+                    Some(platform_hint.as_str()),
+                    None,
+                    None,
+                    0,
+                    0,
+                    "failed",
+                    Some("error.unrecognized_format".to_string()),
+                )
+                .await;
                 source_results.push(serde_json::json!({
                     "filePath": file_path,
                     "success": false,
@@ -1971,11 +2029,14 @@ async fn run_merged_import_batch(
 
     if parsed_sources.is_empty() {
         return Ok(serde_json::json!({
-            "success": false,
+            "success": skipped_files > 0,
             "mode": "merged",
+            "checkpointOnly": skipped_files > 0,
             "totalFiles": file_paths.len(),
+            "mergedSessionId": serde_json::Value::Null,
             "importedFiles": 0,
-            "failedFiles": file_paths.len(),
+            "failedFiles": failed_files,
+            "skippedFiles": skipped_files,
             "items": source_results
         }));
     }
@@ -1994,10 +2055,6 @@ async fn run_merged_import_batch(
         .map(|v| v.to_string())
         .unwrap_or_else(|| format!("Merged Import ({})", merged_platform));
 
-    let pool = crate::database::get_pool()
-        .await
-        .map_err(|e| ApiError::Database(e.to_string()))?;
-    let repo = crate::database::Repository::new(pool.clone());
     let meta_id = repo
         .create_chat(&ChatMeta {
             id: 0,
@@ -2016,10 +2073,6 @@ async fn run_merged_import_batch(
 
     let mut merged_seen: HashSet<String> = HashSet::new();
     let mut imported_files = 0usize;
-    let mut failed_files = source_results
-        .iter()
-        .filter(|v| v.get("success").and_then(|x| x.as_bool()) == Some(false))
-        .count();
     let mut total_inserted = 0usize;
     let mut total_duplicates = 0usize;
 
@@ -2106,13 +2159,14 @@ async fn run_merged_import_batch(
     }
 
     Ok(serde_json::json!({
-        "success": imported_files > 0,
+        "success": imported_files > 0 || skipped_files > 0,
         "mode": "merged",
         "mergedSessionId": meta_id.to_string(),
         "mergedSessionName": merged_name,
         "totalFiles": file_paths.len(),
         "importedFiles": imported_files,
         "failedFiles": failed_files,
+        "skippedFiles": skipped_files,
         "totalInsertedMessages": total_inserted,
         "totalDuplicateMessages": total_duplicates,
         "items": source_results

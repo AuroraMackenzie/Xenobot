@@ -36,7 +36,7 @@
 - 4.2 实现17个解析器: 完成(简化)(已增加注册完整性回归测试，确保17个平台解析器持续可见；API侧新增`/supported-formats`清单断言测试，防止17平台格式条目回退)
   平台覆盖清单(当前注册): WeChat(微信), WhatsApp, LINE, QQ, Telegram, Discord, Instagram, iMessage, Messenger, KakaoTalk, Slack, Teams, Signal, Skype, Google Chat, Zoom, Viber
 - 4.3 实现流式导入和增量导入: 进行中(已提供CLI解析预览+可选写库闭环[api+analysis]，含基础增量去重与`import_progress`状态持久化: pending/importing/completed/failed；新增`import`与`monitor --write-db`共享的源文件检查点闭环：未变化文件自动增量跳过、变化文件继续去重写库并回写检查点统计；`monitor --write-db`已将检查点短路前移到“解析前”，减少无效解析开销；API侧`/sessions/:id/analyze-incremental-import`与`/sessions/:id/incremental-import`已接入同一检查点语义，并在失败路径回写checkpoint状态；CLI侧`import --write-db`失败路径已补写`failed`检查点；API导入解析已优先接入`xenobot-analysis` 17平台解析器并在失败时回退内置解析器；已新增WhatsApp原生TXT集成回归验证analysis解析路径（发送者身份提取不退化到text-importer）；新增API集成回归：17平台矩阵(WeChat/WhatsApp/LINE/QQ/Telegram/Discord/Instagram/iMessage/Messenger/KakaoTalk/Slack/Teams/Signal/Skype/GoogleChat/Zoom/Viber)下验证“导入->增量重复->checkpoint快跳->源变化增量写入->写库计数一致”) 
-- 4.4 实现批量导入和合并导入: 进行中(目录批量解析已支持，`--merge` 合并写库基础版已接入；API侧已新增`/import-batch`端点支持separate/merged两种批量模式：separate模式已接入`api-import-batch-separate`检查点快跳、失败重试(`retryFailed/maxRetries`)与失败回写，并补全成功checkpoint的platform/chat_name元数据；merged模式含跨文件去重与`api-import-batch-merged`检查点回写；多聊天文件链路已加集成回归：`/scan-multi-chat-file`扫描 + `/import-with-options(chatIndex)`按索引导入并验证写库结果)
+- 4.4 实现批量导入和合并导入: 进行中(目录批量解析已支持，`--merge` 合并写库基础版已接入；API侧已新增`/import-batch`端点支持separate/merged两种批量模式：separate模式已接入`api-import-batch-separate`检查点快跳、失败重试(`retryFailed/maxRetries`)与失败回写，并补全成功checkpoint的platform/chat_name元数据；merged模式已补齐“导入前checkpoint快跳 + 解析失败/空消息失败回写 + 跨文件去重 + `api-import-batch-merged`检查点回写”，并在“全部未变化输入”场景下返回checkpoint-only结果且不新建session；多聊天文件链路已加集成回归：`/scan-multi-chat-file`扫描 + `/import-with-options(chatIndex)`按索引导入并验证写库结果)
 
 ## 5. API服务器（HTTP）
 - 5.1 设计Axum HTTP API端点: 完成(新增`/import-batch`端点用于批量/合并导入)
@@ -97,7 +97,7 @@
 - 14.3 延迟优化: 完成(简化)(已在CLI+API接入基础重试退避 + webhook事件队列刷新 + 并发调度；CLI含独立后台worker；已接入dead-letter持久化与CLI list/retry/clear；API与web进程已接入可配置自动dead-letter重放后台调度)
 
 ## 15. 测试和性能优化
-- 15.1 单元测试和集成测试: 进行中(新增core webhook匹配/dead-letter/统计单测 + API dead-letter重放选择逻辑单测 + CLI单测: SQL安全校验/过滤匹配；新增API回归测试：`import_source_checkpoint` upsert/unchanged判定、`message_exists`增量写库一致性；新增API集成测试`chat_incremental_test.rs`覆盖增量导入checkpoint快跳、源文件变化增量写入、失败写回、17平台矩阵回归、17平台detect-format识别、supported-formats条目完整性、多聊天scan+chatIndex导入闭环、`/import-batch`合并模式去重与检查点回写、`/import-batch`分离模式重试与checkpoint快跳、WhatsApp原生TXT解析器身份提取验证（避免退化到text-importer）；新增CLI回归测试：源文件内容指纹变化检测与monitor检查点短路匹配；本轮对API/CLI相关改动已执行`cargo test -p xenobot-api -p xenobot-cli --features \"api,analysis\" --offline`通过；跨模块集成测试仍需扩展)
+- 15.1 单元测试和集成测试: 进行中(新增core webhook匹配/dead-letter/统计单测 + API dead-letter重放选择逻辑单测 + CLI单测: SQL安全校验/过滤匹配；新增API回归测试：`import_source_checkpoint` upsert/unchanged判定、`message_exists`增量写库一致性；新增API集成测试`chat_incremental_test.rs`覆盖增量导入checkpoint快跳、源文件变化增量写入、失败写回、17平台矩阵回归、17平台detect-format识别、supported-formats条目完整性、多聊天scan+chatIndex导入闭环、`/import-batch`合并模式去重与检查点回写、`/import-batch`分离模式重试与checkpoint快跳、`/import-batch`合并模式checkpoint快跳且不新建session、WhatsApp原生TXT解析器身份提取验证（避免退化到text-importer）；新增CLI回归测试：源文件内容指纹变化检测与monitor检查点短路匹配；本轮对API/CLI相关改动已执行`cargo test -p xenobot-api -p xenobot-cli --features \"api,analysis\" --offline`通过；跨模块集成测试仍需扩展)
 - 15.2 性能优化（索引/查询/缓存）: 进行中(新增迁移`003_import_performance_indexes.sql`：dedup查询与platform+chat_name定位索引；新增迁移`004_import_source_checkpoint.sql`：增量检查点表及状态/时间索引，支撑授权导出增量闭环；源文件指纹已从元数据模式升级为`v2`流式内容哈希，降低误跳过概率)
 - 15.3 内存和CPU优化: 进行中
 

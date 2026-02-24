@@ -712,6 +712,109 @@ async fn test_import_batch_merged_mode_writes_single_session_and_checkpoints(
 }
 
 #[tokio::test]
+async fn test_import_batch_merged_mode_checkpoint_skip_without_new_session(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let _test_guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+    let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .canonicalize()?;
+    let _cwd_guard = WorkingDirGuard::change_to(&workspace_root)?;
+
+    let test_root = unique_test_root();
+    fs::create_dir_all(&test_root)?;
+    let db_path = test_root.join("xenobot_api_import_batch_checkpoint_skip.db");
+
+    let mut db_config = DatabaseConfig::default();
+    db_config.sqlite_path = db_path;
+    xenobot_api::database::init_database_with_config(&db_config).await?;
+    let pool = xenobot_api::database::get_pool().await?;
+    let repo = Repository::new(pool.clone());
+    let app = chat::router();
+
+    let file_path = test_root.join("telegram_authorized_batch_single.json");
+    write_json_file(
+        &file_path,
+        &json!({
+            "name": "Checkpoint Skip Batch",
+            "type": "group",
+            "messages": [
+                {
+                    "sender_id": "tg_ckpt_1",
+                    "sender_name": "TG CKPT 1",
+                    "timestamp": 2200000001u64,
+                    "msg_type": 0,
+                    "content": "checkpoint base message"
+                }
+            ]
+        }),
+    )?;
+    let file = file_path.to_string_lossy().to_string();
+
+    let (status, first_resp) = post_json(
+        &app,
+        "/import-batch",
+        json!({
+            "filePaths": [file],
+            "merge": true,
+            "mergedSessionName": "Merged Checkpoint Skip"
+        }),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(first_resp["success"], true);
+    assert_eq!(first_resp["importedFiles"], 1);
+    assert_eq!(first_resp["skippedFiles"], 0);
+    let first_session_id = first_resp["mergedSessionId"]
+        .as_str()
+        .and_then(|v| v.parse::<i64>().ok())
+        .expect("first merged import should create a session");
+
+    let first_meta_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM meta")
+        .fetch_one(&*pool)
+        .await?;
+    assert_eq!(first_meta_count, 1);
+
+    let (status, second_resp) = post_json(
+        &app,
+        "/import-batch",
+        json!({
+            "filePaths": [file.clone()],
+            "merge": true,
+            "mergedSessionName": "Merged Checkpoint Skip"
+        }),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(second_resp["success"], true);
+    assert_eq!(second_resp["checkpointOnly"], true);
+    assert_eq!(second_resp["importedFiles"], 0);
+    assert_eq!(second_resp["failedFiles"], 0);
+    assert_eq!(second_resp["skippedFiles"], 1);
+    assert_eq!(second_resp["mergedSessionId"], serde_json::Value::Null);
+    let items = second_resp["items"]
+        .as_array()
+        .expect("items should be present on second merged import");
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0]["checkpointSkipped"], true);
+
+    let second_meta_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM meta")
+        .fetch_one(&*pool)
+        .await?;
+    assert_eq!(second_meta_count, 1);
+
+    let checkpoint = repo
+        .get_import_source_checkpoint("api-import-batch-merged", &file)
+        .await?
+        .expect("merged checkpoint should exist");
+    assert_eq!(checkpoint.status, "completed");
+    assert_eq!(checkpoint.meta_id, Some(first_session_id));
+
+    let _ = fs::remove_dir_all(&test_root);
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_import_batch_separate_mode_retry_and_checkpoint_skip(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let _test_guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
