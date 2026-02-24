@@ -12,9 +12,11 @@ use futures::stream;
 use serde::{Deserialize, Serialize};
 use sqlx::{QueryBuilder, Row, SqlitePool};
 use std::{
+    cmp::Ordering,
     collections::{BTreeSet, HashSet},
     convert::Infallible,
     fs,
+    hash::{Hash, Hasher},
     path::PathBuf,
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
@@ -27,6 +29,7 @@ use crate::ApiError;
 pub fn router() -> Router {
     Router::new()
         .route("/search-messages", post(search_messages))
+        .route("/semantic-search-messages", post(semantic_search_messages))
         .route("/message-context", post(get_message_context))
         .route("/recent-messages", post(get_recent_messages))
         .route("/all-recent-messages", post(get_all_recent_messages))
@@ -126,6 +129,24 @@ struct SearchMessagesRequest {
     limit: Option<u32>,
     offset: Option<u32>,
     sender_id: Option<i32>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SemanticSearchMessagesRequest {
+    session_id: String,
+    query: String,
+    filter: Option<TimeFilter>,
+    limit: Option<u32>,
+    threshold: Option<f32>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct SemanticSearchMessageResult {
+    #[serde(flatten)]
+    message: SearchMessageResult,
+    similarity: f32,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -375,6 +396,150 @@ fn row_to_search_result(row: MessageRow, is_hit: bool) -> SearchMessageResult {
         reply_to_content: None,
         reply_to_sender_name: None,
         is_hit,
+    }
+}
+
+const SEMANTIC_EMBEDDING_DIM: usize = 512;
+const SEMANTIC_CHUNK_MAX_CHARS: usize = 240;
+const SEMANTIC_CHUNK_OVERLAP_CHARS: usize = 48;
+
+fn semantic_chunk_text(text: &str, max_chars: usize, overlap_chars: usize) -> Vec<&str> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return Vec::new();
+    }
+    let max_chars = max_chars.max(1);
+    let overlap_chars = overlap_chars.min(max_chars.saturating_sub(1));
+    let char_positions: Vec<usize> = trimmed.char_indices().map(|(i, _)| i).collect();
+    let total_chars = char_positions.len();
+    if total_chars <= max_chars {
+        return vec![trimmed];
+    }
+
+    let mut chunks = Vec::new();
+    let step = max_chars.saturating_sub(overlap_chars).max(1);
+    let mut start = 0usize;
+    while start < total_chars {
+        let end = (start + max_chars).min(total_chars);
+        let start_byte = char_positions[start];
+        let end_byte = if end == total_chars {
+            trimmed.len()
+        } else {
+            char_positions[end]
+        };
+        let chunk = trimmed[start_byte..end_byte].trim();
+        if !chunk.is_empty() {
+            chunks.push(chunk);
+        }
+        if end == total_chars {
+            break;
+        }
+        start = start.saturating_add(step);
+    }
+    chunks
+}
+
+fn semantic_tokenize(text: &str) -> Vec<String> {
+    let mut tokens = Vec::new();
+    let mut current = String::new();
+
+    for ch in text.chars() {
+        if ch.is_ascii_alphanumeric() || (!ch.is_ascii() && ch.is_alphanumeric()) {
+            for lowered in ch.to_lowercase() {
+                current.push(lowered);
+            }
+            continue;
+        }
+        if !current.is_empty() {
+            tokens.push(current.clone());
+            current.clear();
+        }
+        if is_cjk_char(ch) {
+            tokens.push(ch.to_string());
+        }
+    }
+    if !current.is_empty() {
+        tokens.push(current);
+    }
+    tokens
+}
+
+fn is_cjk_char(ch: char) -> bool {
+    let code = ch as u32;
+    (0x4E00..=0x9FFF).contains(&code)
+        || (0x3400..=0x4DBF).contains(&code)
+        || (0xF900..=0xFAFF).contains(&code)
+}
+
+fn hash_embedding_from_tokens(tokens: &[String], dim: usize) -> Vec<f32> {
+    let mut output = vec![0.0f32; dim.max(1)];
+    for token in tokens {
+        if token.is_empty() {
+            continue;
+        }
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        token.hash(&mut hasher);
+        let hash = hasher.finish();
+        let idx = (hash as usize) % output.len();
+        let sign = if (hash >> 63) == 0 { 1.0 } else { -1.0 };
+        let weight = 1.0 + (token.chars().count() as f32).ln_1p() * 0.15;
+        output[idx] += sign * weight;
+    }
+    normalize_embedding(&mut output);
+    output
+}
+
+fn normalize_embedding(values: &mut [f32]) {
+    let norm = values.iter().map(|v| v * v).sum::<f32>().sqrt();
+    if norm > 0.0 {
+        for value in values {
+            *value /= norm;
+        }
+    }
+}
+
+fn embed_text_for_semantic(text: &str) -> Vec<f32> {
+    let chunks = semantic_chunk_text(
+        text,
+        SEMANTIC_CHUNK_MAX_CHARS,
+        SEMANTIC_CHUNK_OVERLAP_CHARS,
+    );
+    if chunks.is_empty() {
+        return vec![0.0; SEMANTIC_EMBEDDING_DIM];
+    }
+
+    let mut acc = vec![0.0f32; SEMANTIC_EMBEDDING_DIM];
+    for chunk in chunks {
+        let tokens = semantic_tokenize(chunk);
+        if tokens.is_empty() {
+            continue;
+        }
+        let embedding = hash_embedding_from_tokens(&tokens, SEMANTIC_EMBEDDING_DIM);
+        for (idx, value) in embedding.iter().enumerate() {
+            acc[idx] += *value;
+        }
+    }
+    normalize_embedding(&mut acc);
+    acc
+}
+
+fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
+    let len = a.len().min(b.len());
+    if len == 0 {
+        return 0.0;
+    }
+    let mut dot = 0.0f32;
+    let mut norm_a = 0.0f32;
+    let mut norm_b = 0.0f32;
+    for idx in 0..len {
+        dot += a[idx] * b[idx];
+        norm_a += a[idx] * a[idx];
+        norm_b += b[idx] * b[idx];
+    }
+    if norm_a <= 0.0 || norm_b <= 0.0 {
+        0.0
+    } else {
+        dot / (norm_a.sqrt() * norm_b.sqrt())
     }
 }
 
@@ -673,6 +838,68 @@ async fn search_messages(
     Ok(Json(serde_json::json!({
         "messages": messages,
         "count": messages.len(),
+    })))
+}
+
+#[instrument]
+async fn semantic_search_messages(
+    Json(req): Json<SemanticSearchMessagesRequest>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let meta_id = parse_meta_id(&req.session_id)?;
+    let query = req.query.trim();
+    if query.is_empty() {
+        return Err(ApiError::InvalidRequest("query cannot be empty".to_string()));
+    }
+    let pool = get_pool().await?;
+    let threshold = req.threshold.unwrap_or(0.7).clamp(-1.0, 1.0);
+    let limit = req.limit.unwrap_or(20).max(1).min(200);
+    let lexical_prefilter_limit = (limit as usize).saturating_mul(300).clamp(500, 20_000) as u32;
+
+    let candidates = query_messages(
+        pool.as_ref(),
+        meta_id,
+        req.filter.as_ref(),
+        None,
+        &[],
+        Some(lexical_prefilter_limit),
+        Some(0),
+        None,
+        None,
+        true,
+    )
+    .await?;
+
+    let query_embedding = embed_text_for_semantic(query);
+    let mut scored = Vec::new();
+    for mut candidate in candidates {
+        let content = candidate.content.trim();
+        if content.is_empty() {
+            continue;
+        }
+        let score = cosine_similarity(&query_embedding, &embed_text_for_semantic(&content));
+        if score >= threshold {
+            candidate.is_hit = true;
+            scored.push(SemanticSearchMessageResult {
+                message: candidate,
+                similarity: score,
+            });
+        }
+    }
+
+    scored.sort_by(|a, b| {
+        b.similarity
+            .partial_cmp(&a.similarity)
+            .unwrap_or(Ordering::Equal)
+            .then_with(|| b.message.timestamp.cmp(&a.message.timestamp))
+            .then_with(|| b.message.id.cmp(&a.message.id))
+    });
+    scored.truncate(limit as usize);
+
+    Ok(Json(serde_json::json!({
+        "messages": scored,
+        "count": scored.len(),
+        "threshold": threshold,
+        "prefilterCount": lexical_prefilter_limit,
     })))
 }
 
@@ -1324,4 +1551,29 @@ async fn show_ai_log_file() -> Result<Json<serde_json::Value>, ApiError> {
         "success": true,
         "path": log_file.to_string_lossy().to_string(),
     })))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn semantic_chunk_text_builds_overlapping_windows() {
+        let input = "0123456789abcdefghijKLMNOPQRSTuvwxyz";
+        let chunks = semantic_chunk_text(input, 12, 4);
+        assert!(chunks.len() >= 3);
+        assert_eq!(chunks[0], "0123456789ab");
+        assert!(chunks[1].starts_with("89ab"));
+    }
+
+    #[test]
+    fn semantic_similarity_prefers_related_sentence() {
+        let query = embed_text_for_semantic("database migration checkpoint incremental import");
+        let related = embed_text_for_semantic("incremental import checkpoint for database migration");
+        let unrelated = embed_text_for_semantic("holiday beach music and mountain hiking");
+        let related_score = cosine_similarity(&query, &related);
+        let unrelated_score = cosine_similarity(&query, &unrelated);
+        assert!(related_score > unrelated_score);
+        assert!(related_score > 0.15);
+    }
 }
