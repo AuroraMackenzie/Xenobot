@@ -19,7 +19,7 @@ Xenobot is a Rust-native chat data engineering project for authorized exports, i
 - Axum HTTP API, clap CLI, and ratatui TUI foundations.
 - Apple Silicon compatible path with Metal/MPS integration scaffolding.
 
-### Quick Start (Apple Silicon)
+### Quick Start
 ```bash
 cd Xenobot
 cargo test -p xenobot-api -p xenobot-cli --features "api,analysis" --offline
