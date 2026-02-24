@@ -27,3 +27,8 @@
 *.tmp
 *.swp
 *.swo
+
+# Local private planning files (must stay local only)
+TODOWRITE_STATUS.md
+Xenobot项目蓝图.txt
+前身项目总结.txt
