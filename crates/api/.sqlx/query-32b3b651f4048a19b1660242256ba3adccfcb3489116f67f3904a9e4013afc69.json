@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            UPDATE conversations SET session_id = ?2, messages = ?3, updated_at = ?4 WHERE id = ?1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "32b3b651f4048a19b1660242256ba3adccfcb3489116f67f3904a9e4013afc69"
+}

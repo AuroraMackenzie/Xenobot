@@ -1,0 +1,27 @@
+[package]
+name = "xenobot-gpu"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <your.email@example.com>"]
+description = "Metal MPS GPU acceleration for Xenobot (macOS arm64)"
+license = "AGPL-3.0-only"
+repository = "https://github.com/AuroraMackenzie/Xenobot.git"
+
+[dependencies]
+tokio = { workspace = true, features = ["full"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+metal = { workspace = true, features = ["mps"] }
+candle-core = { workspace = true, features = ["metal"] }
+candle-transformers = { workspace = true, features = ["metal"] }
+
+# Internal workspace dependencies
+xenobot-core = { path = "../core", version = "0.1.0" }
+
+[features]
+default = []
+metal = []
+metal_mps = []

@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT id, session_id, message_id, order_index\n            FROM session_messages WHERE session_id = ?1 ORDER BY order_index\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "session_id",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "message_id",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "order_index",
+        "ordinal": 3,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "9fc1bb7a083fed9bdf3ccd7fd6c839ebe7de5e3ef4e3aeeda89d967e8b487b27"
+}

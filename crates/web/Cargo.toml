@@ -1,0 +1,29 @@
+[package]
+name = "xenobot-web"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <your.email@example.com>"]
+description = "Web frontend integration for Xenobot (preserving Vue 3/TypeScript frontend)"
+license = "AGPL-3.0-only"
+repository = "https://github.com/AuroraMackenzie/Xenobot.git"
+
+[dependencies]
+tokio = { workspace = true, features = ["full"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+axum = { workspace = true, features = ["ws"] }
+futures = { workspace = true }
+tower-http = { version = "0.5", features = ["fs", "cors", "trace"] }
+
+# Internal workspace dependencies
+xenobot-core = { path = "../core", version = "0.1.0" }
+xenobot-api = { path = "../api", version = "0.1.0" }
+
+[build-dependencies]
+chrono = "0.4"
+[features]
+default = []

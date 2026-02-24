@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT message_id, session_id, topic_id\n            FROM message_context WHERE session_id = ?1 ORDER BY message_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "message_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "session_id",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "topic_id",
+        "ordinal": 2,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "81614993b548b4f5acfa9d0bfe26df06e8d0961b42eeff7cb19ac20fdd4a96b4"
+}

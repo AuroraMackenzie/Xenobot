@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO analysis_cache (meta_id, analysis_type, result, params, created_at)\n            VALUES (?1, ?2, ?3, ?4, ?5)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "35c328858254d0f0f1bfa67274985a83fb0a0f7f58d311839a900e69a842b6b0"
+}

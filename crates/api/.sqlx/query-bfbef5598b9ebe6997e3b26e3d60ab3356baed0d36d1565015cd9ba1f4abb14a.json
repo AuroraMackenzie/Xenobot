@@ -1,0 +1,56 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT id, platform_id, account_name, group_nickname, aliases, avatar, roles\n            FROM member WHERE id = ?1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "platform_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "account_name",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "group_nickname",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "aliases",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "avatar",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "roles",
+        "ordinal": 6,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "bfbef5598b9ebe6997e3b26e3d60ab3356baed0d36d1565015cd9ba1f4abb14a"
+}

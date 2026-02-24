@@ -1,0 +1,50 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT id, member_id, name_type, name, start_ts, end_ts\n            FROM member_name_history WHERE member_id = ?1 ORDER BY start_ts DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "member_id",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name_type",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "name",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "start_ts",
+        "ordinal": 4,
+        "type_info": "Integer"
+      },
+      {
+        "name": "end_ts",
+        "ordinal": 5,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "df68e110d5d72bcd4052f1c83c8b820ea8f47b795951b14459e9d6459ede3030"
+}

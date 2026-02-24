@@ -1,0 +1,50 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT id, meta_id, analysis_type, result, params, created_at\n            FROM analysis_cache WHERE meta_id = ?1 ORDER BY created_at DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "meta_id",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "analysis_type",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "result",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "params",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 5,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "27c78f5f38c33b5ab9f92a4247faa5a1cd5e26a673946a2d351f0ccb1b8881f8"
+}

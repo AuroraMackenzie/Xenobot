@@ -1,0 +1,120 @@
+@import 'tailwindcss';
+@source "../../packages";
+@import '@nuxt/ui';
+@import './markdown.css';
+
+/* 自定义主题颜色 - 使用 @theme static 定义色板 */
+@theme static {
+  /* Keep semantic token names to avoid large class churn, but use Xenobot palette. */
+  --color-pink-50: #edf9fb;
+  --color-pink-100: #d6f1f7;
+  --color-pink-200: #b1e4ef;
+  --color-pink-300: #82d2e4;
+  --color-pink-400: #44b9d4;
+  --color-pink-500: #0ea5c9;
+  --color-pink-600: #0a88ac;
+  --color-pink-700: #0a6e8b;
+  --color-pink-800: #0d5b70;
+  --color-pink-900: #114d5f;
+  --color-pink-950: #072b37;
+
+  /* 分析页面使用的更深背景 - 统一使用 zinc-900 */
+  --color-page-dark: #18181b;
+}
+
+:root {
+  --xeno-bg-start: #f4f9fb;
+  --xeno-bg-end: #eef3f8;
+  --xeno-grid-color: rgba(14, 165, 201, 0.08);
+}
+
+html,
+body {
+  font-family:
+    'Avenir Next',
+    'Avenir',
+    'PingFang SC',
+    'SF Pro Text',
+    'Segoe UI',
+    sans-serif;
+}
+
+body {
+  background:
+    radial-gradient(circle at 14% 8%, rgba(14, 165, 201, 0.18), transparent 38%),
+    radial-gradient(circle at 88% 12%, rgba(245, 158, 11, 0.14), transparent 34%),
+    linear-gradient(180deg, var(--xeno-bg-start), var(--xeno-bg-end));
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(var(--xeno-grid-color) 1px, transparent 1px),
+    linear-gradient(90deg, var(--xeno-grid-color) 1px, transparent 1px);
+  background-size: 28px 28px;
+  opacity: 0.45;
+  z-index: -1;
+}
+
+.dark body {
+  background:
+    radial-gradient(circle at 14% 8%, rgba(14, 165, 201, 0.18), transparent 32%),
+    radial-gradient(circle at 88% 12%, rgba(245, 158, 11, 0.12), transparent 28%),
+    linear-gradient(180deg, #0b1220, #101827);
+}
+
+.dark body::before {
+  --xeno-grid-color: rgba(56, 189, 248, 0.1);
+  opacity: 0.34;
+}
+
+/* 全局滚动条样式 */
+::-webkit-scrollbar {
+  width: 3px;
+  height: 3px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 3px;
+}
+
+:hover::-webkit-scrollbar-thumb {
+  background-color: var(--color-gray-300);
+}
+
+.dark :hover::-webkit-scrollbar-thumb {
+  background-color: var(--color-gray-700);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-gray-400);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-gray-600);
+}
+
+/* 标题栏安全区域高度 - 页面顶部 padding 需要避开此区域
+ * macOS: 红绿灯在左侧由 Sidebar 处理，右侧内容区无遮挡，使用较小值
+ * Windows/Linux: 窗口控制按钮在右上角占据 32px 高度，需要完整避开 */
+:root {
+  --titlebar-area-height: 1rem; /* 16px - macOS */
+}
+
+.platform-windows,
+.platform-linux {
+  --titlebar-area-height: 2rem; /* 32px - 匹配 titleBarOverlay height */
+}
+
+/* 禁用窗口拖拽区域 - 用于弹窗等需要正常交互的元素 */
+.app-region-no-drag {
+  -webkit-app-region: no-drag;
+}

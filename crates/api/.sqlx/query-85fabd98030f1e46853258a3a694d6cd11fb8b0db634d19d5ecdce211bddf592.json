@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            UPDATE message SET sender_id = ?2, sender_account_name = ?3, sender_group_nickname = ?4,\n            ts = ?5, msg_type = ?6, content = ?7, reply_to_message_id = ?8, platform_message_id = ?9,\n            meta_id = ?10 WHERE id = ?1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 10
+    },
+    "nullable": []
+  },
+  "hash": "85fabd98030f1e46853258a3a694d6cd11fb8b0db634d19d5ecdce211bddf592"
+}

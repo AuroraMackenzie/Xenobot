@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            UPDATE member SET platform_id = ?2, account_name = ?3, group_nickname = ?4,\n            aliases = ?5, avatar = ?6, roles = ?7 WHERE id = ?1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 7
+    },
+    "nullable": []
+  },
+  "hash": "1d43959657392b7799ae48944dbd9c19f2dc6fe3287a4aeec1f76403b09fbf96"
+}

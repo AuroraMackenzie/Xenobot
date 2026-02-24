@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            UPDATE sessions SET title = ?1, updated_at = ?2 WHERE id = ?3\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "f04af1d34c3a06cb5a734bf259ab62b4d2dbf7b266596d4b7dcd5389cf6891f3"
+}

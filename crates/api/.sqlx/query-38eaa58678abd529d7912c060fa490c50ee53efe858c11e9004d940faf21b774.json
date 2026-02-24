@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            UPDATE session_messages SET order_index = ?1 WHERE id = ?2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "38eaa58678abd529d7912c060fa490c50ee53efe858c11e9004d940faf21b774"
+}

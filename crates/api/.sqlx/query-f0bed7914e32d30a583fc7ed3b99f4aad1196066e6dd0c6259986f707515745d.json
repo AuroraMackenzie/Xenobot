@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM embedding_cache WHERE message_id = ?1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "f0bed7914e32d30a583fc7ed3b99f4aad1196066e6dd0c6259986f707515745d"
+}

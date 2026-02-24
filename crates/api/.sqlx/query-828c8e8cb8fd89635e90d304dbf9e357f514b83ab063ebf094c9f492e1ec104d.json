@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM analysis_cache WHERE meta_id = ?1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "828c8e8cb8fd89635e90d304dbf9e357f514b83ab063ebf094c9f492e1ec104d"
+}

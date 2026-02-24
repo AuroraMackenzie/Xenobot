@@ -1,0 +1,59 @@
+[package]
+name = "xenobot-wechat"
+version = "0.1.0"
+edition = "2021"
+description = "Real-time WeChat data extraction and decryption for Xenobot"
+license = "AGPL-3.0-only"
+repository = "https://github.com/AuroraMackenzie/Xenobot.git"
+
+[dependencies]
+xenobot-core = { path = "../core" }
+tokio = { workspace = true, features = ["fs", "sync", "time", "macros", "rt-multi-thread"] }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+once_cell = { workspace = true }
+dirs = "5.0"
+
+# File monitoring
+notify = "6.1"
+walkdir = "2.5"
+regex = "1.10"
+libc = "0.2"
+
+# Process enumeration
+sysinfo = "0.30"
+
+# Cryptography for V4 decryption
+aes = "0.8"
+cbc = "0.1"
+pbkdf2 = "0.12"
+hmac = "0.12"
+sha2 = "0.10"
+hex = "0.4"
+
+# Parallel processing
+rayon = "1.8"
+
+# Concurrent data structures
+dashmap = "5.5"
+
+# Platform-specific dependencies
+[target.'cfg(target_os = "macos")'.dependencies]
+core-foundation = "0.9"
+security-framework = "2.9"
+mach = "0.3"
+objc = "0.2"
+plist = "1.6"
+
+# SQLite for reading decrypted databases
+rusqlite = { workspace = true }
+
+[features]
+default = []
+test-utils = []
+
+[dev-dependencies]
+tempfile = "3.10"

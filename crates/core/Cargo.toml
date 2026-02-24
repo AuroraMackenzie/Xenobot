@@ -1,0 +1,21 @@
+[package]
+name = "xenobot-core"
+version = "0.1.0"
+edition = "2021"
+description = "Core types, errors, and configuration for Xenobot"
+license = "AGPL-3.0-only"
+repository = "https://github.com/AuroraMackenzie/Xenobot.git"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+once_cell = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }
+dirs = "5.0"
+toml = "0.8"
+
+[features]
+default = []
+test-utils = []

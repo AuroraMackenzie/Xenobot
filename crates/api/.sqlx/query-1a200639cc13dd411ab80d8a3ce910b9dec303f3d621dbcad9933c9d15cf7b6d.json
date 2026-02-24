@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            UPDATE meta SET name = ?2, platform = ?3, chat_type = ?4, imported_at = ?5, group_id = ?6,\n            group_avatar = ?7, owner_id = ?8, schema_version = ?9, session_gap_threshold = ?10\n            WHERE id = ?1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 10
+    },
+    "nullable": []
+  },
+  "hash": "1a200639cc13dd411ab80d8a3ce910b9dec303f3d621dbcad9933c9d15cf7b6d"
+}

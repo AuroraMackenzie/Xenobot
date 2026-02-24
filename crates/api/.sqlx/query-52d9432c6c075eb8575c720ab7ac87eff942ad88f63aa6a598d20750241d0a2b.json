@@ -1,0 +1,74 @@
+{
+  "db_name": "SQLite",
+  "query": "\n                SELECT id, name, platform, chat_type, imported_at, group_id, group_avatar, owner_id, schema_version, session_gap_threshold\n                FROM meta ORDER BY imported_at DESC LIMIT ?1 OFFSET ?2\n                ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "platform",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "chat_type",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "imported_at",
+        "ordinal": 4,
+        "type_info": "Integer"
+      },
+      {
+        "name": "group_id",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "group_avatar",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "owner_id",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "schema_version",
+        "ordinal": 8,
+        "type_info": "Integer"
+      },
+      {
+        "name": "session_gap_threshold",
+        "ordinal": 9,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "52d9432c6c075eb8575c720ab7ac87eff942ad88f63aa6a598d20750241d0a2b"
+}

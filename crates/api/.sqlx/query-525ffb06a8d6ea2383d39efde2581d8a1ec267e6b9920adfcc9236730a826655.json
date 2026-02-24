@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO message_context (message_id, session_id, topic_id)\n            VALUES (?1, ?2, ?3)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "525ffb06a8d6ea2383d39efde2581d8a1ec267e6b9920adfcc9236730a826655"
+}

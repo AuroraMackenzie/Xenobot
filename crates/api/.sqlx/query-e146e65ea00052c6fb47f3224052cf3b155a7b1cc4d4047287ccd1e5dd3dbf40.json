@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            UPDATE import_progress SET processed_messages = ?2, status = ?3 WHERE id = ?1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "e146e65ea00052c6fb47f3224052cf3b155a7b1cc4d4047287ccd1e5dd3dbf40"
+}

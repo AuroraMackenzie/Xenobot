@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO meta (name, platform, chat_type, imported_at, group_id, group_avatar, owner_id, schema_version, session_gap_threshold)\n            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 9
+    },
+    "nullable": []
+  },
+  "hash": "eab3bf720e50690f4d7f3791e3421555d998ae69d90bee4f790df0e8aa0fc02c"
+}

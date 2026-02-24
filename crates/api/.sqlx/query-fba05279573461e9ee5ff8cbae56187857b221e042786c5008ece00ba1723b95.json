@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT sender_id, sender_account_name, COUNT(*) as msg_count\n            FROM message WHERE meta_id = ?1\n            GROUP BY sender_id ORDER BY msg_count DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "sender_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "sender_account_name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "msg_count",
+        "ordinal": 2,
+        "type_info": "Null"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "fba05279573461e9ee5ff8cbae56187857b221e042786c5008ece00ba1723b95"
+}

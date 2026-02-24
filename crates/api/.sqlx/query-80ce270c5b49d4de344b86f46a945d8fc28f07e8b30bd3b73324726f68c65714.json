@@ -1,0 +1,56 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT id, meta_id, start_ts, end_ts, message_count, is_manual, summary FROM chat_session WHERE id = ?1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "meta_id",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "start_ts",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "end_ts",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "message_count",
+        "ordinal": 4,
+        "type_info": "Integer"
+      },
+      {
+        "name": "is_manual",
+        "ordinal": 5,
+        "type_info": "Integer"
+      },
+      {
+        "name": "summary",
+        "ordinal": 6,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "80ce270c5b49d4de344b86f46a945d8fc28f07e8b30bd3b73324726f68c65714"
+}

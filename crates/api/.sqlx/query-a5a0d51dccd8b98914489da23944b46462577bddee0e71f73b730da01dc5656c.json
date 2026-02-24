@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            UPDATE import_progress SET status = 'failed', error_message = ?2 WHERE id = ?1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "a5a0d51dccd8b98914489da23944b46462577bddee0e71f73b730da01dc5656c"
+}

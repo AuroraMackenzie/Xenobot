@@ -1,0 +1,36 @@
+[package]
+name = "xenobot-mcp"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <your.email@example.com>"]
+description = "MCP (Model Context Protocol) integration for Xenobot"
+license = "AGPL-3.0-only"
+repository = "https://github.com/AuroraMackenzie/Xenobot.git"
+
+[dependencies]
+tokio = { workspace = true, features = ["full"] }
+tokio-stream = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+futures-util = { workspace = true }
+tokio-tungstenite = { workspace = true }
+axum = { workspace = true }
+tungstenite = { workspace = true }
+reqwest = { workspace = true }
+rusqlite = { workspace = true }
+
+chrono = { workspace = true }
+dirs = { workspace = true }
+# Internal workspace dependencies
+xenobot-core = { path = "../core", version = "0.1.0" }
+xenobot-wechat = { path = "../wechat", version = "0.1.0", optional = true }
+
+[features]
+default = []
+wechat = ["xenobot-wechat"]
+
+[build-dependencies]
+chrono = { workspace = true }

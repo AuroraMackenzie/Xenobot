@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            UPDATE chat_session SET meta_id = ?2, start_ts = ?3, end_ts = ?4, message_count = ?5, is_manual = ?6, summary = ?7\n            WHERE id = ?1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 7
+    },
+    "nullable": []
+  },
+  "hash": "2ef06c953c08fbfcfe51780c899a4dfe097a2b29175658d6ba8fd9a86a8325c1"
+}

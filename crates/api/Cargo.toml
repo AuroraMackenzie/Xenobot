@@ -1,0 +1,50 @@
+[package]
+name = "xenobot-api"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <your.email@example.com>"]
+description = "HTTP API server for Xenobot, replacing Electron IPC with Axum endpoints"
+license = "AGPL-3.0-only"
+repository = "https://github.com/AuroraMackenzie/Xenobot.git"
+
+[dependencies]
+tokio = { workspace = true, features = ["full"] }
+futures = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+axum = { workspace = true }
+reqwest = { workspace = true }
+once_cell = { workspace = true }
+tower = { workspace = true, features = ["util"] }
+hyper = { version = "1", features = ["http1", "server"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+tower-http = { version = "0.5", features = ["cors", "trace", "compression-br", "limit", "timeout"] }
+sqlx = { workspace = true }
+chrono = "0.4"
+dirs = "5.0"
+regex = "1.10"
+# Legacy rusqlite/r2d2 stack was replaced by SQLx pool access.
+# rusqlite = { workspace = true }
+# r2d2 = "0.8"
+# r2d2_sqlite = "0.32.0"
+rquickjs = { workspace = true }
+
+# Internal workspace dependencies
+xenobot-core = { path = "../core", version = "0.1.0" }
+xenobot-analysis = { path = "../analysis", version = "0.1.0" }
+xenobot-wechat = { path = "../wechat", version = "0.1.0", optional = true }
+
+[build-dependencies]
+chrono = "0.4"
+
+[features]
+default = []
+wechat = ["xenobot-wechat"]
+
+[dev-dependencies]
+reqwest = { workspace = true }
+tracing-subscriber = { workspace = true }
+tokio = { workspace = true, features = ["full"] }

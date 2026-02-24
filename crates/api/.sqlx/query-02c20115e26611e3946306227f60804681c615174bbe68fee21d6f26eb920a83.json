@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO member_name_history (member_id, name_type, name, start_ts, end_ts)\n            VALUES (?1, ?2, ?3, ?4, ?5)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "02c20115e26611e3946306227f60804681c615174bbe68fee21d6f26eb920a83"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO import_progress (file_path, total_messages, processed_messages, status, started_at, completed_at, error_message)\n            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 7
+    },
+    "nullable": []
+  },
+  "hash": "9878c42746618e909864f4b4dc5a8c3c169c9cc0c6c657ba8a3dccc1a40439c2"
+}

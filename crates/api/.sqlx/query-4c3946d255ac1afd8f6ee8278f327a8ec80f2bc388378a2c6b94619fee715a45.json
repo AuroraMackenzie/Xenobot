@@ -1,0 +1,50 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT id, message_id, content, embedding, model, created_at\n            FROM embedding_cache WHERE message_id = ?1 ORDER BY created_at DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "message_id",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "content",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "embedding",
+        "ordinal": 3,
+        "type_info": "Blob"
+      },
+      {
+        "name": "model",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 5,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "4c3946d255ac1afd8f6ee8278f327a8ec80f2bc388378a2c6b94619fee715a45"
+}

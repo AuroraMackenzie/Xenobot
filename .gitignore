@@ -1,0 +1,29 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Local database and runtime artifacts
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.pid
+*.log
+
+# macOS
+.DS_Store
+
+# Editors
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.swp
+*.swo

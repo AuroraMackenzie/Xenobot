@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            UPDATE member_name_history SET end_ts = ?1 WHERE id = ?2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "ec62bbf2428c19bf5c0843278a892545442daba466e1b11c8489feae7236e4c7"
+}

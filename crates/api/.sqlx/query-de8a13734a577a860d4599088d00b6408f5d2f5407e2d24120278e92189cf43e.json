@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO embedding_cache (message_id, content, embedding, model, created_at)\n            VALUES (?1, ?2, ?3, ?4, ?5)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "de8a13734a577a860d4599088d00b6408f5d2f5407e2d24120278e92189cf43e"
+}

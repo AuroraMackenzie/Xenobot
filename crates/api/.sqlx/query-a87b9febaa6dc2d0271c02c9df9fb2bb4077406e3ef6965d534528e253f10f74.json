@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM message_context WHERE message_id = ?1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "a87b9febaa6dc2d0271c02c9df9fb2bb4077406e3ef6965d534528e253f10f74"
+}

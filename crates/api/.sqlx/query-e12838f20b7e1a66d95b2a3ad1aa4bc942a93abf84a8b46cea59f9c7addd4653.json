@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            UPDATE import_progress SET status = 'completed', completed_at = ?2 WHERE id = ?1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "e12838f20b7e1a66d95b2a3ad1aa4bc942a93abf84a8b46cea59f9c7addd4653"
+}

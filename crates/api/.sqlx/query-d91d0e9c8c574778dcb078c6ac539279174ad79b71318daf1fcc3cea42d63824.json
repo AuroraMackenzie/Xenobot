@@ -1,0 +1,74 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT id, sender_id, sender_account_name, sender_group_nickname, ts, msg_type, content, reply_to_message_id, platform_message_id, meta_id\n            FROM message WHERE meta_id = ?1 AND content LIKE ?2 ORDER BY ts DESC LIMIT ?3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "sender_id",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "sender_account_name",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "sender_group_nickname",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "ts",
+        "ordinal": 4,
+        "type_info": "Integer"
+      },
+      {
+        "name": "msg_type",
+        "ordinal": 5,
+        "type_info": "Integer"
+      },
+      {
+        "name": "content",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "reply_to_message_id",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "platform_message_id",
+        "ordinal": 8,
+        "type_info": "Text"
+      },
+      {
+        "name": "meta_id",
+        "ordinal": 9,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      true,
+      false,
+      true,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "d91d0e9c8c574778dcb078c6ac539279174ad79b71318daf1fcc3cea42d63824"
+}
