@@ -918,6 +918,30 @@
                 count: toNumber(data.count, 0),
             };
         },
+        semanticSearchMessages: async (sessionId, query, filter, threshold = 0.7, limit = 20) => {
+            const result = await httpRequest('POST', '/ai/semantic-search-messages', {
+                sessionId,
+                query,
+                filter,
+                threshold,
+                limit,
+            });
+            const data = toCamelDeep(result || {});
+            const rows = Array.isArray(data.messages) ? data.messages : [];
+            return {
+                messages: rows.map((item) => {
+                    const x = toCamelDeep(item || {});
+                    const msg = normalizeAiMessage(x.message || {});
+                    return {
+                        ...msg,
+                        similarity: Number.isFinite(Number(x.similarity)) ? Number(x.similarity) : 0,
+                    };
+                }),
+                count: toNumber(data.count, 0),
+                threshold: Number.isFinite(Number(data.threshold)) ? Number(data.threshold) : threshold,
+                queryRewritten: data.queryRewritten || query || '',
+            };
+        },
         getMessageContext: async (sessionId, messageIdOrIds, contextSize = 3) => {
             const messageIds = Array.isArray(messageIdOrIds) ? messageIdOrIds : [messageIdOrIds];
             const result = await httpRequest('POST', '/ai/message-context', {
