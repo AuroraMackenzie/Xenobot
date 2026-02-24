@@ -25,7 +25,3 @@ cd /Users/ycy/Desktop/open-resources-programs/My-program/Xenobot
 cargo test -p xenobot-api -p xenobot-cli --features "api,analysis" --offline
 cargo run -p xenobot-cli --features "api,analysis" -- api smoke
 ```
-
-## License
-
-`AGPL-3.0-only`. See `/Users/ycy/Desktop/open-resources-programs/My-program/Xenobot/LICENSE`.
