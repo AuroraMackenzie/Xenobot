@@ -11,10 +11,12 @@ use crate::commands::{
 use crate::error::{CliError, Result};
 use clap::Parser;
 use serde::{Deserialize, Serialize};
+use std::cmp::Ordering;
 use std::collections::HashMap;
 #[cfg(feature = "api")]
 use std::collections::VecDeque;
 use std::fs;
+use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 #[cfg(all(feature = "analysis", feature = "api"))]
 use xenobot_core::webhook::{
@@ -1034,12 +1036,8 @@ impl App {
                 limit,
                 format,
             } => {
-                let rows = run_message_search(&conn, query, None, None, None, *limit as i64)?;
-                println!(
-                    "semantic fallback: embedding retrieval is not wired in CLI query yet, using lexical search (threshold hint={})",
-                    threshold
-                );
-                print_search_rows(&rows, format)?;
+                let rows = run_semantic_search(&conn, query, *threshold, *limit as i64)?;
+                print_semantic_rows(&rows, format)?;
             }
         }
         Ok(())
@@ -2643,6 +2641,20 @@ struct QueryMessageRow {
     content: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+struct SemanticMessageRow {
+    message_id: i64,
+    meta_id: i64,
+    platform: String,
+    chat_name: String,
+    sender_id: i64,
+    sender_name: String,
+    ts: i64,
+    msg_type: i64,
+    content: Option<String>,
+    similarity: f32,
+}
+
 fn open_sqlite_read_connection(path: &Path) -> Result<rusqlite::Connection> {
     if !path.exists() {
         return Err(CliError::Argument(format!(
@@ -3019,6 +3031,296 @@ fn run_message_search(
         out.push(row.map_err(|e| CliError::Database(e.to_string()))?);
     }
     Ok(out)
+}
+
+const SEMANTIC_EMBEDDING_DIM: usize = 512;
+const SEMANTIC_CHUNK_MAX_CHARS: usize = 240;
+const SEMANTIC_CHUNK_OVERLAP_CHARS: usize = 48;
+
+fn run_semantic_search(
+    conn: &rusqlite::Connection,
+    query: &str,
+    threshold: f32,
+    limit: i64,
+) -> Result<Vec<SemanticMessageRow>> {
+    let query = query.trim();
+    if query.is_empty() {
+        return Err(CliError::Argument("query cannot be empty".to_string()));
+    }
+
+    let candidate_limit = ((limit.max(1) as usize).saturating_mul(300)).clamp(500, 20_000) as i64;
+    let sql = r#"
+        SELECT
+            msg.id,
+            msg.meta_id,
+            meta.platform,
+            meta.name,
+            msg.sender_id,
+            COALESCE(msg.sender_account_name, member.account_name, ''),
+            msg.ts,
+            msg.msg_type,
+            msg.content
+        FROM message msg
+        JOIN meta ON meta.id = msg.meta_id
+        LEFT JOIN member ON member.id = msg.sender_id
+        WHERE COALESCE(msg.content, '') <> ''
+        ORDER BY msg.ts DESC
+        LIMIT ?1
+    "#;
+
+    let mut stmt = conn
+        .prepare(sql)
+        .map_err(|e| CliError::Database(e.to_string()))?;
+    let mapped = stmt
+        .query_map(rusqlite::params![candidate_limit], |row| {
+            Ok(QueryMessageRow {
+                message_id: row.get(0)?,
+                meta_id: row.get(1)?,
+                platform: row.get(2)?,
+                chat_name: row.get(3)?,
+                sender_id: row.get(4)?,
+                sender_name: row.get::<_, String>(5).unwrap_or_default(),
+                ts: row.get(6)?,
+                msg_type: row.get(7)?,
+                content: row.get(8)?,
+            })
+        })
+        .map_err(|e| CliError::Database(e.to_string()))?;
+
+    let query_embedding = embed_text_for_semantic(query);
+    let mut scored = Vec::new();
+    for row in mapped {
+        let row = row.map_err(|e| CliError::Database(e.to_string()))?;
+        let content = row.content.as_deref().unwrap_or_default().trim();
+        if content.is_empty() {
+            continue;
+        }
+        let similarity = cosine_similarity(&query_embedding, &embed_text_for_semantic(content));
+        if similarity >= threshold {
+            scored.push(SemanticMessageRow {
+                message_id: row.message_id,
+                meta_id: row.meta_id,
+                platform: row.platform,
+                chat_name: row.chat_name,
+                sender_id: row.sender_id,
+                sender_name: row.sender_name,
+                ts: row.ts,
+                msg_type: row.msg_type,
+                content: row.content,
+                similarity,
+            });
+        }
+    }
+
+    scored.sort_by(|a, b| {
+        b.similarity
+            .partial_cmp(&a.similarity)
+            .unwrap_or(Ordering::Equal)
+            .then_with(|| b.ts.cmp(&a.ts))
+    });
+    scored.truncate(limit.max(1) as usize);
+    Ok(scored)
+}
+
+fn semantic_chunk_text(text: &str, max_chars: usize, overlap_chars: usize) -> Vec<&str> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return Vec::new();
+    }
+    let max_chars = max_chars.max(1);
+    let overlap_chars = overlap_chars.min(max_chars.saturating_sub(1));
+    let char_positions: Vec<usize> = trimmed.char_indices().map(|(i, _)| i).collect();
+    let total_chars = char_positions.len();
+    if total_chars <= max_chars {
+        return vec![trimmed];
+    }
+
+    let mut out = Vec::new();
+    let step = max_chars.saturating_sub(overlap_chars).max(1);
+    let mut start = 0usize;
+    while start < total_chars {
+        let end = (start + max_chars).min(total_chars);
+        let start_byte = char_positions[start];
+        let end_byte = if end == total_chars {
+            trimmed.len()
+        } else {
+            char_positions[end]
+        };
+        let chunk = trimmed[start_byte..end_byte].trim();
+        if !chunk.is_empty() {
+            out.push(chunk);
+        }
+        if end == total_chars {
+            break;
+        }
+        start = start.saturating_add(step);
+    }
+    out
+}
+
+fn embed_text_for_semantic(text: &str) -> Vec<f32> {
+    let chunks = semantic_chunk_text(
+        text,
+        SEMANTIC_CHUNK_MAX_CHARS,
+        SEMANTIC_CHUNK_OVERLAP_CHARS,
+    );
+    if chunks.is_empty() {
+        return vec![0.0; SEMANTIC_EMBEDDING_DIM];
+    }
+
+    let mut acc = vec![0.0f32; SEMANTIC_EMBEDDING_DIM];
+    for chunk in chunks {
+        let tokens = semantic_tokenize(chunk);
+        if tokens.is_empty() {
+            continue;
+        }
+        let embedding = hash_embedding_from_tokens(&tokens, SEMANTIC_EMBEDDING_DIM);
+        for (idx, value) in embedding.iter().enumerate() {
+            acc[idx] += *value;
+        }
+    }
+    normalize_vector(&mut acc);
+    acc
+}
+
+fn semantic_tokenize(text: &str) -> Vec<String> {
+    let mut tokens = Vec::new();
+    let mut current = String::new();
+
+    for ch in text.chars() {
+        if ch.is_ascii_alphanumeric() || (!ch.is_ascii() && ch.is_alphanumeric()) {
+            for lowered in ch.to_lowercase() {
+                current.push(lowered);
+            }
+            continue;
+        }
+        if !current.is_empty() {
+            tokens.push(current.clone());
+            current.clear();
+        }
+        if is_cjk_char(ch) {
+            tokens.push(ch.to_string());
+        }
+    }
+
+    if !current.is_empty() {
+        tokens.push(current);
+    }
+    tokens
+}
+
+fn is_cjk_char(ch: char) -> bool {
+    let code = ch as u32;
+    (0x4E00..=0x9FFF).contains(&code)
+        || (0x3400..=0x4DBF).contains(&code)
+        || (0xF900..=0xFAFF).contains(&code)
+}
+
+fn hash_embedding_from_tokens(tokens: &[String], dim: usize) -> Vec<f32> {
+    let mut output = vec![0.0f32; dim.max(1)];
+    for token in tokens {
+        if token.is_empty() {
+            continue;
+        }
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        token.hash(&mut hasher);
+        let hash = hasher.finish();
+        let idx = (hash as usize) % output.len();
+        let sign = if (hash >> 63) == 0 { 1.0 } else { -1.0 };
+        let weight = 1.0 + (token.chars().count() as f32).ln_1p() * 0.15;
+        output[idx] += sign * weight;
+    }
+    normalize_vector(&mut output);
+    output
+}
+
+fn normalize_vector(vec: &mut [f32]) {
+    let norm = vec.iter().map(|v| v * v).sum::<f32>().sqrt();
+    if norm > 0.0 {
+        for item in vec {
+            *item /= norm;
+        }
+    }
+}
+
+fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
+    let len = a.len().min(b.len());
+    if len == 0 {
+        return 0.0;
+    }
+    let mut dot = 0.0f32;
+    let mut norm_a = 0.0f32;
+    let mut norm_b = 0.0f32;
+    for idx in 0..len {
+        dot += a[idx] * b[idx];
+        norm_a += a[idx] * a[idx];
+        norm_b += b[idx] * b[idx];
+    }
+    if norm_a <= 0.0 || norm_b <= 0.0 {
+        0.0
+    } else {
+        dot / (norm_a.sqrt() * norm_b.sqrt())
+    }
+}
+
+fn print_semantic_rows(rows: &[SemanticMessageRow], format: &OutputFormat) -> Result<()> {
+    match format {
+        OutputFormat::Json => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(rows).map_err(|e| CliError::Parse(e.to_string()))?
+            );
+        }
+        OutputFormat::Csv => {
+            println!(
+                "message_id,meta_id,platform,chat_name,sender_id,sender_name,ts,msg_type,similarity,content"
+            );
+            for row in rows {
+                println!(
+                    "{},{},{},{},{},{},{},{},{:.6},{}",
+                    row.message_id,
+                    row.meta_id,
+                    csv_escape(&row.platform),
+                    csv_escape(&row.chat_name),
+                    row.sender_id,
+                    csv_escape(&row.sender_name),
+                    row.ts,
+                    row.msg_type,
+                    row.similarity,
+                    csv_escape(row.content.as_deref().unwrap_or_default())
+                );
+            }
+        }
+        OutputFormat::Yaml => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(rows).map_err(|e| CliError::Parse(e.to_string()))?
+            );
+            println!("note: yaml renderer is not wired in cli; json is printed instead");
+        }
+        _ => {
+            if rows.is_empty() {
+                println!("no messages matched semantic query");
+                return Ok(());
+            }
+            println!("semantic search results");
+            for row in rows {
+                println!(
+                    "- score={:.4} [{}] {} / {} | sender={}({}) | ts={} | type={} | {}",
+                    row.similarity,
+                    row.message_id,
+                    row.platform,
+                    row.chat_name,
+                    row.sender_name,
+                    row.sender_id,
+                    row.ts,
+                    row.msg_type,
+                    row.content.as_deref().unwrap_or_default()
+                );
+            }
+        }
+    }
+    Ok(())
 }
 
 fn print_search_rows(rows: &[QueryMessageRow], format: &OutputFormat) -> Result<()> {
@@ -5214,6 +5516,27 @@ mod tests {
         assert!(snapshot.latency_avg_ms > 0.0);
         assert!(snapshot.latency_p95_ms >= 50);
         assert_eq!(snapshot.latency_max_ms, 60);
+    }
+
+    #[test]
+    fn semantic_chunk_text_splits_long_text_with_overlap() {
+        let input = "0123456789abcdefghijKLMNOPQRSTuvwxyz";
+        let chunks = semantic_chunk_text(input, 12, 4);
+        assert!(chunks.len() >= 3);
+        assert_eq!(chunks[0], "0123456789ab");
+        assert!(chunks[1].starts_with("89ab"));
+    }
+
+    #[test]
+    fn semantic_embedding_similarity_prefers_related_content() {
+        let query = embed_text_for_semantic("database migration checkpoint incremental import");
+        let related = embed_text_for_semantic("incremental import checkpoint for database migration");
+        let unrelated = embed_text_for_semantic("sunny beach holiday music and mountain hiking");
+
+        let related_score = cosine_similarity(&query, &related);
+        let unrelated_score = cosine_similarity(&query, &unrelated);
+        assert!(related_score > unrelated_score);
+        assert!(related_score > 0.15);
     }
 }
 
