@@ -399,6 +399,48 @@ fn row_to_search_result(row: MessageRow, is_hit: bool) -> SearchMessageResult {
     }
 }
 
+fn rewrite_semantic_query(query: &str) -> String {
+    let mut normalized = query.trim().to_lowercase();
+    if normalized.is_empty() {
+        return String::new();
+    }
+
+    let replacements = [
+        ("聊天记录", "聊天 消息 记录"),
+        ("群聊", "群组 聊天"),
+        ("私聊", "私人 聊天"),
+        ("语音", "音频"),
+        ("图片", "图像 照片"),
+        ("msg", "message"),
+        ("msgs", "messages"),
+        ("chatlog", "chat log"),
+        ("im", "instant message"),
+    ];
+    for (from, to) in replacements {
+        normalized = normalized.replace(from, to);
+    }
+
+    let mut out = String::with_capacity(normalized.len());
+    let mut last_was_space = false;
+    for ch in normalized.chars() {
+        let mapped = if ch.is_alphanumeric() || is_cjk_char(ch) {
+            ch
+        } else {
+            ' '
+        };
+        if mapped == ' ' {
+            if !last_was_space {
+                out.push(' ');
+                last_was_space = true;
+            }
+        } else {
+            out.push(mapped);
+            last_was_space = false;
+        }
+    }
+    out.trim().to_string()
+}
+
 const SEMANTIC_EMBEDDING_DIM: usize = 512;
 const SEMANTIC_CHUNK_MAX_CHARS: usize = 240;
 const SEMANTIC_CHUNK_OVERLAP_CHARS: usize = 48;
@@ -846,7 +888,8 @@ async fn semantic_search_messages(
     Json(req): Json<SemanticSearchMessagesRequest>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let meta_id = parse_meta_id(&req.session_id)?;
-    let query = req.query.trim();
+    let rewritten_query = rewrite_semantic_query(&req.query);
+    let query = rewritten_query.trim();
     if query.is_empty() {
         return Err(ApiError::InvalidRequest("query cannot be empty".to_string()));
     }
@@ -899,6 +942,7 @@ async fn semantic_search_messages(
         "messages": scored,
         "count": scored.len(),
         "threshold": threshold,
+        "queryRewritten": rewritten_query,
         "prefilterCount": lexical_prefilter_limit,
     })))
 }
@@ -1575,5 +1619,13 @@ mod tests {
         let unrelated_score = cosine_similarity(&query, &unrelated);
         assert!(related_score > unrelated_score);
         assert!(related_score > 0.15);
+    }
+
+    #[test]
+    fn semantic_query_rewrite_normalizes_phrases() {
+        let rewritten = rewrite_semantic_query(" 聊天记录 msg 语音! ");
+        assert!(rewritten.contains("聊天"));
+        assert!(rewritten.contains("message"));
+        assert!(rewritten.contains("音频"));
     }
 }

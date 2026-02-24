@@ -63,7 +63,7 @@
 - 8.2 Embedding向量生成（Candle + Metal MPS）: 进行中
 - 8.3 向量存储: 完成
 - 8.4 语义搜索（余弦相似度）: 完成(简化)(CLI `query semantic` 已从词法回退升级为哈希向量嵌入 + 余弦相似度排序 + 阈值过滤 + 相似度分数输出；API新增`/ai/semantic-search-messages`对应能力)
-- 8.5 查询改写: 未完成
+- 8.5 查询改写: 完成(简化)(已在CLI与API语义检索路径接入基础query rewrite：中英文短语归一化、标点清洗与空白折叠)
 
 ## 9. SQL Lab和自定义查询
 - 9.1 安全SQL查询接口（仅SELECT）: 完成
