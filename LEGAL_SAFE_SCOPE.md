@@ -1,4 +1,4 @@
-# Xenobot Legal-Safe Scope (MacBook arm64 / Apple Silicon)
+# Xenobot Legal-Safe Scope
 
 Last updated: 2026-02-23
 
