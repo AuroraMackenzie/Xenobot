@@ -21,6 +21,11 @@ This document describes the current HTTP endpoints exposed by `xenobot-api` (Axu
 - `POST /import-with-options`
 - `POST /scan-multi-chat-file`
 
+## AI Search
+
+- `POST /ai/search-messages` (keyword search)
+- `POST /ai/semantic-search-messages` (query rewrite + chunked embedding + cosine similarity)
+
 ### `POST /import-batch` modes
 
 `separate` mode (default):

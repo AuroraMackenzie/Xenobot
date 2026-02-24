@@ -3043,7 +3043,8 @@ fn run_semantic_search(
     threshold: f32,
     limit: i64,
 ) -> Result<Vec<SemanticMessageRow>> {
-    let query = query.trim();
+    let rewritten_query = rewrite_semantic_query(query);
+    let query = rewritten_query.trim();
     if query.is_empty() {
         return Err(CliError::Argument("query cannot be empty".to_string()));
     }
@@ -3120,6 +3121,48 @@ fn run_semantic_search(
     });
     scored.truncate(limit.max(1) as usize);
     Ok(scored)
+}
+
+fn rewrite_semantic_query(query: &str) -> String {
+    let mut normalized = query.trim().to_lowercase();
+    if normalized.is_empty() {
+        return String::new();
+    }
+
+    let replacements = [
+        ("聊天记录", "聊天 消息 记录"),
+        ("群聊", "群组 聊天"),
+        ("私聊", "私人 聊天"),
+        ("语音", "音频"),
+        ("图片", "图像 照片"),
+        ("msg", "message"),
+        ("msgs", "messages"),
+        ("chatlog", "chat log"),
+        ("im", "instant message"),
+    ];
+    for (from, to) in replacements {
+        normalized = normalized.replace(from, to);
+    }
+
+    let mut out = String::with_capacity(normalized.len());
+    let mut last_was_space = false;
+    for ch in normalized.chars() {
+        let mapped = if ch.is_alphanumeric() || is_cjk_char(ch) {
+            ch
+        } else {
+            ' '
+        };
+        if mapped == ' ' {
+            if !last_was_space {
+                out.push(' ');
+                last_was_space = true;
+            }
+        } else {
+            out.push(mapped);
+            last_was_space = false;
+        }
+    }
+    out.trim().to_string()
 }
 
 fn semantic_chunk_text(text: &str, max_chars: usize, overlap_chars: usize) -> Vec<&str> {
@@ -5537,6 +5580,14 @@ mod tests {
         let unrelated_score = cosine_similarity(&query, &unrelated);
         assert!(related_score > unrelated_score);
         assert!(related_score > 0.15);
+    }
+
+    #[test]
+    fn semantic_query_rewrite_normalizes_phrases() {
+        let rewritten = rewrite_semantic_query("  聊天记录 msg 语音!!!  ");
+        assert!(rewritten.contains("聊天"));
+        assert!(rewritten.contains("message"));
+        assert!(rewritten.contains("音频"));
     }
 }
 
