@@ -1,4 +1,4 @@
-# Xenobot [60%+ - developing]
+# Xenobot [10%+ - developing]
 
 Xenobot is a Rust-first, privacy-preserving, multi-platform chat data workspace for authorized exports, incremental import, analytics, and AI-assisted exploration on Apple Silicon.
 
