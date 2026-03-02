@@ -1,4 +1,4 @@
-# Xenobot [developing]
+# Xenobot [60%+ - developing]
 
 Xenobot is a Rust-first, privacy-preserving, multi-platform chat data workspace for authorized exports, incremental import, analytics, and AI-assisted exploration on Apple Silicon.
 
@@ -13,7 +13,7 @@ Xenobot is a Rust-native chat data engineering project for authorized exports, i
 - Principle of least privilege and local-first processing.
 
 ### Current Capabilities
-- 17-platform parser registry and format sniffing.
+- 20-over-platform parser registry and format sniffing.
 - Incremental checkpoint semantics with failure writeback.
 - Batch import in `separate` and `merged` modes.
 - Axum HTTP API, clap CLI, and ratatui TUI foundations.
