@@ -32,8 +32,8 @@ cargo run -p xenobot-cli --features "api,analysis" -- api smoke
 
 ### Run from Any Directory (Recommended)
 ```bash
-/Users/ycy/Desktop/open-resources-programs/My-program/Xenobot/scripts/xb api status
-/Users/ycy/Desktop/open-resources-programs/My-program/Xenobot/scripts/xb api start --db-path /tmp/xenobot.db
+/Users/.../Xenobot/scripts/xb api status
+/Users/.../Xenobot/scripts/xb api start --db-path /tmp/xenobot.db
 ```
 
 ### Continuous Run
