@@ -22,6 +22,6 @@ Xenobot is a Rust-native chat data engineering project for authorized exports, i
 ### Quick Start
 ```bash
 cd Xenobot
-cargo test -p xenobot-api -p xenobot-cli --features "api,analysis" --offline
+cargo test -p xenobot-api -p xenobot-cli --features "api,analysis"
 cargo run -p xenobot-cli --features "api,analysis" -- api smoke
 ```
