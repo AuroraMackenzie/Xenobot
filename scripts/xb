@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+is_xenobot_root() {
+  local dir="$1"
+  [[ -f "$dir/Cargo.toml" ]] || return 1
+  [[ -f "$dir/crates/cli/Cargo.toml" ]] || return 1
+  grep -q 'name = "xenobot-cli"' "$dir/crates/cli/Cargo.toml"
+}
+
+find_xenobot_root() {
+  local dir="${PWD}"
+  while [[ "$dir" != "/" ]]; do
+    if is_xenobot_root "$dir"; then
+      printf "%s\n" "$dir"
+      return 0
+    fi
+    dir="$(dirname "$dir")"
+  done
+
+  if [[ -n "${XENOBOT_ROOT:-}" ]] && is_xenobot_root "$XENOBOT_ROOT"; then
+    printf "%s\n" "$XENOBOT_ROOT"
+    return 0
+  fi
+
+  local candidates=(
+    "$HOME/Desktop/open-resources-programs/My-program/Xenobot"
+    "$HOME/Desktop/open-resources-programs/GitHub/Myself/Xenobot"
+  )
+  local candidate
+  for candidate in "${candidates[@]}"; do
+    if is_xenobot_root "$candidate"; then
+      printf "%s\n" "$candidate"
+      return 0
+    fi
+  done
+
+  local discovered
+  discovered="$(find "$HOME" -maxdepth 6 -type f -name Cargo.toml -path "*/Xenobot/Cargo.toml" 2>/dev/null | head -n 1 || true)"
+  if [[ -n "$discovered" ]]; then
+    candidate="$(dirname "$discovered")"
+    if is_xenobot_root "$candidate"; then
+      printf "%s\n" "$candidate"
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
+usage() {
+  cat <<'EOF'
+Usage:
+  xb root
+  xb cargo <args...>
+  xb <xenobot-cli args...>
+
+Examples:
+  xb api status
+  xb api start --db-path /tmp/xenobot.db
+  xb cargo test -p xenobot-api -p xenobot-cli --features "api,analysis"
+EOF
+}
+
+main() {
+  local root
+  if ! root="$(find_xenobot_root)"; then
+    echo "error: Xenobot root not found. Set XENOBOT_ROOT or run inside the Xenobot tree." >&2
+    exit 1
+  fi
+
+  if [[ $# -eq 0 ]]; then
+    usage
+    exit 0
+  fi
+
+  case "$1" in
+    root)
+      printf "%s\n" "$root"
+      ;;
+    cargo)
+      shift
+      exec cargo --manifest-path "$root/Cargo.toml" "$@"
+      ;;
+    *)
+      exec cargo run --manifest-path "$root/Cargo.toml" -p xenobot-cli --features "api,analysis" -- "$@"
+      ;;
+  esac
+}
+
+main "$@"
