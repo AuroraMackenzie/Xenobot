@@ -25,3 +25,19 @@ cd Xenobot
 cargo test -p xenobot-api -p xenobot-cli --features "api,analysis"
 cargo run -p xenobot-cli --features "api,analysis" -- api smoke
 ```
+
+### Continuously Running
+```bash
+cd Xenobot
+cargo run -p xenobot-cli --features "api,analysis" -- api start --db-path /tmp/xenobot.db
+```
+
+### Result Checking
+```
+cargo run -p xenobot-cli --features "api,analysis" -- db create /tmp/xenobot.db
+cargo run -p xenobot-cli --features "api,analysis" -- import <你的导出文件或目录> we-chat --db-path /tmp/xenobot.db --write-db --incremental
+cargo run -p xenobot-cli --features "api,analysis" -- query --db-path /tmp/xenobot.db search "关键词" -l 20 -f table
+cargo run -p xenobot-cli --features "api,analysis" -- analyze --db-path /tmp/xenobot.db stats
+```
+
+
