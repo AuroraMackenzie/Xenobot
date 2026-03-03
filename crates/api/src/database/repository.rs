@@ -402,14 +402,13 @@ impl Repository {
     }
 
     pub async fn get_chat(&self, id: i64) -> SqlxResult<Option<ChatMeta>> {
-        sqlx::query_as!(
-            ChatMeta,
+        sqlx::query_as::<_, ChatMeta>(
             r#"
-            SELECT id as "id!: i64", name as "name!: String", platform as "platform!: String", chat_type as "chat_type!: String", imported_at as "imported_at!: i64", group_id as "group_id?", group_avatar as "group_avatar?", owner_id as "owner_id?", schema_version as "schema_version!: i64", session_gap_threshold as "session_gap_threshold!: i64"
+            SELECT id, name, platform, chat_type, imported_at, group_id, group_avatar, owner_id, schema_version, session_gap_threshold
             FROM meta WHERE id = ?1
             "#,
-            id
         )
+        .bind(id)
         .fetch_optional(&*self.pool)
         .await
     }
@@ -444,28 +443,26 @@ impl Repository {
         offset: i32,
     ) -> SqlxResult<Vec<ChatMeta>> {
         if let Some(p) = platform {
-            sqlx::query_as!(
-                ChatMeta,
+            sqlx::query_as::<_, ChatMeta>(
                 r#"
-                SELECT id as "id!: i64", name as "name!: String", platform as "platform!: String", chat_type as "chat_type!: String", imported_at as "imported_at!: i64", group_id as "group_id?", group_avatar as "group_avatar?", owner_id as "owner_id?", schema_version as "schema_version!: i64", session_gap_threshold as "session_gap_threshold!: i64"
+                SELECT id, name, platform, chat_type, imported_at, group_id, group_avatar, owner_id, schema_version, session_gap_threshold
                 FROM meta WHERE platform = ?1 ORDER BY imported_at DESC LIMIT ?2 OFFSET ?3
                 "#,
-                p,
-                limit,
-                offset
             )
+            .bind(p)
+            .bind(limit)
+            .bind(offset)
             .fetch_all(&*self.pool)
             .await
         } else {
-            sqlx::query_as!(
-                ChatMeta,
+            sqlx::query_as::<_, ChatMeta>(
                 r#"
-                SELECT id as "id!: i64", name as "name!: String", platform as "platform!: String", chat_type as "chat_type!: String", imported_at as "imported_at!: i64", group_id as "group_id?", group_avatar as "group_avatar?", owner_id as "owner_id?", schema_version as "schema_version!: i64", session_gap_threshold as "session_gap_threshold!: i64"
+                SELECT id, name, platform, chat_type, imported_at, group_id, group_avatar, owner_id, schema_version, session_gap_threshold
                 FROM meta ORDER BY imported_at DESC LIMIT ?1 OFFSET ?2
                 "#,
-                limit,
-                offset
             )
+            .bind(limit)
+            .bind(offset)
             .fetch_all(&*self.pool)
             .await
         }
@@ -730,15 +727,14 @@ impl Repository {
             msg_count: i64,
         }
 
-        let rows: Vec<StatsRow> = sqlx::query_as!(
-            StatsRow,
+        let rows: Vec<StatsRow> = sqlx::query_as::<_, StatsRow>(
             r#"
-            SELECT sender_id, sender_account_name, CAST(COUNT(*) AS INTEGER) as "msg_count!: i64"
+            SELECT sender_id, sender_account_name, CAST(COUNT(*) AS INTEGER) as msg_count
             FROM message WHERE meta_id = ?1
             GROUP BY sender_id ORDER BY COUNT(*) DESC
             "#,
-            meta_id
         )
+        .bind(meta_id)
         .fetch_all(&*self.pool)
         .await?;
 
