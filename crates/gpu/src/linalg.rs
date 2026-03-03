@@ -19,7 +19,7 @@ impl VectorOps {
         Self { device }
     }
 
-    /// Compute dot product of two vectors: a · b
+    /// Compute the dot product of two vectors: a * b.
     pub fn dot(&self, a: &[f32], b: &[f32]) -> Result<f32> {
         if a.len() != b.len() {
             return Err(GpuError::LinearAlgebra(format!(

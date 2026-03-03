@@ -9,26 +9,26 @@ const { t } = useI18n()
 const settingsStore = useSettingsStore()
 const { locale } = storeToRefs(settingsStore)
 
-// 弹窗状态
+// English engineering note.
 const showModal = ref(false)
 
-// 加载状态
+// English engineering note.
 const isLoading = ref(false)
 const loadError = ref<string | null>(null)
 
-// 展开的版本
-// 使用 Map 来跟踪每个版本的展开状态，undefined 表示使用默认状态
+// English engineering note.
+// English engineering note.
 const expandedState = ref<Map<string, boolean>>(new Map())
 
-// 当前软件版本（用于高亮显示和默认展开）
+// English engineering note.
 const currentAppVersion = ref<string | null>(null)
 
-// 版本日志已读标记的 localStorage key
+// English engineering note.
 const CHANGELOG_READ_KEY = 'xenobot_changelog_read_version'
-// 用户协议同意标记的 localStorage key
+// English engineering note.
 const AGREEMENT_KEY = 'xenobot_agreement_version'
 
-// summary 的白名单配置（可按需扩展）
+// English engineering note.
 const SUMMARY_SANITIZE_OPTIONS = {
   allowedTags: ['br', 'a', 'img'],
   allowedAttrs: {
@@ -37,38 +37,38 @@ const SUMMARY_SANITIZE_OPTIONS = {
   },
 }
 
-// 切换版本展开/收起
+// English engineering note.
 function toggleVersion(version: string, index: number) {
   const currentState = isExpanded(version, index)
   expandedState.value.set(version, !currentState)
 }
 
-// 版本号统一格式，避免 v 前缀造成匹配失败
+// English engineering note.
 function normalizeVersion(version?: string | null) {
   return version ? version.trim().replace(/^v/i, '') : null
 }
 
-// 判断版本是否展开
+// English engineering note.
 function isExpanded(version: string, index: number) {
-  // 如果有明确设置的状态，使用该状态
+  // English engineering note.
   if (expandedState.value.has(version)) {
     return expandedState.value.get(version)!
   }
-  // 如果设置了当前软件版本，则当前版本默认展开
+  // English engineering note.
   if (currentAppVersion.value) {
     return isCurrentVersion(version)
   }
-  // 否则，第一个版本默认展开，其他默认收起
+  // English engineering note.
   return index === 0
 }
 
-// 判断是否是当前软件版本
+// English engineering note.
 function isCurrentVersion(version: string) {
   const current = normalizeVersion(currentAppVersion.value)
   return current ? normalizeVersion(version) === current : false
 }
 
-// Changelog 数据结构
+// English engineering note.
 interface ChangelogItem {
   version: string
   date: string
@@ -79,16 +79,16 @@ interface ChangelogItem {
   }[]
 }
 
-// Changelog 数据
+// English engineering note.
 const changelogs = ref<ChangelogItem[]>([])
 
-// 获取 changelog URL
+// English engineering note.
 function getChangelogUrl(lang: string) {
   const langPath = lang === 'zh-CN' ? 'cn' : 'en'
   return `https://xenobot.app/${langPath}/changelogs.json`
 }
 
-// 从服务端获取 changelog 数据
+// English engineering note.
 async function fetchChangelogs() {
   isLoading.value = true
   loadError.value = null
@@ -107,14 +107,14 @@ async function fetchChangelogs() {
   }
 }
 
-// 监听语言变化，重新获取数据
+// English engineering note.
 watch(locale, () => {
   if (showModal.value && changelogs.value.length > 0) {
     fetchChangelogs()
   }
 })
 
-// 变更类型图标和颜色映射
+// English engineering note.
 const changeTypeConfig = {
   feat: {
     icon: 'i-heroicons-sparkles',
@@ -138,7 +138,7 @@ const changeTypeConfig = {
   },
 }
 
-// 获取变更类型显示名称
+// English engineering note.
 function getChangeTypeLabel(type: string) {
   const labels: Record<string, string> = {
     feat: t('home.changelog.types.feat'),
@@ -149,7 +149,7 @@ function getChangeTypeLabel(type: string) {
   return labels[type] || type
 }
 
-// 格式化日期
+// English engineering note.
 function formatDate(dateStr: string) {
   const date = new Date(dateStr)
   if (locale.value === 'zh-CN') {
@@ -162,41 +162,41 @@ function formatDate(dateStr: string) {
   })
 }
 
-// 标记当前版本为已读
+// English engineering note.
 function markVersionAsRead(version: string) {
   localStorage.setItem(CHANGELOG_READ_KEY, version)
 }
 
-// 检查是否需要显示新版本日志（冷启动时自动检查）
+// English engineering note.
 async function checkNewVersion() {
   try {
-    // 0. 如果用户还没同意隐私协议，不检查更新日志（避免两个弹窗同时弹出）
+    // English engineering note.
     const acceptedAgreement = localStorage.getItem(AGREEMENT_KEY)
     if (!acceptedAgreement) {
       return
     }
 
-    // 1. 获取当前软件版本号
+    // English engineering note.
     const rawVersion = await window.api.app.getVersion()
     const currentVersion = normalizeVersion(rawVersion)
     if (!currentVersion) return
 
-    // 2. 获取 localStorage 中存储的已读版本号
+    // English engineering note.
     const rawReadVersion = localStorage.getItem(CHANGELOG_READ_KEY)
     const readVersion = normalizeVersion(rawReadVersion)
 
-    // 2.1 如果是全新用户（从未设置过该 key），静默标记当前版本为已读，不弹窗
+    // English engineering note.
     if (rawReadVersion === null) {
       markVersionAsRead(currentVersion)
       return
     }
 
-    // 3. 如果 readVersion 等于 currentVersion，说明用户已看过，不需要请求数据
+    // English engineering note.
     if (readVersion === currentVersion) {
       return
     }
 
-    // 4. readVersion 为空或不等于 currentVersion，需要请求远程 changelog 数据
+    // English engineering note.
     const result = await window.api.app.fetchRemoteConfig(getChangelogUrl(locale.value))
     if (!result.success || !result.data) return
 
@@ -204,26 +204,26 @@ async function checkNewVersion() {
     const latestChangelogVersion = normalizeVersion(data[0]?.version)
     if (!latestChangelogVersion) return
 
-    // 仅当“当前版本就是最新版本”时才弹窗
-    // 避免当前版本较旧时（存在更高版本日志）也弹出阅读
+    // English engineering note.
+    // English engineering note.
     if (currentVersion !== latestChangelogVersion) {
       return
     }
 
-    // 5. 在 changelog 中查找当前软件版本
+    // English engineering note.
     const currentVersionExists = data.some((log) => normalizeVersion(log.version) === currentVersion)
 
-    // 如果在 changelog 中找不到当前版本，说明日志还没更新到当前版本，不显示弹窗
+    // English engineering note.
     if (!currentVersionExists) {
       return
     }
 
-    // 6. 找到了当前版本，显示弹窗
-    // 传入完整的 changelog 和当前版本号，让弹窗组件处理展开逻辑和标签显示
-    // 延迟打开，等待其他弹窗（如迁移弹窗）检查完成
+    // English engineering note.
+    // English engineering note.
+    // English engineering note.
     setTimeout(() => {
       openWithData(data, currentVersion)
-      // 打开后标记当前软件版本为已读
+      // English engineering note.
       markVersionAsRead(currentVersion)
     }, 500)
   } catch (error) {
@@ -231,11 +231,11 @@ async function checkNewVersion() {
   }
 }
 
-// 暴露方法给父组件
+// English engineering note.
 
-// 手动打开弹窗（用户点击时调用），会自动获取数据
+// English engineering note.
 async function open() {
-  // 手动打开也标记当前版本，避免标签缺失
+  // English engineering note.
   try {
     currentAppVersion.value = normalizeVersion(await window.api.app.getVersion())
   } catch {
@@ -243,17 +243,17 @@ async function open() {
   }
   expandedState.value.clear()
   showModal.value = true
-  // 打开时获取数据（如果还没有数据）
+  // English engineering note.
   if (changelogs.value.length === 0) {
     fetchChangelogs()
   }
 }
 
-// 使用预设数据打开弹窗（自动检查新版本时调用）
+// English engineering note.
 function openWithData(data: ChangelogItem[], appVersion?: string) {
   changelogs.value = data
   currentAppVersion.value = appVersion || null
-  expandedState.value.clear() // 重置展开状态
+  expandedState.value.clear() // English engineering note.
   showModal.value = true
 }
 
@@ -261,12 +261,12 @@ function close() {
   showModal.value = false
 }
 
-// 获取最新版本号（供外部使用）
+// English engineering note.
 function getLatestVersion() {
   return changelogs.value[0]?.version || null
 }
 
-// 组件挂载时检查新版本
+// English engineering note.
 onMounted(() => {
   checkNewVersion()
 })
@@ -349,7 +349,7 @@ defineExpose({ open, openWithData, close, fetchChangelogs, getLatestVersion })
                       >
                         {{ t('home.changelog.latest') }}
                       </span>
-                      <!-- 当前软件版本标签 -->
+                      <!-- English UI note -->
                       <span
                         v-if="isCurrentVersion(log.version)"
                         class="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-600 dark:bg-green-900/30 dark:text-green-400"

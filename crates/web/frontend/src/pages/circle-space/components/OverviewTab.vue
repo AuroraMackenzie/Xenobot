@@ -30,10 +30,10 @@ const props = defineProps<{
   timeFilter?: { startTs?: number; endTs?: number }
 }>()
 
-// 星期活跃度数据（用于统计信息计算）
+// English engineering note.
 const weekdayActivity = ref<WeekdayActivity[]>([])
 
-// 使用 Composables
+// English engineering note.
 const {
   durationDays,
   dailyAvgMessages,
@@ -53,7 +53,7 @@ const {
 
 const { dailyChartData } = useDailyTrend(props.dailyActivity)
 
-// 消息类型图表数据
+// English engineering note.
 const typeChartData = computed<EChartPieData>(() => {
   return {
     labels: props.messageTypes.map((item) => getMessageTypeName(item.type, t)),
@@ -61,7 +61,7 @@ const typeChartData = computed<EChartPieData>(() => {
   }
 })
 
-// 成员水群分布图表数据
+// English engineering note.
 const memberChartData = computed<EChartPieData>(() => {
   const sortedMembers = [...props.memberActivity].sort((a, b) => b.messageCount - a.messageCount)
   const top10 = sortedMembers.slice(0, 10)
@@ -81,7 +81,7 @@ const memberChartData = computed<EChartPieData>(() => {
   }
 })
 
-// 加载星期活跃度数据（用于统计信息计算）
+// English engineering note.
 async function loadWeekdayActivity() {
   if (!props.session.id) return
   try {
@@ -91,7 +91,7 @@ async function loadWeekdayActivity() {
   }
 }
 
-// 监听 session.id 和 timeFilter 变化
+// English engineering note.
 watch(
   () => [props.session.id, props.timeFilter],
   () => {
@@ -103,7 +103,7 @@ watch(
 
 <template>
   <div class="main-content space-y-6 p-6">
-    <!-- 群聊身份卡 -->
+    <!-- English UI note -->
     <OverviewIdentityCard
       :session="session"
       :total-duration-days="totalDurationDays"
@@ -111,7 +111,7 @@ watch(
       :time-range="timeRange"
     />
 
-    <!-- 关键指标卡片 -->
+    <!-- English UI note -->
     <OverviewStatCards
       :daily-avg-messages="dailyAvgMessages"
       :duration-days="durationDays"
@@ -127,16 +127,16 @@ watch(
       :max-consecutive-days="maxConsecutiveDays"
     />
 
-    <!-- 图表区域：消息类型 & 成员分布 -->
+    <!-- English UI note -->
     <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
-      <!-- 消息类型分布 -->
+      <!-- English UI note -->
       <SectionCard :title="t('analysis.overview.messageTypeDistribution')" :show-divider="false">
         <div class="p-5">
           <EChartPie :data="typeChartData" :height="256" />
         </div>
       </SectionCard>
 
-      <!-- 成员水群分布 -->
+      <!-- English UI note -->
       <SectionCard :title="t('analysis.overview.memberDistribution')" :show-divider="false">
         <div class="p-5">
           <EChartPie :data="memberChartData" :height="256" />
@@ -144,7 +144,7 @@ watch(
       </SectionCard>
     </div>
 
-    <!-- 每日消息趋势 -->
+    <!-- English UI note -->
     <DailyTrendCard :daily-activity="dailyActivity" :daily-chart-data="dailyChartData" />
   </div>
 </template>

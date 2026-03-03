@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * 日期选择器组件
- * 基于 UPopover + UCalendar 封装
+ * English note.
+ * English note.
  */
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -12,13 +12,13 @@ const { t, locale } = useI18n()
 
 const props = withDefaults(
   defineProps<{
-    /** 日期值 (YYYY-MM-DD 格式字符串) */
+    /** English note.
     modelValue: string
-    /** 占位符文本 */
+    /** English note.
     placeholder?: string
-    /** 是否显示清空按钮 */
+    /** English note.
     clearable?: boolean
-    /** 按钮宽度类 */
+    /** English note.
     widthClass?: string
   }>(),
   {
@@ -32,26 +32,26 @@ const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void
 }>()
 
-// Popover 开关状态
+// English engineering note.
 const popoverOpen = ref(false)
 
-// 日历组件的 locale
+// English engineering note.
 const calendarLocale = computed(() => (locale.value === 'zh-CN' ? 'zh-CN' : 'en-US'))
 
-// 辅助函数：将字符串日期转换为 CalendarDate
+// English engineering note.
 function stringToCalendarDate(dateStr: string): CalendarDate | undefined {
   if (!dateStr) return undefined
   const d = dayjs(dateStr)
   return new CalendarDate(d.year(), d.month() + 1, d.date())
 }
 
-// 辅助函数：将 CalendarDate 转换为字符串
+// English engineering note.
 function calendarDateToString(date: CalendarDate | undefined): string {
   if (!date) return ''
   return `${date.year}-${String(date.month).padStart(2, '0')}-${String(date.day).padStart(2, '0')}`
 }
 
-// CalendarDate 对象（用于 UCalendar 双向绑定）
+// English engineering note.
 const dateObj = computed<CalendarDate | undefined>({
   get: () => stringToCalendarDate(props.modelValue),
   set: (val) => {
@@ -60,10 +60,10 @@ const dateObj = computed<CalendarDate | undefined>({
   },
 })
 
-// 格式化显示的日期
+// English engineering note.
 const dateDisplay = computed(() => (props.modelValue ? dayjs(props.modelValue).format('YYYY/MM/DD') : ''))
 
-// 清空日期
+// English engineering note.
 function clearDate() {
   emit('update:modelValue', '')
   popoverOpen.value = false

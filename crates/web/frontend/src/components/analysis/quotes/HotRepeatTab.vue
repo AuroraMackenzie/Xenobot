@@ -21,7 +21,7 @@ const props = defineProps<{
 
 const layoutStore = useLayoutStore()
 
-// ==================== 最火复读内容 ====================
+// English engineering note.
 const repeatAnalysis = ref<XenoRepeatAnalysis | null>(null)
 const isLoading = ref(false)
 
@@ -43,7 +43,7 @@ function truncateContent(content: string, maxLength = 30): string {
 }
 
 /**
- * 查看复读内容的聊天记录上下文
+ * English note.
  */
 function viewRepeatContext(item: { content: string; firstMessageId: number }) {
   layoutStore.openChatRecordDrawer({
@@ -52,7 +52,7 @@ function viewRepeatContext(item: { content: string; firstMessageId: number }) {
   })
 }
 
-// 监听 sessionId 和 timeFilter 变化
+// English engineering note.
 watch(
   () => [props.sessionId, props.timeFilter],
   () => {
@@ -64,10 +64,10 @@ watch(
 
 <template>
   <div class="main-content mx-auto max-w-3xl p-6">
-    <!-- 加载中 -->
+    <!-- English UI note -->
     <LoadingState v-if="isLoading" :text="t('quotes.hotRepeat.loading')" />
 
-    <!-- 最火复读内容列表 -->
+    <!-- English UI note -->
     <ListPro
       v-else-if="repeatAnalysis && repeatAnalysis.hotContents.length > 0"
       :items="repeatAnalysis.hotContents"
@@ -112,7 +112,7 @@ watch(
       </template>
     </ListPro>
 
-    <!-- 空状态 -->
+    <!-- English UI note -->
     <SectionCard v-else :title="t('quotes.hotRepeat.title')">
       <EmptyState :text="t('quotes.hotRepeat.empty')" />
     </SectionCard>

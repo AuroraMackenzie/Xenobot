@@ -1,33 +1,33 @@
 /**
- * 侧边栏 Footer 链接配置类型
+ * English note.
  */
 
 /**
- * 链接类型
- * - link: 普通外链
+ * English note.
+ * English note.
  */
 export type FooterLinkType = 'link'
 
 /**
- * Footer 链接配置项
+ * English note.
  */
 export interface FooterLinkConfig {
-  /** 唯一标识 */
+  /** English note.
   id: string
-  /** 图标名称（支持 iconify 或 brand:xxx） */
+  /** English note.
   icon: string
-  /** 标题 */
+  /** English note.
   title: string
-  /** 副标题/描述 */
+  /** English note.
   subtitle: string
-  /** 链接类型 */
+  /** English note.
   type: FooterLinkType
-  /** 链接地址 */
+  /** English note.
   url: string
 }
 
 /**
- * 默认的 Footer 链接配置
+ * English note.
  */
 export const defaultFooterLinks: FooterLinkConfig[] = [
   {

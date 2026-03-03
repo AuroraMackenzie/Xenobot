@@ -3,43 +3,43 @@ import { ref, computed } from 'vue'
 import type { EmbeddingServiceConfigDisplay } from '@electron/preload/index'
 
 /**
- * Embedding 配置状态管理
- * 集中管理 Embedding 配置的获取、切换和刷新
+ * English note.
+ * English note.
  */
 export const useEmbeddingStore = defineStore('embedding', () => {
-  // ============ 状态 ============
+  // English engineering note.
 
-  /** 所有配置列表 */
+  /** English note.
   const configs = ref<EmbeddingServiceConfigDisplay[]>([])
 
-  /** 当前激活配置 ID */
+  /** English note.
   const activeConfigId = ref<string | null>(null)
 
-  /** 是否正在加载 */
+  /** English note.
   const isLoading = ref(false)
 
-  /** 是否已初始化 */
+  /** English note.
   const isInitialized = ref(false)
 
-  /** 向量存储统计 */
+  /** English note.
   const vectorStoreStats = ref<{
     enabled: boolean
     count?: number
     sizeBytes?: number
   }>({ enabled: false })
 
-  // ============ 计算属性 ============
+  // English engineering note.
 
-  /** 当前激活的配置 */
+  /** English note.
   const activeConfig = computed(() => configs.value.find((c) => c.id === activeConfigId.value) || null)
 
-  /** 是否有可用配置 */
+  /** English note.
   const hasConfig = computed(() => configs.value.length > 0)
 
-  /** 是否达到最大配置数量 */
+  /** English note.
   const isMaxConfigs = computed(() => configs.value.length >= 10)
 
-  /** 格式化的存储大小 */
+  /** English note.
   const vectorStoreSizeFormatted = computed(() => {
     const bytes = vectorStoreStats.value.sizeBytes ?? 0
     if (bytes === 0) return '0 B'
@@ -49,10 +49,10 @@ export const useEmbeddingStore = defineStore('embedding', () => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   })
 
-  // ============ 方法 ============
+  // English engineering note.
 
   /**
-   * 初始化加载配置（仅首次调用生效）
+   * English note.
    */
   async function init() {
     if (isInitialized.value) return
@@ -61,7 +61,7 @@ export const useEmbeddingStore = defineStore('embedding', () => {
   }
 
   /**
-   * 加载所有配置
+   * English note.
    */
   async function loadConfigs() {
     isLoading.value = true
@@ -83,7 +83,7 @@ export const useEmbeddingStore = defineStore('embedding', () => {
   }
 
   /**
-   * 切换激活配置
+   * English note.
    */
   async function setActiveConfig(id: string): Promise<boolean> {
     try {
@@ -101,7 +101,7 @@ export const useEmbeddingStore = defineStore('embedding', () => {
   }
 
   /**
-   * 删除配置
+   * English note.
    */
   async function deleteConfig(id: string): Promise<boolean> {
     try {
@@ -119,7 +119,7 @@ export const useEmbeddingStore = defineStore('embedding', () => {
   }
 
   /**
-   * 清空向量存储
+   * English note.
    */
   async function clearVectorStore(): Promise<boolean> {
     try {
@@ -138,25 +138,25 @@ export const useEmbeddingStore = defineStore('embedding', () => {
   }
 
   /**
-   * 刷新配置列表
+   * English note.
    */
   async function refreshConfigs() {
     await loadConfigs()
   }
 
   return {
-    // 状态
+    // English engineering note.
     configs,
     activeConfigId,
     isLoading,
     isInitialized,
     vectorStoreStats,
-    // 计算属性
+    // English engineering note.
     activeConfig,
     hasConfig,
     isMaxConfigs,
     vectorStoreSizeFormatted,
-    // 方法
+    // English engineering note.
     init,
     loadConfigs,
     setActiveConfig,

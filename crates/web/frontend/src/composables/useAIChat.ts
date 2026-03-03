@@ -1,6 +1,6 @@
 /**
- * AI 对话 Composable
- * 封装 AI 对话的核心逻辑（基于 Agent + Function Calling）
+ * English note.
+ * English note.
  */
 
 import { ref, computed } from 'vue'
@@ -8,13 +8,13 @@ import { storeToRefs } from 'pinia'
 import { usePromptStore } from '@/stores/prompt'
 import { useSessionStore } from '@/stores/session'
 
-// 工具调用记录
+// English engineering note.
 export interface ToolCallRecord {
   name: string
   displayName: string
   status: 'running' | 'done' | 'error'
   timestamp: number
-  /** 工具调用参数（如搜索关键词等） */
+  /** English note.
   params?: Record<string, unknown>
 }
 
@@ -25,16 +25,16 @@ export interface ToolBlockContent {
   params?: Record<string, unknown>
 }
 
-// 内容块类型（用于 AI 消息的流式混合渲染）
+// English engineering note.
 export type ContentBlock =
   | { type: 'text'; text: string }
-  | { type: 'think'; tag: string; text: string; durationMs?: number } // 思考内容块
+  | { type: 'think'; tag: string; text: string; durationMs?: number } // English engineering note.
   | {
       type: 'tool'
       tool: ToolBlockContent
     }
 
-// 消息类型
+// English engineering note.
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
@@ -44,14 +44,14 @@ export interface ChatMessage {
     toolsUsed: string[]
     toolRounds: number
   }
-  /** @deprecated 使用 contentBlocks 替代 */
+  /** English note.
   toolCalls?: ToolCallRecord[]
-  /** AI 消息的内容块数组（按时序排列的文本和工具调用） */
+  /** English note.
   contentBlocks?: ContentBlock[]
   isStreaming?: boolean
 }
 
-// 搜索结果消息类型（保留用于数据源面板）
+// English engineering note.
 export interface SourceMessage {
   id: number
   senderName: string
@@ -61,7 +61,7 @@ export interface SourceMessage {
   type: number
 }
 
-// 工具状态类型
+// English engineering note.
 export interface ToolStatus {
   name: string
   displayName: string
@@ -69,17 +69,17 @@ export interface ToolStatus {
   result?: unknown
 }
 
-// Token 使用量类型
+// English engineering note.
 export interface TokenUsage {
   promptTokens: number
   completionTokens: number
   totalTokens: number
 }
 
-// 工具显示名称通过 vue-i18n 管理: ai.chat.message.tools.*
-// 渲染层 (ChatMessage.vue, AIThinkingIndicator.vue) 使用 t() 动态获取
+// English engineering note.
+// English engineering note.
 
-/** Owner 信息类型 */
+/** English note.
 interface OwnerInfo {
   platformId: string
   displayName: string
@@ -91,12 +91,30 @@ export function useAIChat(
   chatType: 'group' | 'private' = 'group',
   locale: string = 'zh-CN'
 ) {
-  // 获取 chat store 中的提示词配置和全局设置
+  const AGENT_TOOL_ALIAS_TO_CANONICAL: Record<string, string> = {
+    get_member_stats: 'member_stats',
+    get_time_stats: 'time_stats',
+    get_group_members: 'member_list',
+    get_member_name_history: 'nickname_history',
+    get_conversation_between: 'conversation_between',
+    get_message_context: 'message_context',
+    get_session_summaries: 'get_session_summary',
+    semantic_search_messages: 'semantic_search',
+  }
+
+  function normalizeAgentToolName(rawName?: string): string {
+    if (!rawName) return ''
+    const normalized = rawName.trim()
+    if (!normalized) return ''
+    return AGENT_TOOL_ALIAS_TO_CANONICAL[normalized] || normalized
+  }
+
+  // English engineering note.
   const promptStore = usePromptStore()
   const sessionStore = useSessionStore()
   const { activePreset, aiGlobalSettings } = storeToRefs(promptStore)
 
-  // 获取当前聊天类型对应的提示词配置（使用统一的激活预设）
+  // English engineering note.
   const currentPromptConfig = computed(() => {
     return {
       roleDefinition: activePreset.value.roleDefinition,
@@ -104,7 +122,7 @@ export function useAIChat(
     }
   })
 
-  // 状态
+  // English engineering note.
   const messages = ref<ChatMessage[]>([])
   const sourceMessages = ref<SourceMessage[]>([])
   const currentKeywords = ref<string[]>([])
@@ -112,17 +130,17 @@ export function useAIChat(
   const isAIThinking = ref(false)
   const currentConversationId = ref<string | null>(null)
 
-  // Owner 信息（用于告诉 AI 当前用户是谁）
+  // English engineering note.
   const ownerInfo = ref<OwnerInfo | undefined>(undefined)
 
-  // 工具调用状态
+  // English engineering note.
   const currentToolStatus = ref<ToolStatus | null>(null)
   const toolsUsedInCurrentRound = ref<string[]>([])
 
-  // Token 使用量（当前会话累计）
+  // English engineering note.
   const sessionTokenUsage = ref<TokenUsage>({ promptTokens: 0, completionTokens: 0, totalTokens: 0 })
 
-  // 初始化：获取 Owner 信息
+  // English engineering note.
   async function initOwnerInfo() {
     const ownerId = sessionStore.currentSession?.ownerId
     if (!ownerId) {
@@ -131,7 +149,7 @@ export function useAIChat(
     }
 
     try {
-      // 获取成员列表，找到 owner 的显示名称
+      // English engineering note.
       const members = await window.chatApi.getMembers(sessionId)
       const ownerMember = members.find((m) => m.platformId === ownerId)
       if (ownerMember) {
@@ -147,23 +165,23 @@ export function useAIChat(
     }
   }
 
-  // 初始化时加载 Owner 信息
+  // English engineering note.
   initOwnerInfo()
 
-  // 中止控制
+  // English engineering note.
   let isAborted = false
-  // 当前请求 ID，用于区分不同请求的响应
+  // English engineering note.
   let currentRequestId = ''
-  // 当前 Agent 请求 ID，用于中止请求
+  // English engineering note.
   let currentAgentRequestId = ''
 
-  // 生成消息 ID
+  // English engineering note.
   function generateId(prefix: string): string {
     return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
   }
 
   /**
-   * 发送消息（使用 Agent + Function Calling）
+   * English note.
    */
   async function sendMessage(content: string): Promise<void> {
     console.log('[AI] ====== 开始处理用户消息 ======')
@@ -174,7 +192,7 @@ export function useAIChat(
       return
     }
 
-    // 检查是否已配置 LLM
+    // English engineering note.
     console.log('[AI] 检查 LLM 配置...')
     const hasConfig = await window.llmApi.hasConfig()
     console.log('[AI] LLM 配置状态:', hasConfig)
@@ -190,29 +208,29 @@ export function useAIChat(
       return
     }
 
-    // 添加用户消息（包含工具调用记录）
+    // English engineering note.
     const userMessage: ChatMessage = {
       id: generateId('user'),
       role: 'user',
       content,
       timestamp: Date.now(),
-      toolCalls: [], // 工具调用会在这里更新
+      toolCalls: [], // English engineering note.
     }
     messages.value.push(userMessage)
     console.log('[AI] 已添加用户消息')
 
-    // 开始处理
+    // English engineering note.
     isAIThinking.value = true
     isLoadingSource.value = true
     currentToolStatus.value = null
     toolsUsedInCurrentRound.value = []
     isAborted = false
-    // 生成新的请求 ID
+    // English engineering note.
     currentRequestId = generateId('req')
     const thisRequestId = currentRequestId
     console.log('[AI] 开始 Agent 处理...', { requestId: thisRequestId })
 
-    // 创建 AI 响应消息占位符（使用 contentBlocks 数组）
+    // English engineering note.
     const aiMessageId = generateId('ai')
     const aiMessage: ChatMessage = {
       id: aiMessageId,
@@ -220,13 +238,13 @@ export function useAIChat(
       content: '',
       timestamp: Date.now(),
       isStreaming: true,
-      contentBlocks: [], // 初始化内容块数组
+      contentBlocks: [], // English engineering note.
     }
     messages.value.push(aiMessage)
     const aiMessageIndex = messages.value.length - 1
     let hasStreamError = false
 
-    // 辅助函数：更新 AI 消息
+    // English engineering note.
     const updateAIMessage = (updates: Partial<ChatMessage>) => {
       messages.value[aiMessageIndex] = {
         ...messages.value[aiMessageIndex],
@@ -234,32 +252,32 @@ export function useAIChat(
       }
     }
 
-    // 辅助函数：获取或创建当前文本块
+    // English engineering note.
     const appendTextToBlocks = (text: string) => {
       if (!text) return
       const blocks = messages.value[aiMessageIndex].contentBlocks || []
       const lastBlock = blocks[blocks.length - 1]
 
       if (text.trim().length === 0 && (!lastBlock || lastBlock.type !== 'text')) {
-        // 纯空白且没有可追加的文本块时，避免创建空块
+        // English engineering note.
         return
       }
 
       if (lastBlock && lastBlock.type === 'text') {
-        // 追加到现有文本块
+        // English engineering note.
         lastBlock.text += text
       } else {
-        // 创建新文本块
+        // English engineering note.
         blocks.push({ type: 'text', text })
       }
 
       updateAIMessage({
         contentBlocks: [...blocks],
-        content: messages.value[aiMessageIndex].content + text, // 同时更新 content 用于向后兼容和数据库存储
+        content: messages.value[aiMessageIndex].content + text, // English engineering note.
       })
     }
 
-    // 辅助函数：追加思考块（单独渲染，不写入 content）
+    // English engineering note.
     const appendThinkToBlocks = (text: string, tag?: string, durationMs?: number) => {
       if (!text && durationMs === undefined) return
       const blocks = messages.value[aiMessageIndex].contentBlocks || []
@@ -271,7 +289,7 @@ export function useAIChat(
         durationMs === undefined &&
         (!lastBlock || lastBlock.type !== 'think' || lastBlock.tag !== thinkTag)
       ) {
-        // 纯空白且没有可追加的思考块时，避免创建空块
+        // English engineering note.
         return
       }
 
@@ -282,7 +300,7 @@ export function useAIChat(
         targetBlock = { type: 'think', tag: thinkTag, text }
         blocks.push(targetBlock)
       } else if (durationMs !== undefined) {
-        // 仅更新耗时时，向前查找最近的同标签思考块
+        // English engineering note.
         for (let i = blocks.length - 1; i >= 0; i--) {
           const block = blocks[i]
           if (block.type === 'think' && block.tag === thinkTag) {
@@ -299,7 +317,7 @@ export function useAIChat(
       updateAIMessage({ contentBlocks: [...blocks] })
     }
 
-    // 辅助函数：添加工具块
+    // English engineering note.
     const addToolBlock = (toolName: string, params?: Record<string, unknown>) => {
       const blocks = messages.value[aiMessageIndex].contentBlocks || []
       blocks.push({
@@ -314,10 +332,10 @@ export function useAIChat(
       updateAIMessage({ contentBlocks: [...blocks] })
     }
 
-    // 辅助函数：更新工具块状态
+    // English engineering note.
     const updateToolBlockStatus = (toolName: string, status: 'done' | 'error') => {
       const blocks = messages.value[aiMessageIndex].contentBlocks || []
-      // 找到最后一个匹配的 running 状态的工具块
+      // English engineering note.
       for (let i = blocks.length - 1; i >= 0; i--) {
         const block = blocks[i]
         if (block.type === 'tool' && block.tool.name === toolName && block.tool.status === 'running') {
@@ -329,8 +347,8 @@ export function useAIChat(
     }
 
     try {
-      // 调用 Agent API
-      // 注意：ownerInfo 需要深拷贝为普通对象，否则 IPC 克隆会失败
+      // English engineering note.
+      // English engineering note.
       const context = {
         sessionId,
         timeFilter: timeFilter ? { startTs: timeFilter.startTs, endTs: timeFilter.endTs } : undefined,
@@ -347,16 +365,16 @@ export function useAIChat(
         aiGlobalSettings: aiGlobalSettings.value,
       })
 
-      // 收集历史消息（排除当前用户消息和 AI 占位消息）
-      // 应用历史轮数限制：每轮 = 用户提问 + AI 回复 = 2 条消息
+      // English engineering note.
+      // English engineering note.
       const maxHistoryRounds = aiGlobalSettings.value.maxHistoryRounds ?? 5
       const maxHistoryMessages = maxHistoryRounds * 2
 
       const historyMessages = messages.value
-        .slice(0, -2) // 排除刚添加的用户消息和 AI 占位消息
+        .slice(0, -2) // English engineering note.
         .filter((msg) => msg.role === 'user' || msg.role === 'assistant')
-        .filter((msg) => msg.content && msg.content.trim() !== '') // 排除空消息
-        .slice(-maxHistoryMessages) // 只保留最近 N 轮对话
+        .filter((msg) => msg.content && msg.content.trim() !== '') // English engineering note.
+        .slice(-maxHistoryMessages) // English engineering note.
         .map((msg) => ({
           role: msg.role as 'user' | 'assistant',
           content: msg.content,
@@ -369,12 +387,12 @@ export function useAIChat(
         promptConfig: currentPromptConfig.value,
       })
 
-      // 获取 requestId 和 promise（传递历史消息、聊天类型、提示词配置和语言设置）
+      // English engineering note.
       const { requestId: agentReqId, promise: agentPromise } = window.agentApi.runStream(
         content,
         context,
         (chunk) => {
-          // 如果已中止或请求 ID 不匹配，忽略后续 chunks
+          // English engineering note.
           if (isAborted || thisRequestId !== currentRequestId) {
             console.log('[AI] 已中止或请求已过期，忽略 chunk', {
               isAborted,
@@ -384,14 +402,14 @@ export function useAIChat(
             return
           }
 
-          // 只在工具调用时记录，减少日志噪音
+          // English engineering note.
           if (chunk.type === 'tool_start' || chunk.type === 'tool_result') {
             console.log('[AI] Agent chunk:', chunk.type, chunk.toolName)
           }
 
           switch (chunk.type) {
             case 'content':
-              // 流式内容更新 - 追加到 contentBlocks
+              // English engineering note.
               if (chunk.content) {
                 currentToolStatus.value = null
                 appendTextToBlocks(chunk.content)
@@ -399,7 +417,7 @@ export function useAIChat(
               break
 
             case 'think':
-              // 思考内容 - 写入思考块
+              // English engineering note.
               if (chunk.content) {
                 appendThinkToBlocks(chunk.content, chunk.thinkTag)
               } else if (chunk.thinkDurationMs !== undefined) {
@@ -408,43 +426,51 @@ export function useAIChat(
               break
 
             case 'tool_start':
-              // 工具开始执行 - 添加工具块到 contentBlocks
+              // English engineering note.
               console.log('[AI] 工具开始执行:', chunk.toolName, chunk.toolParams)
               if (chunk.toolName) {
+                const normalizedToolName = normalizeAgentToolName(chunk.toolName)
+                if (!normalizedToolName) {
+                  break
+                }
                 const toolParams = chunk.toolParams as Record<string, unknown> | undefined
                 currentToolStatus.value = {
-                  name: chunk.toolName,
-                  displayName: chunk.toolName,
+                  name: normalizedToolName,
+                  displayName: normalizedToolName,
                   status: 'running',
                 }
-                toolsUsedInCurrentRound.value.push(chunk.toolName)
+                toolsUsedInCurrentRound.value.push(normalizedToolName)
 
-                // 添加工具块到 AI 消息的 contentBlocks
-                addToolBlock(chunk.toolName, toolParams)
+                // English engineering note.
+                addToolBlock(normalizedToolName, toolParams)
               }
               break
 
             case 'tool_result':
-              // 工具执行结果 - 更新工具块状态
+              // English engineering note.
               console.log('[AI] 工具执行结果:', chunk.toolName, chunk.toolResult)
               if (chunk.toolName) {
-                if (currentToolStatus.value?.name === chunk.toolName) {
+                const normalizedToolName = normalizeAgentToolName(chunk.toolName)
+                if (!normalizedToolName) {
+                  break
+                }
+                if (currentToolStatus.value?.name === normalizedToolName) {
                   currentToolStatus.value = {
                     ...currentToolStatus.value,
                     status: 'done',
                   }
                 }
-                // 更新 contentBlocks 中的工具块状态
-                updateToolBlockStatus(chunk.toolName, 'done')
+                // English engineering note.
+                updateToolBlockStatus(normalizedToolName, 'done')
               }
               isLoadingSource.value = false
               break
 
             case 'done':
-              // 完成 - 更新 Token 使用量
+              // English engineering note.
               console.log('[AI] Agent 完成', chunk.usage)
               currentToolStatus.value = null
-              // 更新会话累计 Token（流式响应在最后一个 chunk 返回 usage）
+              // English engineering note.
               if (chunk.usage) {
                 sessionTokenUsage.value = {
                   promptTokens: sessionTokenUsage.value.promptTokens + chunk.usage.promptTokens,
@@ -456,20 +482,20 @@ export function useAIChat(
               break
 
             case 'error':
-              // 错误
+              // English engineering note.
               console.error('[AI] Agent 错误:', chunk.error)
               if (currentToolStatus.value) {
                 currentToolStatus.value = {
                   ...currentToolStatus.value,
                   status: 'error',
                 }
-                // 更新对应工具块状态为错误
+                // English engineering note.
                 updateToolBlockStatus(currentToolStatus.value.name, 'error')
               }
               if (!hasStreamError) {
                 hasStreamError = true
                 const errorMessage = chunk.error || '未知错误'
-                // 提前将错误显示给用户，避免无反馈
+                // English engineering note.
                 appendTextToBlocks(`\n\n❌ 处理失败：${errorMessage}`)
                 updateAIMessage({ isStreaming: false })
               }
@@ -478,7 +504,7 @@ export function useAIChat(
         },
         historyMessages,
         chatType,
-        // 确保传递纯对象，避免 IPC 克隆失败
+        // English engineering note.
         {
           roleDefinition: currentPromptConfig.value.roleDefinition,
           responseRules: currentPromptConfig.value.responseRules,
@@ -486,22 +512,22 @@ export function useAIChat(
         locale
       )
 
-      // 存储 Agent 请求 ID（用于中止）
+      // English engineering note.
       currentAgentRequestId = agentReqId
       console.log('[AI] Agent 请求已启动，agentReqId:', agentReqId)
 
-      // 等待 Agent 完成
+      // English engineering note.
       const result = await agentPromise
       console.log('[AI] Agent 返回结果:', result)
 
-      // 如果请求已过期，不更新
+      // English engineering note.
       if (thisRequestId !== currentRequestId) {
         console.log('[AI] 请求已过期，跳过结果处理')
         return
       }
 
       if (result.success && result.result) {
-        // 更新消息的 dataSource
+        // English engineering note.
         messages.value[aiMessageIndex] = {
           ...messages.value[aiMessageIndex],
           dataSource: {
@@ -511,15 +537,16 @@ export function useAIChat(
           isStreaming: false,
         }
 
-        // 保存对话到数据库
+        // English engineering note.
         console.log('[AI] 保存对话...')
         await saveConversation(userMessage, messages.value[aiMessageIndex])
         console.log('[AI] 对话已保存')
       } else {
-        // 处理错误
-        const errorText = `❌ 处理失败：${result.error || '未知错误'}`
+        // English engineering note.
+        const detail = (result as { error?: string; errorMessage?: string }).errorMessage || result.error || '未知错误'
+        const errorText = `❌ 处理失败：${detail}`
         if (!hasStreamError) {
-          // 只在未展示过错误时追加
+          // English engineering note.
           appendTextToBlocks(`\n\n${errorText}`)
         }
         messages.value[aiMessageIndex] = {
@@ -550,13 +577,13 @@ export function useAIChat(
   }
 
   /**
-   * 保存对话到数据库
+   * English note.
    */
   async function saveConversation(userMsg: ChatMessage, aiMsg: ChatMessage): Promise<void> {
     console.log('[AI] saveConversation 调用')
 
     try {
-      // 如果没有当前对话，创建新对话
+      // English engineering note.
       if (!currentConversationId.value) {
         const title = userMsg.content.slice(0, 50) + (userMsg.content.length > 50 ? '...' : '')
         const conversation = await window.aiApi.createConversation(sessionId, title)
@@ -564,11 +591,11 @@ export function useAIChat(
         console.log('[AI] 创建了新对话:', conversation.id)
       }
 
-      // 保存用户消息
+      // English engineering note.
       await window.aiApi.addMessage(currentConversationId.value, 'user', userMsg.content)
 
-      // 保存 AI 消息（包含 contentBlocks）
-      // 注意：需要深拷贝 contentBlocks 以确保可序列化（避免 Vue 响应式代理对象）
+      // English engineering note.
+      // English engineering note.
       const serializableContentBlocks = aiMsg.contentBlocks
         ? JSON.parse(JSON.stringify(aiMsg.contentBlocks))
         : undefined
@@ -581,9 +608,9 @@ export function useAIChat(
         currentConversationId.value,
         'assistant',
         aiMsg.content,
-        undefined, // 不再保存关键词
+        undefined, // English engineering note.
         undefined,
-        serializableContentBlocks // 保存内容块（已序列化）
+        serializableContentBlocks // English engineering note.
       )
       console.log('[AI] 消息保存完成')
     } catch (error) {
@@ -592,7 +619,7 @@ export function useAIChat(
   }
 
   /**
-   * 加载对话历史
+   * English note.
    */
   async function loadConversation(conversationId: string): Promise<void> {
     console.log('[AI] 加载对话历史，conversationId:', conversationId)
@@ -616,7 +643,7 @@ export function useAIChat(
         role: msg.role,
         content: msg.content,
         timestamp: msg.timestamp * 1000,
-        // 加载保存的 contentBlocks（如果有）
+        // English engineering note.
         contentBlocks: msg.contentBlocks as ContentBlock[] | undefined,
       }))
       console.log('[AI] 加载完成，messages.value 数量:', messages.value.length)
@@ -626,14 +653,14 @@ export function useAIChat(
   }
 
   /**
-   * 创建新对话
+   * English note.
    */
   function startNewConversation(welcomeMessage?: string): void {
     currentConversationId.value = null
     messages.value = []
     sourceMessages.value = []
     currentKeywords.value = []
-    // 重置 Token 计数
+    // English engineering note.
     sessionTokenUsage.value = { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
 
     if (welcomeMessage) {
@@ -647,21 +674,21 @@ export function useAIChat(
   }
 
   /**
-   * 加载更多搜索结果（保留兼容性，但不再主动使用）
+   * English note.
    */
   async function loadMoreSourceMessages(): Promise<void> {
-    // Agent 模式下暂不支持加载更多
+    // English engineering note.
   }
 
   /**
-   * 更新配置（保留兼容性）
+   * English note.
    */
   async function updateMaxMessages(): Promise<void> {
-    // Agent 模式下由工具自行控制
+    // English engineering note.
   }
 
   /**
-   * 停止生成
+   * English note.
    */
   async function stopGeneration(): Promise<void> {
     if (!isAIThinking.value) return
@@ -672,7 +699,7 @@ export function useAIChat(
     isLoadingSource.value = false
     currentToolStatus.value = null
 
-    // 调用主进程中止 Agent 请求
+    // English engineering note.
     if (currentAgentRequestId) {
       console.log('[AI] 中止 Agent 请求:', currentAgentRequestId)
       try {
@@ -684,7 +711,7 @@ export function useAIChat(
       currentAgentRequestId = ''
     }
 
-    // 标记最后一条 AI 消息为已完成
+    // English engineering note.
     const lastMessage = messages.value[messages.value.length - 1]
     if (lastMessage && lastMessage.role === 'assistant' && lastMessage.isStreaming) {
       lastMessage.isStreaming = false
@@ -693,7 +720,7 @@ export function useAIChat(
   }
 
   return {
-    // 状态
+    // English engineering note.
     messages,
     sourceMessages,
     currentKeywords,
@@ -704,7 +731,7 @@ export function useAIChat(
     toolsUsedInCurrentRound,
     sessionTokenUsage,
 
-    // 方法
+    // English engineering note.
     sendMessage,
     loadConversation,
     startNewConversation,

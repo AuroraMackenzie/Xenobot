@@ -1,9 +1,9 @@
 /**
- * 排名样式工具函数
- * 统一管理排行榜中的金银铜等排名样式
+ * English note.
+ * English note.
  */
 
-/** 排名徽章样式（圆形背景） */
+/** English note.
 export function getRankBadgeClass(index: number): string {
   if (index === 0) return 'bg-linear-to-r from-amber-400 to-orange-500 text-white'
   if (index === 1) return 'bg-linear-to-r from-gray-300 to-gray-400 text-white'
@@ -11,7 +11,7 @@ export function getRankBadgeClass(index: number): string {
   return 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
 }
 
-/** 进度条渐变颜色 */
+/** English note.
 export function getRankBarColor(index: number): string {
   const colors = [
     'from-amber-400 to-orange-500',

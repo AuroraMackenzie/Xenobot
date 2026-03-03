@@ -1,21 +1,21 @@
 <script setup lang="ts">
 /**
- * 带标题的卡片容器组件
- * 统一的分析模块卡片样式
+ * English note.
+ * English note.
  */
 import { computed } from 'vue'
 
 const props = withDefaults(
   defineProps<{
-    /** 卡片标题 */
+    /** English note.
     title: string
-    /** 可选的描述文字 */
+    /** English note.
     description?: string
-    /** 是否显示边框分隔线（默认 true） */
+    /** English note.
     showDivider?: boolean
-    /** 是否启用内容滚动 */
+    /** English note.
     scrollable?: boolean
-    /** 最大高度（vh 单位），默认 60vh */
+    /** English note.
     maxHeightVh?: number
   }>(),
   {
@@ -25,7 +25,7 @@ const props = withDefaults(
   }
 )
 
-// 内容区域样式
+// English engineering note.
 const contentStyle = computed(() => {
   if (!props.scrollable) return undefined
   return {
@@ -37,7 +37,7 @@ const contentStyle = computed(() => {
 
 <template>
   <div class="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
-    <!-- 标题区域 -->
+    <!-- English UI note -->
     <div class="px-5 py-3" :class="{ 'border-b border-gray-200 dark:border-gray-800': showDivider && $slots.default }">
       <div class="flex items-center justify-between">
         <div>
@@ -46,18 +46,18 @@ const contentStyle = computed(() => {
             {{ description }}
           </p>
         </div>
-        <!-- 标题右侧插槽 -->
+        <!-- English UI note -->
         <slot name="headerRight" />
       </div>
     </div>
 
-    <!-- 内容区域 -->
+    <!-- English UI note -->
     <div v-if="scrollable" :style="contentStyle">
       <slot />
     </div>
     <slot v-else />
 
-    <!-- 底部区域（在滚动区域外） -->
+    <!-- English UI note -->
     <slot name="footer" />
   </div>
 </template>

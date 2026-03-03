@@ -8,7 +8,7 @@ export interface SQLExportData {
 }
 
 /**
- * 将 SQL 结果格式化为 CSV
+ * English note.
  */
 export function formatAsCSV(data: SQLExportData): string {
   const header = data.columns.join(',')
@@ -19,7 +19,7 @@ export function formatAsCSV(data: SQLExportData): string {
 }
 
 /**
- * 将 SQL 结果格式化为 JSON（数组对象形式）
+ * English note.
  */
 export function formatAsJSON(data: SQLExportData): string {
   const jsonData = data.rows.map((row) => {
@@ -33,7 +33,7 @@ export function formatAsJSON(data: SQLExportData): string {
 }
 
 /**
- * 导出 SQL 结果到文件
+ * English note.
  */
 export async function exportSQLResult(
   data: SQLExportData,
@@ -57,7 +57,7 @@ export async function exportSQLResult(
     mimeType = 'text/csv'
   }
 
-  // 转换为 data URL 并保存
+  // English engineering note.
   const dataUrl = `data:${mimeType};charset=utf-8,${encodeURIComponent(content)}`
   const result = await window.cacheApi.saveToDownloads(filename, dataUrl)
 

@@ -18,7 +18,8 @@
     "startDate": "Start Date",
     "endDate": "End Date",
     "reset": "Reset",
-    "filter": "Filter"
+    "filter": "Filter",
+    "keywordsSemanticHint": "use semantic: your question for meaning-based retrieval"
   },
   "timeline": {
     "timeline": "Sessions",

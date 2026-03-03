@@ -1,18 +1,18 @@
 <script setup lang="ts">
 /**
- * 统一加载状态组件
- * 支持三种场景：行内加载、页面加载、蒙层覆盖
+ * English note.
+ * English note.
  */
 
 import { computed } from 'vue'
 
 const props = withDefaults(
   defineProps<{
-    /** 加载提示文本 */
+    /** English note.
     text?: string
-    /** 自定义高度（仅 inline 模式生效） */
+    /** English note.
     height?: string
-    /** 显示模式：inline=行内, page=全屏页面, overlay=蒙层覆盖 */
+    /** English note.
     variant?: 'inline' | 'page' | 'overlay'
   }>(),
   {
@@ -20,7 +20,7 @@ const props = withDefaults(
   }
 )
 
-// 容器样式
+// English engineering note.
 const containerClass = computed(() => {
   const base = 'flex items-center justify-center'
 

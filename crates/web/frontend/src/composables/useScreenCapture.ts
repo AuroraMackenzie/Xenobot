@@ -1,35 +1,35 @@
 /**
- * 截屏功能 Composable
- * 提供简洁的 API 用于捕获页面/元素截图
+ * English note.
+ * English note.
  */
 import { ref } from 'vue'
 import { captureAsImageData } from '@/utils/snapCapture'
 import { useToast } from '@nuxt/ui/runtime/composables/useToast.js'
 import { useLayoutStore } from '@/stores/layout'
 
-/** 默认移动端最大宽度 */
+/** English note.
 const DEFAULT_MOBILE_MAX_WIDTH = 525
 
 export interface ScreenCaptureOptions {
-  /** 截屏时要隐藏的元素选择器列表 */
+  /** English note.
   hideSelectors?: string[]
-  /** 最大导出宽度 */
+  /** English note.
   maxExportWidth?: number
-  /** 背景颜色 */
+  /** English note.
   backgroundColor?: string
-  /** 是否捕获完整的可滚动内容（默认 true） */
+  /** English note.
   fullContent?: boolean
   /**
-   * 移动端适配宽度，设置后会临时改变元素宽度以适配移动端布局
-   * - 传入数字：使用指定宽度
-   * - 传入 true：使用默认值 525px（自动适配，仅当原始宽度超过时才缩放）
-   * - 传入 false 或不传：不进行移动端适配
+   * English note.
+   * English note.
+   * English note.
+   * English note.
    */
   mobileWidth?: number | boolean
 }
 
 /**
- * 截屏功能 Composable
+ * English note.
  */
 export function useScreenCapture() {
   const layoutStore = useLayoutStore()
@@ -37,11 +37,11 @@ export function useScreenCapture() {
   const isCapturing = ref(false)
   const captureError = ref<string | null>(null)
 
-  // 保存最后一次截图数据（用于 Toast 操作）
+  // English engineering note.
   let lastCapturedImage: string | null = null
 
   /**
-   * 保存图片到专用下载目录
+   * English note.
    */
   async function downloadImage(imageData: string) {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
@@ -81,7 +81,7 @@ export function useScreenCapture() {
   }
 
   /**
-   * 显示截屏成功的 Toast
+   * English note.
    */
   function showSuccessToast(imageData: string) {
     lastCapturedImage = imageData
@@ -115,9 +115,9 @@ export function useScreenCapture() {
   }
 
   /**
-   * 捕获指定选择器的元素
-   * @param selector CSS 选择器（class 或 id）
-   * @param options 截屏选项
+   * English note.
+   * English note.
+   * English note.
    */
   async function capture(selector: string, options?: ScreenCaptureOptions): Promise<boolean> {
     const element = document.querySelector(selector) as HTMLElement | null
@@ -129,9 +129,9 @@ export function useScreenCapture() {
   }
 
   /**
-   * 捕获指定的 DOM 元素
-   * @param element 要截屏的 DOM 元素
-   * @param options 截屏选项
+   * English note.
+   * English note.
+   * English note.
    */
   async function captureElement(element: HTMLElement, options?: ScreenCaptureOptions): Promise<boolean> {
     if (isCapturing.value) return false
@@ -139,7 +139,7 @@ export function useScreenCapture() {
     isCapturing.value = true
     captureError.value = null
 
-    // 临时给元素添加边距和 position: relative（用于水印定位）
+    // English engineering note.
     const originalPadding = element.style.padding
     const originalPaddingBottom = element.style.paddingBottom
     const originalPosition = element.style.position
@@ -148,24 +148,24 @@ export function useScreenCapture() {
     const originalMaxWidth = element.style.maxWidth
 
     element.style.padding = '16px'
-    element.style.paddingBottom = '48px' // 为水印留出空间
+    element.style.paddingBottom = '48px' // English engineering note.
     const computedPosition = window.getComputedStyle(element).position
     if (computedPosition === 'static') {
       element.style.position = 'relative'
     }
 
-    // 移动端宽度适配（渐进式缩放）
+    // English engineering note.
     let appliedMobileWidth = false
     if (options?.mobileWidth) {
       const baseWidth = typeof options.mobileWidth === 'number' ? options.mobileWidth : DEFAULT_MOBILE_MAX_WIDTH
 
-      // 获取元素当前的实际宽度
+      // English engineering note.
       const currentWidth = element.getBoundingClientRect().width
 
-      // 只有当原始宽度大于基准宽度时才缩放
+      // English engineering note.
       if (currentWidth > baseWidth) {
-        // 渐进式缩放：目标宽度 = 基准宽度 + (原始宽度 - 基准宽度) × 缩放因子
-        // 缩放因子 0.3 表示超出部分保留 30%
+        // English engineering note.
+        // English engineering note.
         const scaleFactor = 0.3
         const targetWidth = Math.round(baseWidth + (currentWidth - baseWidth) * scaleFactor)
 
@@ -176,7 +176,7 @@ export function useScreenCapture() {
       }
     }
 
-    // 添加底部水印标识（绝对定位）
+    // English engineering note.
     const watermark = document.createElement('div')
     watermark.className = '__capture-watermark__'
     watermark.style.cssText = `
@@ -191,11 +191,11 @@ export function useScreenCapture() {
     watermark.textContent = 'Xenobot · Local-First Chat Intelligence'
     element.appendChild(watermark)
 
-    // 隐藏指定元素（使用临时 class 而不是 inline style，避免恢复问题）
+    // English engineering note.
     const hiddenElements: HTMLElement[] = []
     const HIDDEN_CLASS = '__capture-hidden__'
 
-    // 注入隐藏样式（如果不存在）
+    // English engineering note.
     let styleTag = document.getElementById('__capture-style__')
     if (!styleTag) {
       styleTag = document.createElement('style')
@@ -204,7 +204,7 @@ export function useScreenCapture() {
       document.head.appendChild(styleTag)
     }
 
-    // 隐藏带有 .no-capture class 的元素（通用排除规则）
+    // English engineering note.
     const noCaptureElements = element.querySelectorAll('.no-capture')
     noCaptureElements.forEach((el) => {
       const htmlEl = el as HTMLElement
@@ -212,7 +212,7 @@ export function useScreenCapture() {
       htmlEl.classList.add(HIDDEN_CLASS)
     })
 
-    // 隐藏用户指定的选择器元素
+    // English engineering note.
     if (options?.hideSelectors) {
       for (const selector of options.hideSelectors) {
         const elements = document.querySelectorAll(selector)
@@ -224,7 +224,7 @@ export function useScreenCapture() {
       }
     }
 
-    // 如果需要捕获完整内容，临时移除 overflow 限制
+    // English engineering note.
     const fullContent = options?.fullContent !== false
     const overflowElements: {
       el: HTMLElement
@@ -234,7 +234,7 @@ export function useScreenCapture() {
     }[] = []
 
     if (fullContent) {
-      // 处理目标元素及其所有子元素的 overflow 和 max-height 限制
+      // English engineering note.
       const elementsWithOverflow = [element, ...Array.from(element.querySelectorAll('*'))] as HTMLElement[]
       for (const node of elementsWithOverflow) {
         const style = window.getComputedStyle(node)
@@ -259,14 +259,14 @@ export function useScreenCapture() {
           })
           node.style.overflow = 'visible'
           node.style.maxHeight = 'none'
-          // 如果有固定高度，也需要临时移除
+          // English engineering note.
           if (style.height !== 'auto' && node.scrollHeight > node.clientHeight) {
             node.style.height = 'auto'
           }
         }
       }
 
-      // 也处理祖先元素
+      // English engineering note.
       let parent: HTMLElement | null = element.parentElement
       while (parent) {
         const style = window.getComputedStyle(parent)
@@ -292,7 +292,7 @@ export function useScreenCapture() {
       }
     }
 
-    // 修复 Chart.js canvas 黑色边框问题（@zumer/snapdom bug）
+    // English engineering note.
     const canvasElements: { el: HTMLCanvasElement; originalOutline: string; originalBorder: string }[] = []
     const canvases = element.querySelectorAll('canvas')
     canvases.forEach((canvas) => {
@@ -305,8 +305,8 @@ export function useScreenCapture() {
       canvas.style.border = 'none'
     })
 
-    // 修复 Markdown 标题元素在 @zumer/snapdom 中的黑色边框问题
-    // 注意：不修改 background，以保留渐变文字等效果
+    // English engineering note.
+    // English engineering note.
     const headingElements: {
       el: HTMLElement
       originalStyles: {
@@ -326,15 +326,15 @@ export function useScreenCapture() {
           boxShadow: htmlEl.style.boxShadow,
         },
       })
-      // 只清除边框相关样式，保留 background/margin/padding
+      // English engineering note.
       htmlEl.style.border = 'none'
       htmlEl.style.outline = 'none'
       htmlEl.style.boxShadow = 'none'
     })
 
-    // 修复 Markdown 列表元素在 @zumer/snapdom 中的渲染问题
-    // BUG: @zumer/snapdom 在处理 <ol>/<ul> 的 list-style 时会产生额外的黑色边框和位置偏移
-    // 解决方案：临时移除 list-style，手动添加数字/圆点作为文本前缀
+    // English engineering note.
+    // English engineering note.
+    // English engineering note.
     const listElements: {
       el: HTMLElement
       originalStyles: {
@@ -366,16 +366,16 @@ export function useScreenCapture() {
         addedPrefixes,
       })
 
-      // 移除列表样式以避免 @zumer/snapdom 渲染问题
+      // English engineering note.
       htmlEl.style.listStyleType = 'none'
       htmlEl.style.paddingLeft = '0'
       htmlEl.style.marginLeft = '0'
-      // 移除边框以修复 @zumer/snapdom 的黑色边框 bug
+      // English engineering note.
       htmlEl.style.border = 'none'
       htmlEl.style.outline = 'none'
       htmlEl.style.boxShadow = 'none'
 
-      // 为每个 li 添加手动前缀
+      // English engineering note.
       const lis = htmlEl.querySelectorAll(':scope > li')
       lis.forEach((li, index) => {
         const prefix = document.createElement('span')
@@ -387,12 +387,12 @@ export function useScreenCapture() {
       })
     })
 
-    // 清理可能导致 URI malformed 错误的特殊字符（孤立的 Unicode 代理对）
+    // English engineering note.
     const textNodesBackup: { node: Text; originalText: string }[] = []
     const cleanProblematicCharacters = (text: string): string => {
-      // 移除孤立的代理对（会导致 encodeURIComponent 失败）
-      // 高代理：\uD800-\uDBFF，低代理：\uDC00-\uDFFF
-      // 有效的代理对应该是 高代理+低代理 的组合
+      // English engineering note.
+      // English engineering note.
+      // English engineering note.
       return text.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '\uFFFD')
     }
     const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, null)
@@ -407,7 +407,7 @@ export function useScreenCapture() {
     }
 
     try {
-      // 如果应用了移动端宽度，等待 DOM 重新布局
+      // English engineering note.
       if (appliedMobileWidth) {
         await new Promise<void>((resolve) => {
           requestAnimationFrame(() => {
@@ -422,14 +422,14 @@ export function useScreenCapture() {
         fullContent: options?.fullContent,
       })
 
-      // 自动复制到剪贴板
+      // English engineering note.
       const copyResult = await window.api.clipboard.copyImage(imageData)
 
       if (copyResult.success) {
-        // 显示成功 Toast（包含预览和下载按钮）
+        // English engineering note.
         showSuccessToast(imageData)
       } else {
-        // 复制失败时，直接打开预览弹窗
+        // English engineering note.
         toast.add({
           title: '截图完成',
           description: '复制到剪贴板失败，请手动保存',
@@ -445,7 +445,7 @@ export function useScreenCapture() {
       captureError.value = String(error)
       console.error('截屏失败:', error)
 
-      // 提供更友好的错误提示
+      // English engineering note.
       let errorMessage = String(error)
       if (errorMessage.includes('URI malformed')) {
         errorMessage = '页面包含无法处理的特殊字符，请尝试截屏其他区域'
@@ -460,10 +460,10 @@ export function useScreenCapture() {
       })
       return false
     } finally {
-      // 移除水印
+      // English engineering note.
       watermark.remove()
 
-      // 恢复元素样式
+      // English engineering note.
       element.style.padding = originalPadding
       element.style.paddingBottom = originalPaddingBottom
       element.style.position = originalPosition
@@ -471,22 +471,22 @@ export function useScreenCapture() {
       element.style.minWidth = originalMinWidth
       element.style.maxWidth = originalMaxWidth
 
-      // 恢复文本节点的原始内容
+      // English engineering note.
       for (const { node, originalText } of textNodesBackup) {
         node.textContent = originalText
       }
-      // 恢复 canvas 样式
+      // English engineering note.
       for (const { el, originalOutline, originalBorder } of canvasElements) {
         el.style.outline = originalOutline
         el.style.border = originalBorder
       }
-      // 恢复标题元素样式（@zumer/snapdom bug workaround）
+      // English engineering note.
       for (const { el, originalStyles } of headingElements) {
         el.style.border = originalStyles.border
         el.style.outline = originalStyles.outline
         el.style.boxShadow = originalStyles.boxShadow
       }
-      // 恢复列表元素样式并移除手动添加的前缀（@zumer/snapdom bug workaround）
+      // English engineering note.
       for (const { el, originalStyles, addedPrefixes } of listElements) {
         el.style.listStyleType = originalStyles.listStyleType
         el.style.paddingLeft = originalStyles.paddingLeft
@@ -494,18 +494,18 @@ export function useScreenCapture() {
         el.style.border = originalStyles.border
         el.style.outline = originalStyles.outline
         el.style.boxShadow = originalStyles.boxShadow
-        // 移除手动添加的前缀
+        // English engineering note.
         for (const prefix of addedPrefixes) {
           prefix.remove()
         }
       }
-      // 恢复 overflow 设置
+      // English engineering note.
       for (const { el, originalOverflow, originalHeight, originalMaxHeight } of overflowElements) {
         el.style.overflow = originalOverflow
         el.style.height = originalHeight
         el.style.maxHeight = originalMaxHeight
       }
-      // 恢复隐藏元素
+      // English engineering note.
       for (const el of hiddenElements) {
         el.classList.remove('__capture-hidden__')
       }
@@ -514,13 +514,13 @@ export function useScreenCapture() {
   }
 
   /**
-   * 捕获当前页面的主内容区域
-   * 优先查找 .main-content 标记的实际内容区域
-   * @param options 截屏选项
+   * English note.
+   * English note.
+   * English note.
    */
   async function capturePage(options?: ScreenCaptureOptions): Promise<boolean> {
-    // 优先查找标记了 .main-content 的实际内容区域
-    // 这是页面截屏的标准约定，详见 .docs/rules.md
+    // English engineering note.
+    // English engineering note.
     const mainContent =
       document.querySelector('.main-content') ||
       document.querySelector('main .overflow-y-auto') ||
@@ -535,15 +535,15 @@ export function useScreenCapture() {
   }
 
   return {
-    /** 是否正在截屏 */
+    /** English note.
     isCapturing,
-    /** 截屏错误信息 */
+    /** English note.
     captureError,
-    /** 截屏指定选择器的元素 */
+    /** English note.
     capture,
-    /** 截屏指定 DOM 元素 */
+    /** English note.
     captureElement,
-    /** 截屏当前页面主内容区域 */
+    /** English note.
     capturePage,
   }
 }

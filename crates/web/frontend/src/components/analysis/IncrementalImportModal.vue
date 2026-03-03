@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * 增量导入弹窗
- * 支持向已有会话追加聊天记录（去重后合并）
+ * English note.
+ * English note.
  */
 
 import { ref, computed, watch } from 'vue'
@@ -17,49 +17,49 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
-  /** 导入完成后触发，携带新增消息数 */
+  /** English note.
   imported: [newMessageCount: number]
 }>()
 
 const { t } = useI18n()
 
-// 状态
+// English engineering note.
 type Stage = 'select' | 'analyzing' | 'preview' | 'importing' | 'done' | 'error'
 const stage = ref<Stage>('select')
 
-// 文件信息
+// English engineering note.
 const selectedFile = ref<{ path: string; name: string } | null>(null)
 
-// 分析结果
+// English engineering note.
 const analyzeResult = ref<{
   newMessageCount: number
   duplicateCount: number
   totalInFile: number
 } | null>(null)
 
-// 导入进度
+// English engineering note.
 const importProgress = ref<ImportProgress | null>(null)
 
-// 错误信息
+// English engineering note.
 const errorMessage = ref<string | null>(null)
 
-// 导入结果
+// English engineering note.
 const importResult = ref<{ newMessageCount: number } | null>(null)
 
-// 计算弹窗是否打开
+// English engineering note.
 const isOpen = computed({
   get: () => props.modelValue,
   set: (value) => emit('update:modelValue', value),
 })
 
-// 监听弹窗关闭，重置状态
+// English engineering note.
 watch(isOpen, (value) => {
   if (!value) {
     resetState()
   }
 })
 
-// 重置状态
+// English engineering note.
 function resetState() {
   stage.value = 'select'
   selectedFile.value = null
@@ -69,7 +69,7 @@ function resetState() {
   importResult.value = null
 }
 
-// 处理文件拖拽/选择
+// English engineering note.
 async function handleFileDrop({ paths }: { files: File[]; paths: string[] }) {
   if (paths.length === 0) {
     errorMessage.value = t('home.import.cannotReadPath')
@@ -84,7 +84,7 @@ async function handleFileDrop({ paths }: { files: File[]; paths: string[] }) {
   await analyzeFile()
 }
 
-// 点击选择文件
+// English engineering note.
 async function handleSelectFile() {
   const result = await window.api.dialog.showOpenDialog({
     title: t('analysis.incremental.selectFile'),
@@ -107,7 +107,7 @@ async function handleSelectFile() {
   await analyzeFile()
 }
 
-// 分析文件（检测去重后能新增多少消息）
+// English engineering note.
 async function analyzeFile() {
   if (!selectedFile.value) return
 
@@ -136,7 +136,7 @@ async function analyzeFile() {
   }
 }
 
-// 执行增量导入
+// English engineering note.
 async function executeImport() {
   if (!selectedFile.value) return
 
@@ -148,7 +148,7 @@ async function executeImport() {
   }
 
   try {
-    // 监听进度
+    // English engineering note.
     const unsubscribe = window.chatApi.onImportProgress((progress) => {
       importProgress.value = progress
     })
@@ -169,7 +169,7 @@ async function executeImport() {
   }
 }
 
-// 完成并关闭
+// English engineering note.
 function handleDone() {
   if (importResult.value) {
     emit('imported', importResult.value.newMessageCount)
@@ -177,7 +177,7 @@ function handleDone() {
   isOpen.value = false
 }
 
-// 返回选择文件
+// English engineering note.
 function handleBack() {
   stage.value = 'select'
   selectedFile.value = null
@@ -185,7 +185,7 @@ function handleBack() {
   errorMessage.value = null
 }
 
-// 翻译错误
+// English engineering note.
 function translateError(error: string): string {
   if (error.startsWith('error.')) {
     const key = `home.import.errors.${error.slice(6)}`
@@ -200,7 +200,7 @@ function translateError(error: string): string {
   <UModal v-model:open="isOpen" :title="t('analysis.incremental.title')">
     <template #body>
       <div class="min-h-[200px]">
-        <!-- 阶段 1：选择文件 -->
+        <!-- English UI note -->
         <div v-if="stage === 'select'" class="space-y-4">
           <p class="text-sm text-gray-600 dark:text-gray-400">
             {{ t('analysis.incremental.description', { name: sessionName }) }}
@@ -226,14 +226,14 @@ function translateError(error: string): string {
           </FileDropZone>
         </div>
 
-        <!-- 阶段 2：分析中 -->
+        <!-- English UI note -->
         <div v-else-if="stage === 'analyzing'" class="flex flex-col items-center justify-center py-10">
           <UIcon name="i-heroicons-arrow-path" class="mb-4 h-10 w-10 animate-spin text-pink-500" />
           <p class="text-gray-600 dark:text-gray-400">{{ t('analysis.incremental.analyzing') }}</p>
           <p class="mt-2 text-sm text-gray-500">{{ selectedFile?.name }}</p>
         </div>
 
-        <!-- 阶段 3：预览 -->
+        <!-- English UI note -->
         <div v-else-if="stage === 'preview' && analyzeResult" class="space-y-6">
           <div class="rounded-lg bg-gray-50 p-4 dark:bg-gray-800">
             <p class="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -267,7 +267,7 @@ function translateError(error: string): string {
           </p>
         </div>
 
-        <!-- 阶段 4：导入中 -->
+        <!-- English UI note -->
         <div v-else-if="stage === 'importing'" class="flex flex-col items-center justify-center py-10">
           <UIcon name="i-heroicons-arrow-path" class="mb-4 h-10 w-10 animate-spin text-pink-500" />
           <p class="text-gray-600 dark:text-gray-400">{{ t('analysis.incremental.importing') }}</p>
@@ -276,7 +276,7 @@ function translateError(error: string): string {
           </div>
         </div>
 
-        <!-- 阶段 5：完成 -->
+        <!-- English UI note -->
         <div v-else-if="stage === 'done' && importResult" class="flex flex-col items-center justify-center py-10">
           <UIcon name="i-heroicons-check-circle" class="mb-4 h-12 w-12 text-green-500" />
           <p class="text-lg font-medium text-gray-900 dark:text-white">
@@ -287,7 +287,7 @@ function translateError(error: string): string {
           </p>
         </div>
 
-        <!-- 阶段 6：错误 -->
+        <!-- English UI note -->
         <div v-else-if="stage === 'error'" class="flex flex-col items-center justify-center py-10">
           <UIcon name="i-heroicons-x-circle" class="mb-4 h-12 w-12 text-red-500" />
           <p class="text-lg font-medium text-gray-900 dark:text-white">
@@ -302,14 +302,14 @@ function translateError(error: string): string {
 
     <template #footer>
       <div class="flex w-full justify-end gap-2">
-        <!-- 选择阶段 -->
+        <!-- English UI note -->
         <template v-if="stage === 'select'">
           <UButton color="neutral" variant="ghost" @click="isOpen = false">
             {{ t('common.cancel') }}
           </UButton>
         </template>
 
-        <!-- 预览阶段 -->
+        <!-- English UI note -->
         <template v-else-if="stage === 'preview'">
           <UButton color="neutral" variant="ghost" @click="handleBack">
             {{ t('common.back') }}
@@ -323,7 +323,7 @@ function translateError(error: string): string {
           </UButton>
         </template>
 
-        <!-- 完成/错误阶段 -->
+        <!-- English UI note -->
         <template v-else-if="stage === 'done' || stage === 'error'">
           <UButton v-if="stage === 'error'" color="neutral" variant="ghost" @click="handleBack">
             {{ t('common.retry') }}

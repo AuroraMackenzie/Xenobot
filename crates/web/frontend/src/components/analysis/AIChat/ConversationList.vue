@@ -36,12 +36,12 @@ const emit = defineEmits<{
 // State
 const conversations = ref<Conversation[]>([])
 const isLoading = ref(false)
-const isExporting = ref<string | null>(null) // 正在导出的对话 ID
+const isExporting = ref<string | null>(null) // English engineering note.
 const editingId = ref<string | null>(null)
 const editingTitle = ref('')
 const isCollapsed = ref(false)
 
-// 加载对话列表
+// English engineering note.
 async function loadConversations() {
   isLoading.value = true
   try {
@@ -53,7 +53,7 @@ async function loadConversations() {
   }
 }
 
-// 格式化时间（数据库存储的是秒级时间戳，需转换为毫秒级）
+// English engineering note.
 function formatTime(timestamp: number): string {
   const now = dayjs()
   const date = dayjs(timestamp * 1000)
@@ -67,18 +67,18 @@ function formatTime(timestamp: number): string {
   }
 }
 
-// 获取对话标题
+// English engineering note.
 function getTitle(conv: Conversation): string {
   return conv.title || t('ai.chat.conversation.newChat')
 }
 
-// 开始编辑标题
+// English engineering note.
 function startEditing(conv: Conversation) {
   editingId.value = conv.id
   editingTitle.value = conv.title || ''
 }
 
-// 保存标题
+// English engineering note.
 async function saveTitle(convId: string) {
   if (editingTitle.value.trim()) {
     try {
@@ -94,7 +94,7 @@ async function saveTitle(convId: string) {
   editingId.value = null
 }
 
-// 删除对话
+// English engineering note.
 async function handleDelete(convId: string) {
   try {
     await window.aiApi.deleteConversation(convId)
@@ -105,13 +105,13 @@ async function handleDelete(convId: string) {
   }
 }
 
-// 导出对话
+// English engineering note.
 async function handleExport(conv: Conversation) {
   if (isExporting.value) return
 
   isExporting.value = conv.id
   try {
-    // 获取对话消息
+    // English engineering note.
     const messages = await window.aiApi.getMessages(conv.id)
 
     if (messages.length === 0) {
@@ -124,31 +124,31 @@ async function handleExport(conv: Conversation) {
       return
     }
 
-    // 获取导出格式和标题
+    // English engineering note.
     const format = (aiGlobalSettings.value.exportFormat || 'markdown') as ExportFormat
     const title = conv.title || t('ai.chat.conversation.newChat')
 
-    // 导出标签（国际化）
+    // English engineering note.
     const labels = {
       createdAt: t('ai.chat.conversation.export.createdAt'),
       user: t('ai.chat.conversation.export.user'),
       assistant: t('ai.chat.conversation.export.assistant'),
     }
 
-    // 转换消息时间戳（数据库存储的是秒级时间戳，需转换为毫秒级）
+    // English engineering note.
     const messagesWithMs = messages.map((msg) => ({
       ...msg,
       timestamp: msg.timestamp * 1000,
     }))
 
-    // 调用导出工具
+    // English engineering note.
     const result = await exportConversation(title, messagesWithMs, conv.createdAt * 1000, format, labels)
 
     if (result.success && result.filePath) {
-      // 获取文件名
+      // English engineering note.
       const filename = result.filePath.split('/').pop() || result.filePath
       const exportedFilePath = result.filePath
-      // 显示成功 toast
+      // English engineering note.
       toast.add({
         title: t('common.exportSuccess'),
         description: filename,
@@ -187,12 +187,12 @@ async function handleExport(conv: Conversation) {
   }
 }
 
-// 初始化
+// English engineering note.
 onMounted(() => {
   loadConversations()
 })
 
-// 监听 sessionId 变化
+// English engineering note.
 watch(
   () => props.sessionId,
   () => {
@@ -200,7 +200,7 @@ watch(
   }
 )
 
-// 暴露刷新方法
+// English engineering note.
 defineExpose({
   refresh: loadConversations,
 })
@@ -211,7 +211,7 @@ defineExpose({
     class="flex flex-col border-r border-gray-200 bg-white transition-all dark:border-gray-800 dark:bg-gray-900"
     :class="isCollapsed ? 'w-10' : 'w-64'"
   >
-    <!-- 头部 -->
+    <!-- English UI note -->
     <div class="flex items-center justify-between border-b border-gray-200 p-2 dark:border-gray-800">
       <template v-if="!isCollapsed">
         <span class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('ai.chat.conversation.title') }}</span>
@@ -242,14 +242,14 @@ defineExpose({
       </template>
     </div>
 
-    <!-- 展开状态列表 -->
+    <!-- English UI note -->
     <div v-if="!isCollapsed" class="flex-1 overflow-y-auto p-2">
-      <!-- 加载中 -->
+      <!-- English UI note -->
       <div v-if="isLoading" class="flex items-center justify-center py-8">
         <UIcon name="i-heroicons-arrow-path" class="h-5 w-5 animate-spin text-gray-400" />
       </div>
 
-      <!-- 空状态 -->
+      <!-- English UI note -->
       <div v-else-if="conversations.length === 0" class="flex flex-col items-center justify-center py-12 text-center">
         <div class="flex h-12 w-12 items-center justify-center rounded-full bg-gray-50 dark:bg-gray-800">
           <UIcon name="i-heroicons-chat-bubble-left" class="h-6 w-6 text-gray-300 dark:text-gray-600" />
@@ -260,7 +260,7 @@ defineExpose({
         </UButton>
       </div>
 
-      <!-- 对话列表 -->
+      <!-- English UI note -->
       <div v-else class="space-y-0.5">
         <div
           v-for="conv in conversations"
@@ -273,7 +273,7 @@ defineExpose({
           ]"
           @click="emit('select', conv.id)"
         >
-          <!-- 编辑模式 -->
+          <!-- English UI note -->
           <template v-if="editingId === conv.id">
             <input
               v-model="editingTitle"
@@ -286,26 +286,26 @@ defineExpose({
             />
           </template>
 
-          <!-- 正常模式 -->
+          <!-- English UI note -->
           <template v-else>
             <div class="relative">
-              <!-- 标题 -->
+              <!-- English UI note -->
               <p class="line-clamp-1 pr-2 text-sm font-medium leading-snug">
                 {{ getTitle(conv) }}
               </p>
 
-              <!-- 时间 -->
+              <!-- English UI note -->
               <p class="mt-1.5 text-[10px] text-gray-400">
                 {{ formatTime(conv.updatedAt) }}
               </p>
 
-              <!-- 操作按钮（垂直居中，带渐变背景） -->
+              <!-- English UI note -->
               <div
                 class="absolute inset-y-0 right-0 flex items-center opacity-0 transition-opacity group-hover:opacity-100"
                 :class="{ 'opacity-100': activeId === conv.id }"
                 @click.stop
               >
-                <!-- 左侧渐变过渡区域 -->
+                <!-- English UI note -->
                 <div
                   class="absolute inset-y-0 -left-6 w-6 bg-linear-to-r from-transparent"
                   :class="[
@@ -314,7 +314,7 @@ defineExpose({
                       : 'to-gray-50 group-hover:to-gray-100 dark:to-gray-900 dark:group-hover:to-gray-800',
                   ]"
                 />
-                <!-- 按钮组背景 -->
+                <!-- English UI note -->
                 <div
                   class="relative flex h-full items-center gap-0.5 pl-1 pr-0.5"
                   :class="[
@@ -359,9 +359,9 @@ defineExpose({
       </div>
     </div>
 
-    <!-- 折叠状态列表 -->
+    <!-- English UI note -->
     <div v-else class="flex flex-1 flex-col items-center gap-2 overflow-y-auto py-2">
-      <!-- 新建按钮 -->
+      <!-- English UI note -->
       <button
         class="rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-pink-500 dark:hover:bg-gray-800"
         :title="t('ai.chat.conversation.startNew')"
@@ -370,10 +370,10 @@ defineExpose({
         <UIcon name="i-heroicons-plus" class="h-4 w-4" />
       </button>
 
-      <!-- 分隔线 -->
+      <!-- English UI note -->
       <div class="h-px w-6 bg-gray-200 dark:bg-gray-800"></div>
 
-      <!-- 对话列表图标 -->
+      <!-- English UI note -->
       <button
         v-for="conv in conversations"
         :key="conv.id"

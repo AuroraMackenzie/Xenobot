@@ -16,50 +16,50 @@ const emit = defineEmits<{
   'data-changed': []
 }>()
 
-// 成员列表（当前页）
+// English engineering note.
 const members = ref<MemberWithStats[]>([])
-const allMembers = ref<MemberWithStats[]>([]) // 用于 OwnerSelector（仅加载一次）
+const allMembers = ref<MemberWithStats[]>([]) // English engineering note.
 const isLoading = ref(false)
 const searchQuery = ref('')
 
-// 删除确认状态
+// English engineering note.
 const deletingMember = ref<MemberWithStats | null>(null)
 const isDeleting = ref(false)
 
-// 分页配置
+// English engineering note.
 const pageSize = 20
 const currentPage = ref(1)
 const total = ref(0)
 const totalPages = ref(0)
 
-// 排序配置
-const sortOrder = ref<'desc' | 'asc'>('desc') // desc = 发言多在前
+// English engineering note.
+const sortOrder = ref<'desc' | 'asc'>('desc') // English engineering note.
 
-// 正在保存别名的成员ID（用于显示加载状态）
+// English engineering note.
 const savingAliasesId = ref<number | null>(null)
 
-// 搜索防抖定时器
+// English engineering note.
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
-// 获取成员显示名称
+// English engineering note.
 function getDisplayName(member: MemberWithStats): string {
   return member.groupNickname || member.accountName || member.platformId
 }
 
-// 获取成员首字符（用于头像）
+// English engineering note.
 function getFirstChar(member: MemberWithStats): string {
   const name = getDisplayName(member)
   return name.slice(0, 1)
 }
 
-// 切换排序
+// English engineering note.
 function toggleSort() {
   sortOrder.value = sortOrder.value === 'desc' ? 'asc' : 'desc'
   currentPage.value = 1
   loadMembers()
 }
 
-// 加载成员列表（分页）
+// English engineering note.
 async function loadMembers() {
   if (!props.sessionId) return
   isLoading.value = true
@@ -80,7 +80,7 @@ async function loadMembers() {
   }
 }
 
-// 加载所有成员（用于 OwnerSelector）
+// English engineering note.
 async function loadAllMembers() {
   if (!props.sessionId) return
   try {
@@ -90,12 +90,12 @@ async function loadAllMembers() {
   }
 }
 
-// 直接更新别名（输入框失焦或回车时触发）
+// English engineering note.
 async function updateAliases(member: MemberWithStats, newAliases: string[]) {
-  // 将 Vue 响应式数组转换为普通数组，避免 IPC 序列化问题
+  // English engineering note.
   const aliasesToSave = JSON.parse(JSON.stringify(newAliases)) as string[]
 
-  // 检查是否有变化
+  // English engineering note.
   const currentAliases = JSON.stringify(member.aliases)
   const newAliasesStr = JSON.stringify(aliasesToSave)
   if (currentAliases === newAliasesStr) return
@@ -104,7 +104,7 @@ async function updateAliases(member: MemberWithStats, newAliases: string[]) {
   try {
     const success = await window.chatApi.updateMemberAliases(props.sessionId, member.id, aliasesToSave)
     if (success) {
-      // 更新本地数据 - 找到对应成员并更新
+      // English engineering note.
       const idx = members.value.findIndex((m) => m.id === member.id)
       if (idx !== -1) {
         members.value[idx] = {
@@ -120,28 +120,28 @@ async function updateAliases(member: MemberWithStats, newAliases: string[]) {
   }
 }
 
-// 显示删除确认
+// English engineering note.
 function showDeleteConfirm(member: MemberWithStats) {
   deletingMember.value = member
 }
 
-// 取消删除
+// English engineering note.
 function cancelDelete() {
   deletingMember.value = null
 }
 
-// 确认删除
+// English engineering note.
 async function confirmDelete() {
   if (!deletingMember.value) return
   isDeleting.value = true
   try {
     const success = await window.chatApi.deleteMember(props.sessionId, deletingMember.value.id)
     if (success) {
-      // 重新加载当前页数据
+      // English engineering note.
       await loadMembers()
-      // 同时更新 allMembers（用于 OwnerSelector）
+      // English engineering note.
       await loadAllMembers()
-      // 通知父组件刷新数据
+      // English engineering note.
       emit('data-changed')
     }
   } catch (error) {
@@ -152,10 +152,10 @@ async function confirmDelete() {
   }
 }
 
-// 搜索时重置页码并防抖加载
+// English engineering note.
 watch(searchQuery, () => {
   currentPage.value = 1
-  // 防抖：延迟 300ms 后执行搜索
+  // English engineering note.
   if (searchDebounceTimer) {
     clearTimeout(searchDebounceTimer)
   }
@@ -164,12 +164,12 @@ watch(searchQuery, () => {
   }, 300)
 })
 
-// 监听页码变化
+// English engineering note.
 watch(currentPage, () => {
   loadMembers()
 })
 
-// 监听 sessionId 变化
+// English engineering note.
 watch(
   () => props.sessionId,
   () => {
@@ -189,7 +189,7 @@ onMounted(() => {
 
 <template>
   <div class="main-content max-w-5xl p-6">
-    <!-- 页面标题 -->
+    <!-- English UI note -->
     <div class="mb-6">
       <div class="flex items-center gap-3">
         <div>
@@ -201,7 +201,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Owner配置 -->
+    <!-- English UI note -->
     <OwnerSelector
       class="mb-6"
       :session-id="sessionId"
@@ -210,7 +210,7 @@ onMounted(() => {
       chat-type="group"
     />
 
-    <!-- 搜索框 -->
+    <!-- English UI note -->
     <div class="mb-4">
       <UInput
         v-model="searchQuery"
@@ -224,14 +224,14 @@ onMounted(() => {
       </UInput>
     </div>
 
-    <!-- 成员列表 -->
+    <!-- English UI note -->
     <div class="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
-      <!-- 加载状态 -->
+      <!-- English UI note -->
       <div v-if="isLoading" class="flex h-60 items-center justify-center">
         <UIcon name="i-heroicons-arrow-path" class="h-8 w-8 animate-spin text-pink-500" />
       </div>
 
-      <!-- 空状态 -->
+      <!-- English UI note -->
       <div v-else-if="members.length === 0" class="flex h-60 flex-col items-center justify-center">
         <UIcon name="i-heroicons-user-group" class="mb-3 h-12 w-12 text-gray-300 dark:text-gray-600" />
         <p class="text-gray-500 dark:text-gray-400">
@@ -239,7 +239,7 @@ onMounted(() => {
         </p>
       </div>
 
-      <!-- 成员表格 -->
+      <!-- English UI note -->
       <div v-else>
         <div class="max-h-[500px] overflow-y-auto">
           <table class="w-full">
@@ -265,10 +265,10 @@ onMounted(() => {
             </thead>
             <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
               <tr v-for="member in members" :key="member.id" class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                <!-- 账号名称 (ID) -->
+                <!-- English UI note -->
                 <td class="px-4 py-4">
                   <div class="flex items-center gap-2">
-                    <!-- 头像：优先显示真实头像，否则显示首字母 -->
+                    <!-- English UI note -->
                     <img
                       v-if="member.avatar"
                       :src="member.avatar"
@@ -290,7 +290,7 @@ onMounted(() => {
                   </div>
                 </td>
 
-                <!-- 群昵称 -->
+                <!-- English UI note -->
                 <td class="px-4 py-4">
                   <span v-if="member.groupNickname" class="text-sm font-medium text-gray-900 dark:text-white">
                     {{ member.groupNickname }}
@@ -298,14 +298,14 @@ onMounted(() => {
                   <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
                 </td>
 
-                <!-- 消息数 -->
+                <!-- English UI note -->
                 <td class="px-4 py-4">
                   <span class="text-sm font-semibold text-gray-900 dark:text-white">
                     {{ member.messageCount.toLocaleString() }}
                   </span>
                 </td>
 
-                <!-- 别名 - 直接编辑 -->
+                <!-- English UI note -->
                 <td class="px-4 py-4">
                   <div class="max-w-xs">
                     <UInputTags
@@ -314,14 +314,14 @@ onMounted(() => {
                       class="w-80"
                       @update:model-value="(val) => updateAliases(member, val)"
                     />
-                    <!-- 保存中指示器 -->
+                    <!-- English UI note -->
                     <div v-if="savingAliasesId === member.id" class="absolute right-2 top-1/2 -translate-y-1/2">
                       <UIcon name="i-heroicons-arrow-path" class="h-4 w-4 animate-spin text-pink-500" />
                     </div>
                   </div>
                 </td>
 
-                <!-- 操作 -->
+                <!-- English UI note -->
                 <td class="px-4 py-4 text-right">
                   <UButton :label="t('members.list.delete')" size="xs" @click="showDeleteConfirm(member)" />
                 </td>
@@ -330,7 +330,7 @@ onMounted(() => {
           </table>
         </div>
 
-        <!-- 分页 -->
+        <!-- English UI note -->
         <div
           v-if="totalPages > 1"
           class="flex items-center justify-between border-t border-gray-200 px-6 py-4 dark:border-gray-700"
@@ -367,7 +367,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- 提示信息 -->
+    <!-- English UI note -->
     <div class="mt-4 flex items-start gap-3 rounded-xl bg-amber-50 p-4 dark:bg-amber-900/20">
       <UIcon name="i-heroicons-exclamation-triangle" class="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
       <div>
@@ -377,7 +377,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- 删除确认弹窗 -->
+    <!-- English UI note -->
     <UModal :open="!!deletingMember" :ui="{ content: 'max-w-sm' }" @update:open="deletingMember = null">
       <template #content>
         <div class="p-6 text-center">

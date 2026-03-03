@@ -10,23 +10,23 @@ const router = useRouter()
 const route = useRoute()
 const layoutStore = useLayoutStore()
 
-// 是否在工作台页面
+// English engineering note.
 const isManagePage = computed(() => route.name === 'workbench')
 
-// 注意：帮助和反馈功能已迁移到首页 Footer (HomeFooter.vue)
-// 如需恢复，请参考 git 历史记录
+// English engineering note.
+// English engineering note.
 </script>
 
 <template>
   <div class="px-4 py-2 dark:border-gray-800 space-y-2 mb-2">
-    <!-- 管理 -->
+    <!-- English UI note -->
     <SidebarButton
       icon="i-heroicons-rectangle-stack"
       :title="t('tools.title')"
       :active="isManagePage"
       @click="router.push({ name: 'workbench' })"
     />
-    <!-- 设置 -->
+    <!-- English UI note -->
     <SidebarButton
       icon="i-heroicons-cog-6-tooth"
       :title="t('layout.footer.settings')"

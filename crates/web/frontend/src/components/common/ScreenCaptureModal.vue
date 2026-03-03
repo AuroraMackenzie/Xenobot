@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * 截屏预览弹窗
- * 仅用于展示截图预览
+ * English note.
+ * English note.
  */
 import { computed } from 'vue'
 

@@ -1,14 +1,14 @@
 <script setup lang="ts">
 /**
- * 会话索引管理区块
- * 配置会话索引阈值和批量生成功能
+ * English note.
+ * English note.
  */
 import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 
-// 会话索引状态
+// English engineering note.
 interface SessionIndexStatus {
   id: string
   name: string
@@ -16,17 +16,17 @@ interface SessionIndexStatus {
   sessionCount: number
 }
 
-// 会话索引配置
-const DEFAULT_GAP_MINUTES = 30 // 默认30分钟
+// English engineering note.
+const DEFAULT_GAP_MINUTES = 30 // English engineering note.
 const sessionGapMinutes = ref(DEFAULT_GAP_MINUTES)
 
-// 批量生成相关状态
+// English engineering note.
 const allSessionsStatus = ref<SessionIndexStatus[]>([])
 const isLoadingSessionStatus = ref(false)
 const isBatchGenerating = ref(false)
 const batchProgress = ref({ current: 0, total: 0, currentName: '' })
 
-// 计算统计信息
+// English engineering note.
 const sessionIndexStats = computed(() => {
   const total = allSessionsStatus.value.length
   const generated = allSessionsStatus.value.filter((s) => s.hasIndex).length
@@ -34,21 +34,21 @@ const sessionIndexStats = computed(() => {
   return { total, generated, notGenerated }
 })
 
-// 进度百分比
+// English engineering note.
 const batchProgressPercent = computed(() => {
   if (batchProgress.value.total === 0) return 0
   return Math.round((batchProgress.value.current / batchProgress.value.total) * 100)
 })
 
-// 保存会话阈值（这里只是保存到本地存储，实际每个 session 的阈值在生成时传入）
+// English engineering note.
 function saveSessionThreshold() {
   if (sessionGapMinutes.value < 1) sessionGapMinutes.value = 1
   if (sessionGapMinutes.value > 1440) sessionGapMinutes.value = 1440
-  // 保存到 localStorage 作为全局默认值
+  // English engineering note.
   localStorage.setItem('sessionGapThreshold', String(sessionGapMinutes.value * 60))
 }
 
-// 加载会话阈值
+// English engineering note.
 function loadSessionThreshold() {
   const saved = localStorage.getItem('sessionGapThreshold')
   if (saved) {
@@ -56,14 +56,14 @@ function loadSessionThreshold() {
   }
 }
 
-// 加载所有会话的索引状态
+// English engineering note.
 async function loadSessionIndexStatus() {
   isLoadingSessionStatus.value = true
   try {
-    // 获取所有会话
+    // English engineering note.
     const sessions = await window.chatApi.getSessions()
 
-    // 获取每个会话的索引状态
+    // English engineering note.
     const statusList: SessionIndexStatus[] = []
     for (const session of sessions) {
       try {
@@ -92,7 +92,7 @@ async function loadSessionIndexStatus() {
   }
 }
 
-// 批量生成所有未生成索引的会话
+// English engineering note.
 async function batchGenerateIndex() {
   const notGeneratedSessions = allSessionsStatus.value.filter((s) => !s.hasIndex)
   if (notGeneratedSessions.length === 0) return
@@ -100,7 +100,7 @@ async function batchGenerateIndex() {
   isBatchGenerating.value = true
   batchProgress.value = { current: 0, total: notGeneratedSessions.length, currentName: '' }
 
-  // 获取阈值
+  // English engineering note.
   const gapThreshold = sessionGapMinutes.value * 60
 
   for (let i = 0; i < notGeneratedSessions.length; i++) {
@@ -113,7 +113,7 @@ async function batchGenerateIndex() {
 
     try {
       const count = await window.sessionApi.generate(session.id, gapThreshold)
-      // 更新状态
+      // English engineering note.
       const statusItem = allSessionsStatus.value.find((s) => s.id === session.id)
       if (statusItem) {
         statusItem.hasIndex = true
@@ -132,14 +132,14 @@ async function batchGenerateIndex() {
   isBatchGenerating.value = false
 }
 
-// 批量重新生成所有会话的索引
+// English engineering note.
 async function batchRegenerateAll() {
   if (allSessionsStatus.value.length === 0) return
 
   isBatchGenerating.value = true
   batchProgress.value = { current: 0, total: allSessionsStatus.value.length, currentName: '' }
 
-  // 获取阈值
+  // English engineering note.
   const gapThreshold = sessionGapMinutes.value * 60
 
   for (let i = 0; i < allSessionsStatus.value.length; i++) {
@@ -152,7 +152,7 @@ async function batchRegenerateAll() {
 
     try {
       const count = await window.sessionApi.generate(session.id, gapThreshold)
-      // 更新状态
+      // English engineering note.
       session.hasIndex = true
       session.sessionCount = count
     } catch (error) {
@@ -168,7 +168,7 @@ async function batchRegenerateAll() {
   isBatchGenerating.value = false
 }
 
-// 组件挂载时加载数据
+// English engineering note.
 onMounted(() => {
   loadSessionThreshold()
   loadSessionIndexStatus()
@@ -177,7 +177,7 @@ onMounted(() => {
 
 <template>
   <div class="space-y-6">
-    <!-- 会话索引配置 -->
+    <!-- English UI note -->
     <div class="space-y-3">
       <div class="flex items-center justify-between">
         <div>
@@ -189,7 +189,7 @@ onMounted(() => {
             {{ t('settings.storage.session.description') }}
           </p>
         </div>
-        <!-- 刷新按钮 -->
+        <!-- English UI note -->
         <UButton
           icon="i-heroicons-arrow-path"
           variant="ghost"
@@ -199,7 +199,7 @@ onMounted(() => {
         />
       </div>
 
-      <!-- 默认阈值设置 -->
+      <!-- English UI note -->
       <div
         class="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/50"
       >
@@ -225,7 +225,7 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- 会话索引统计 -->
+      <!-- English UI note -->
       <div class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/50">
         <div class="flex items-center justify-between">
           <div>
@@ -273,7 +273,7 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- 批量生成进度 -->
+        <!-- English UI note -->
         <div v-if="isBatchGenerating" class="mt-3 space-y-2">
           <div class="flex items-center justify-between text-xs">
             <span class="text-gray-500">

@@ -318,7 +318,7 @@ fn get_darwin_version() -> String {
         .unwrap_or_default()
 }
 
-/// V4 key patterns from chatlog
+/// V4 key patterns from reverse-verified local samples
 const V4_KEY_PATTERNS: &[(&[u8], &[i32])] = &[
     (
         &[0x20, 0x66, 0x74, 0x73, 0x35, 0x28, 0x25, 0x00],

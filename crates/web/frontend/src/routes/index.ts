@@ -35,15 +35,15 @@ router.afterEach((to) => {
 })
 
 /**
- * 预加载关键路由组件
+ * English note.
  */
 function preloadCriticalRoutes() {
   requestIdleCallback(() => {
-    // 预加载高频分析页
+    // English engineering note.
     import('@/pages/circle-space/index.vue')
     import('@/pages/direct-space/index.vue')
   })
 }
 
-// 路由准备就绪后触发预加载
+// English engineering note.
 router.isReady().then(preloadCriticalRoutes)

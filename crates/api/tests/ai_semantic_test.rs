@@ -152,6 +152,26 @@ async fn test_semantic_search_endpoint_returns_ranked_messages_and_rewrite(
     });
     assert!(has_expected_hit);
     assert!(messages[0]["similarity"].as_f64().unwrap_or(-1.0) >= 0.0);
+    assert!(resp["totalCount"].as_u64().unwrap_or(0) >= messages.len() as u64);
+
+    let (status_page2, resp_page2) = post_json(
+        &app,
+        "/semantic-search-messages",
+        serde_json::json!({
+            "sessionId": meta_id.to_string(),
+            "query": "incremental checkpoint",
+            "threshold": 0.0,
+            "limit": 1,
+            "offset": 1,
+            "senderId": sender_id
+        }),
+    )
+    .await?;
+    assert_eq!(status_page2, StatusCode::OK);
+    assert_eq!(resp_page2["count"].as_u64().unwrap_or(0), 1);
+    assert_eq!(resp_page2["offset"].as_u64().unwrap_or(0), 1);
+    assert_eq!(resp_page2["limit"].as_u64().unwrap_or(0), 1);
+    assert!(resp_page2["totalCount"].as_u64().unwrap_or(0) >= 1);
 
     let _ = fs::remove_dir_all(&test_root);
     Ok(())

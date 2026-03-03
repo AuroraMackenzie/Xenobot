@@ -610,6 +610,31 @@
             };
             return httpRequest('GET', `/chat/sessions/${encodeURIComponent(sessionId)}/laugh-analysis${toQuery(query)}`);
         },
+        getNightOwlAnalysis: (sessionId, filter) =>
+            httpRequest(
+                'GET',
+                `/chat/sessions/${encodeURIComponent(sessionId)}/night-owl-analysis${toQuery(normalizeTimeFilter(filter))}`
+            ),
+        getDragonKingAnalysis: (sessionId, filter) =>
+            httpRequest(
+                'GET',
+                `/chat/sessions/${encodeURIComponent(sessionId)}/dragon-king-analysis${toQuery(normalizeTimeFilter(filter))}`
+            ),
+        getLurkerAnalysis: (sessionId, filter) =>
+            httpRequest(
+                'GET',
+                `/chat/sessions/${encodeURIComponent(sessionId)}/lurker-analysis${toQuery(normalizeTimeFilter(filter))}`
+            ),
+        getCheckinAnalysis: (sessionId, filter) =>
+            httpRequest(
+                'GET',
+                `/chat/sessions/${encodeURIComponent(sessionId)}/checkin-analysis${toQuery(normalizeTimeFilter(filter))}`
+            ),
+        getRepeatAnalysis: (sessionId, filter) =>
+            httpRequest(
+                'GET',
+                `/chat/sessions/${encodeURIComponent(sessionId)}/repeat-analysis${toQuery(normalizeTimeFilter(filter))}`
+            ),
 
         getMembers: async (sessionId) => {
             const [membersRaw, activityRaw] = await Promise.all([
@@ -710,6 +735,30 @@
 
     function randomId(prefix) {
         return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    }
+
+    function normalizeAgentError(raw) {
+        const text = String(raw || '').trim();
+        const lower = text.toLowerCase();
+        if (!text) {
+            return { code: 'error.agent_unknown', message: 'Unknown agent error' };
+        }
+        if (lower.includes('invalid session_id') || lower.includes('session_not_found')) {
+            return { code: 'error.invalid_session_id', message: text };
+        }
+        if (lower.includes('tool') && lower.includes('not found')) {
+            return { code: 'error.tool_not_found', message: text };
+        }
+        if (lower.includes('database')) {
+            return { code: 'error.database', message: text };
+        }
+        if (lower.includes('aborted') || lower.includes('cancel')) {
+            return { code: 'error.aborted', message: text };
+        }
+        if (lower.startsWith('http ')) {
+            return { code: 'error.http', message: text };
+        }
+        return { code: 'error.agent_runtime', message: text };
     }
 
     function normalizeAiMessage(raw) {
@@ -918,13 +967,15 @@
                 count: toNumber(data.count, 0),
             };
         },
-        semanticSearchMessages: async (sessionId, query, filter, threshold = 0.7, limit = 20) => {
+        semanticSearchMessages: async (sessionId, query, filter, threshold = 0.7, limit = 20, offset = 0, senderId) => {
             const result = await httpRequest('POST', '/ai/semantic-search-messages', {
                 sessionId,
                 query,
                 filter,
                 threshold,
                 limit,
+                offset,
+                senderId,
             });
             const data = toCamelDeep(result || {});
             const rows = Array.isArray(data.messages) ? data.messages : [];
@@ -938,6 +989,9 @@
                     };
                 }),
                 count: toNumber(data.count, 0),
+                totalCount: toNumber(data.totalCount, 0),
+                offset: toNumber(data.offset, 0),
+                limit: toNumber(data.limit, 0),
                 threshold: Number.isFinite(Number(data.threshold)) ? Number(data.threshold) : threshold,
                 queryRewritten: data.queryRewritten || query || '',
             };
@@ -1154,32 +1208,34 @@
             activeAgentRequests.set(requestId, controller);
 
             const ownerInfo = context.ownerInfo || context.owner_info;
+            const rawTimeFilter = context.timeFilter || context.time_filter || null;
             const payload = {
-                user_message: userMessage,
+                requestId,
+                userMessage,
                 context: {
-                    session_id: context.sessionId ?? context.session_id ?? '',
-                    time_filter: context.timeFilter
+                    sessionId: context.sessionId ?? context.session_id ?? '',
+                    timeFilter: rawTimeFilter
                         ? {
-                              start_ts: context.timeFilter.startTs ?? context.timeFilter.start_ts ?? null,
-                              end_ts: context.timeFilter.endTs ?? context.timeFilter.end_ts ?? null,
+                              startTs: rawTimeFilter.startTs ?? rawTimeFilter.start_ts ?? null,
+                              endTs: rawTimeFilter.endTs ?? rawTimeFilter.end_ts ?? null,
                           }
-                        : context.time_filter,
-                    max_messages_limit: context.maxMessagesLimit ?? context.max_messages_limit ?? null,
-                    owner_info: ownerInfo
+                        : null,
+                    maxMessagesLimit: context.maxMessagesLimit ?? context.max_messages_limit ?? null,
+                    ownerInfo: ownerInfo
                         ? {
                               id: toNumber(ownerInfo.id ?? ownerInfo.platformId, 0),
                               name: ownerInfo.name ?? ownerInfo.displayName ?? '',
-                              avatar_url: ownerInfo.avatarUrl ?? ownerInfo.avatar_url ?? null,
+                              avatarUrl: ownerInfo.avatarUrl ?? ownerInfo.avatar_url ?? null,
                           }
                         : null,
                     locale: context.locale ?? locale ?? null,
                 },
-                history_messages: Array.isArray(historyMessages) ? historyMessages : [],
-                chat_type: chatType || 'group',
-                prompt_config: promptConfig
+                historyMessages: Array.isArray(historyMessages) ? historyMessages : [],
+                chatType: chatType || 'group',
+                promptConfig: promptConfig
                     ? {
-                          role_definition: promptConfig.roleDefinition ?? promptConfig.role_definition ?? '',
-                          response_rules: promptConfig.responseRules ?? promptConfig.response_rules ?? '',
+                          roleDefinition: promptConfig.roleDefinition ?? promptConfig.role_definition ?? '',
+                          responseRules: promptConfig.responseRules ?? promptConfig.response_rules ?? '',
                       }
                     : null,
                 locale: locale || context.locale || 'zh-CN',
@@ -1214,6 +1270,14 @@
                         if (chunk.type === 'tool_start' && chunk.toolName) {
                             toolsUsed.add(chunk.toolName);
                         }
+                        if (chunk.type === 'error' && chunk.error) {
+                            const normalized = normalizeAgentError(chunk.error);
+                            return {
+                                success: false,
+                                error: normalized.code,
+                                errorMessage: normalized.message,
+                            };
+                        }
                     }
 
                     return {
@@ -1229,12 +1293,17 @@
                     if (error && error.name === 'AbortError') {
                         return {
                             success: false,
-                            error: 'aborted',
+                            error: 'error.aborted',
+                            errorMessage: 'aborted',
                         };
                     }
+                    const normalized = normalizeAgentError(
+                        error instanceof Error ? error.message : String(error)
+                    );
                     return {
                         success: false,
-                        error: error instanceof Error ? error.message : String(error),
+                        error: normalized.code,
+                        errorMessage: normalized.message,
                     };
                 } finally {
                     activeAgentRequests.delete(requestId);
@@ -1250,6 +1319,11 @@
                 activeAgentRequests.delete(requestId);
             }
             return httpRequest('POST', `/agent/abort/${encodeURIComponent(requestId)}`);
+        },
+        listTools: async () => {
+            const result = await httpRequest('GET', '/agent/tools');
+            const tools = Array.isArray(result) ? result : [];
+            return tools.map((item) => toCamelDeep(item || {}));
         },
     };
     

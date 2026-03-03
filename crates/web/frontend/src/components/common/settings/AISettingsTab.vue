@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import AIModelConfigTab from './AI/AIModelConfigTab.vue'
 import AIPromptConfigTab from './AI/AIPromptConfigTab.vue'
 import AIPromptPresetTab from './AI/AIPromptPresetTab.vue'
-// TODO: 向量模型暂时隐藏，待功能完善后恢复
+// English engineering note.
 // import RAGConfigTab from './AI/RAGConfigTab.vue'
 import SubTabs from '@/components/UI/SubTabs.vue'
 import { useSubTabsScroll } from '@/composables/useSubTabsScroll'
@@ -16,32 +16,32 @@ const emit = defineEmits<{
   'config-changed': []
 }>()
 
-// 导航配置
+// English engineering note.
 const navItems = computed(() => [
   { id: 'model', label: t('settings.tabs.aiConfig') },
-  // TODO: 向量模型暂时隐藏，待功能完善后恢复
+  // English engineering note.
   // { id: 'rag', label: t('settings.tabs.aiRAG') },
   { id: 'chat', label: t('settings.tabs.aiPrompt') },
   { id: 'preset', label: t('settings.tabs.aiPreset') },
 ])
 
-// 使用二级导航滚动联动 composable
+// English engineering note.
 const { activeNav, scrollContainerRef, setSectionRef, handleNavChange, scrollToId } = useSubTabsScroll(navItems)
-void scrollContainerRef // 在模板中通过 ref="scrollContainerRef" 使用
+void scrollContainerRef // English engineering note.
 
-// AI 配置变更回调
+// English engineering note.
 function handleAIConfigChanged() {
   emit('config-changed')
 }
 
 /**
- * 滚动到指定 section（供外部调用）
+ * English note.
  */
 function scrollToSection(sectionId: string) {
   scrollToId(sectionId)
 }
 
-// 暴露方法供父组件调用
+// English engineering note.
 defineExpose({
   scrollToSection,
 })
@@ -53,20 +53,20 @@ void aiModelConfigRef.value
 
 <template>
   <div class="flex h-full gap-6">
-    <!-- 左侧锚点导航 -->
+    <!-- English UI note -->
     <div class="w-28 shrink-0">
       <SubTabs v-model="activeNav" :items="navItems" orientation="vertical" @change="handleNavChange" />
     </div>
 
-    <!-- 右侧内容区域 -->
+    <!-- English UI note -->
     <div ref="scrollContainerRef" class="min-w-0 flex-1 overflow-y-auto">
       <div class="space-y-8">
-        <!-- 模型配置 -->
+        <!-- English UI note -->
         <div :ref="(el) => setSectionRef('model', el as HTMLElement)">
           <AIModelConfigTab ref="aiModelConfigRef" @config-changed="handleAIConfigChanged" />
         </div>
 
-        <!-- TODO: 向量模型暂时隐藏，待功能完善后恢复 -->
+        <!-- English UI note -->
         <!--
         <div class="border-t border-gray-200 dark:border-gray-700" />
         <div :ref="(el) => setSectionRef('rag', el as HTMLElement)">
@@ -74,18 +74,18 @@ void aiModelConfigRef.value
         </div>
         -->
 
-        <!-- 分隔线 -->
+        <!-- English UI note -->
         <div class="border-t border-gray-200 dark:border-gray-700" />
 
-        <!-- 对话配置 -->
+        <!-- English UI note -->
         <div :ref="(el) => setSectionRef('chat', el as HTMLElement)">
           <AIPromptConfigTab @config-changed="handleAIConfigChanged" />
         </div>
 
-        <!-- 分隔线 -->
+        <!-- English UI note -->
         <div class="border-t border-gray-200 dark:border-gray-700" />
 
-        <!-- 提示词配置 -->
+        <!-- English UI note -->
         <div :ref="(el) => setSectionRef('preset', el as HTMLElement)">
           <AIPromptPresetTab @config-changed="handleAIConfigChanged" />
         </div>

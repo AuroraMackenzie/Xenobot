@@ -5830,6 +5830,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "xenobot-discord"
+version = "0.1.0"
+dependencies = [
+ "thiserror 1.0.69",
+ "xenobot-analysis",
+ "xenobot-core",
+]
+
+[[package]]
+name = "xenobot-googlechat"
+version = "0.1.0"
+dependencies = [
+ "thiserror 1.0.69",
+ "xenobot-analysis",
+ "xenobot-core",
+]
+
+[[package]]
 name = "xenobot-gpu"
 version = "0.1.0"
 dependencies = [
@@ -5842,6 +5860,42 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tracing",
+ "xenobot-core",
+]
+
+[[package]]
+name = "xenobot-imessage"
+version = "0.1.0"
+dependencies = [
+ "thiserror 1.0.69",
+ "xenobot-analysis",
+ "xenobot-core",
+]
+
+[[package]]
+name = "xenobot-instagram"
+version = "0.1.0"
+dependencies = [
+ "thiserror 1.0.69",
+ "xenobot-analysis",
+ "xenobot-core",
+]
+
+[[package]]
+name = "xenobot-kakaotalk"
+version = "0.1.0"
+dependencies = [
+ "thiserror 1.0.69",
+ "xenobot-analysis",
+ "xenobot-core",
+]
+
+[[package]]
+name = "xenobot-line"
+version = "0.1.0"
+dependencies = [
+ "thiserror 1.0.69",
+ "xenobot-analysis",
  "xenobot-core",
 ]
 
@@ -5862,10 +5916,74 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tokio-tungstenite 0.20.1",
+ "tower",
  "tracing",
  "tungstenite 0.20.1",
  "xenobot-core",
  "xenobot-wechat",
+]
+
+[[package]]
+name = "xenobot-messenger"
+version = "0.1.0"
+dependencies = [
+ "thiserror 1.0.69",
+ "xenobot-analysis",
+ "xenobot-core",
+]
+
+[[package]]
+name = "xenobot-qq"
+version = "0.1.0"
+dependencies = [
+ "thiserror 1.0.69",
+ "xenobot-analysis",
+ "xenobot-core",
+]
+
+[[package]]
+name = "xenobot-signal"
+version = "0.1.0"
+dependencies = [
+ "thiserror 1.0.69",
+ "xenobot-analysis",
+ "xenobot-core",
+]
+
+[[package]]
+name = "xenobot-skype"
+version = "0.1.0"
+dependencies = [
+ "thiserror 1.0.69",
+ "xenobot-analysis",
+ "xenobot-core",
+]
+
+[[package]]
+name = "xenobot-slack"
+version = "0.1.0"
+dependencies = [
+ "thiserror 1.0.69",
+ "xenobot-analysis",
+ "xenobot-core",
+]
+
+[[package]]
+name = "xenobot-teams"
+version = "0.1.0"
+dependencies = [
+ "thiserror 1.0.69",
+ "xenobot-analysis",
+ "xenobot-core",
+]
+
+[[package]]
+name = "xenobot-telegram"
+version = "0.1.0"
+dependencies = [
+ "thiserror 1.0.69",
+ "xenobot-analysis",
+ "xenobot-core",
 ]
 
 [[package]]
@@ -5884,6 +6002,15 @@ dependencies = [
  "xenobot-api",
  "xenobot-core",
  "xenobot-wechat",
+]
+
+[[package]]
+name = "xenobot-viber"
+version = "0.1.0"
+dependencies = [
+ "thiserror 1.0.69",
+ "xenobot-analysis",
+ "xenobot-core",
 ]
 
 [[package]]
@@ -5937,6 +6064,24 @@ dependencies = [
  "tokio",
  "tracing",
  "walkdir",
+ "xenobot-core",
+]
+
+[[package]]
+name = "xenobot-whatsapp"
+version = "0.1.0"
+dependencies = [
+ "thiserror 1.0.69",
+ "xenobot-analysis",
+ "xenobot-core",
+]
+
+[[package]]
+name = "xenobot-zoom"
+version = "0.1.0"
+dependencies = [
+ "thiserror 1.0.69",
+ "xenobot-analysis",
  "xenobot-core",
 ]
 

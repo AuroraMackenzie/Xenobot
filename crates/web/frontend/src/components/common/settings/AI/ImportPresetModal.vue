@@ -17,20 +17,20 @@ const emit = defineEmits<{
   'preset-added': []
 }>()
 
-// 状态
+// English engineering note.
 const isLoading = ref(false)
 const error = ref('')
 const remotePresets = ref<RemotePresetData[]>([])
 
-// 预览状态
+// English engineering note.
 const previewPreset = ref<RemotePresetData | null>(null)
 const isPreviewLoading = ref(false)
 const previewError = ref('')
 
-// 添加状态（跟踪正在添加的预设 ID）
+// English engineering note.
 const addingPresetId = ref<string | null>(null)
 
-// 预设分组配置
+// English engineering note.
 const presetGroups = computed(() => [
   {
     key: 'common',
@@ -55,7 +55,7 @@ const presetGroups = computed(() => [
   },
 ])
 
-// 加载远程预设索引（不下载内容）
+// English engineering note.
 async function loadRemotePresets() {
   isLoading.value = true
   error.value = ''
@@ -74,23 +74,23 @@ async function loadRemotePresets() {
   }
 }
 
-// 预览预设（按需下载内容）
+// English engineering note.
 async function handlePreview(preset: RemotePresetData) {
   previewError.value = ''
 
-  // 如果已有内容，直接显示
+  // English engineering note.
   if (preset.roleDefinition && preset.responseRules) {
     previewPreset.value = preset
     return
   }
 
   isPreviewLoading.value = true
-  previewPreset.value = preset // 先显示基本信息
+  previewPreset.value = preset // English engineering note.
 
   const fullPreset = await promptStore.fetchPresetContent(preset)
   if (fullPreset) {
     previewPreset.value = fullPreset
-    // 更新列表中的缓存
+    // English engineering note.
     const index = remotePresets.value.findIndex((p) => p.id === preset.id)
     if (index !== -1) {
       remotePresets.value[index] = fullPreset
@@ -102,17 +102,17 @@ async function handlePreview(preset: RemotePresetData) {
   isPreviewLoading.value = false
 }
 
-// 关闭预览
+// English engineering note.
 function closePreview() {
   previewPreset.value = null
   previewError.value = ''
 }
 
-// 添加预设（按需下载后再添加）
+// English engineering note.
 async function handleAddPreset(preset: RemotePresetData) {
   addingPresetId.value = preset.id
 
-  // 如果还没有内容，先下载
+  // English engineering note.
   let fullPreset = preset
   if (!preset.roleDefinition || !preset.responseRules) {
     const fetched = await promptStore.fetchPresetContent(preset)
@@ -121,7 +121,7 @@ async function handleAddPreset(preset: RemotePresetData) {
       return
     }
     fullPreset = fetched
-    // 更新列表中的缓存
+    // English engineering note.
     const index = remotePresets.value.findIndex((p) => p.id === preset.id)
     if (index !== -1) {
       remotePresets.value[index] = fullPreset
@@ -135,20 +135,20 @@ async function handleAddPreset(preset: RemotePresetData) {
   addingPresetId.value = null
 }
 
-// 从预览弹窗添加预设（添加后自动关闭预览）
+// English engineering note.
 async function handleAddPresetFromPreview() {
   if (!previewPreset.value) return
   await handleAddPreset(previewPreset.value)
   closePreview()
 }
 
-// 关闭弹窗
+// English engineering note.
 function closeModal() {
   emit('update:open', false)
   closePreview()
 }
 
-// 监听打开状态，打开时加载数据
+// English engineering note.
 watch(
   () => props.open,
   (newVal) => {
@@ -176,20 +176,20 @@ watch(
           <UButton icon="i-heroicons-x-mark" variant="ghost" size="sm" @click="closeModal" />
         </div>
 
-        <!-- 描述 -->
+        <!-- English UI note -->
         <p class="mb-4 text-sm text-gray-500 dark:text-gray-400">
           {{ t('settings.aiPrompt.importPreset.description') }}
         </p>
 
-        <!-- 内容区域 -->
+        <!-- English UI note -->
         <div class="max-h-[400px] overflow-y-auto">
-          <!-- 加载中 -->
+          <!-- English UI note -->
           <div v-if="isLoading" class="flex flex-col items-center justify-center py-12">
             <UIcon name="i-heroicons-arrow-path" class="h-8 w-8 animate-spin text-primary-500" />
             <p class="mt-2 text-sm text-gray-500">{{ t('settings.aiPrompt.importPreset.loading') }}</p>
           </div>
 
-          <!-- 错误状态 -->
+          <!-- English UI note -->
           <div v-else-if="error" class="flex flex-col items-center justify-center py-12">
             <UIcon name="i-heroicons-exclamation-circle" class="h-8 w-8 text-red-500" />
             <p class="mt-2 text-sm text-gray-500">{{ error }}</p>
@@ -198,9 +198,9 @@ watch(
             </UButton>
           </div>
 
-          <!-- 预设列表 -->
+          <!-- English UI note -->
           <div v-else class="space-y-4">
-            <!-- 预设分组 -->
+            <!-- English UI note -->
             <div v-for="group in presetGroups" :key="group.key">
               <div v-if="group.presets.length > 0">
                 <h4 class="mb-2 flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -220,12 +220,12 @@ watch(
                       </p>
                     </div>
                     <div class="flex items-center gap-1.5 ml-2 shrink-0">
-                      <!-- 预览按钮 -->
+                      <!-- English UI note -->
                       <UButton color="gray" size="xs" @click="handlePreview(preset)">
                         <UIcon name="i-heroicons-eye" class="mr-1 h-3.5 w-3.5" />
                         {{ t('settings.aiPrompt.importPreset.preview') }}
                       </UButton>
-                      <!-- 添加按钮 -->
+                      <!-- English UI note -->
                       <UButton
                         v-if="promptStore.isRemotePresetAdded(preset.id)"
                         variant="soft"
@@ -258,7 +258,7 @@ watch(
     </template>
   </UModal>
 
-  <!-- 预览弹窗 -->
+  <!-- English UI note -->
   <UModal :open="!!previewPreset" :ui="{ content: 'md:w-full max-w-2xl' }" @update:open="closePreview">
     <template #content>
       <div class="p-6">
@@ -269,19 +269,19 @@ watch(
           <UButton icon="i-heroicons-x-mark" variant="ghost" size="sm" @click="closePreview" />
         </div>
 
-        <!-- 加载中 -->
+        <!-- English UI note -->
         <div v-if="isPreviewLoading" class="flex items-center justify-center py-8">
           <UIcon name="i-heroicons-arrow-path" class="h-6 w-6 animate-spin text-primary-500" />
           <span class="ml-2 text-sm text-gray-500">{{ t('settings.aiPrompt.importPreset.fetchingContent') }}</span>
         </div>
 
-        <!-- 错误 -->
+        <!-- English UI note -->
         <div v-else-if="previewError" class="text-center py-8">
           <UIcon name="i-heroicons-exclamation-circle" class="h-8 w-8 text-red-500 mx-auto" />
           <p class="mt-2 text-sm text-gray-500">{{ previewError }}</p>
         </div>
 
-        <!-- 内容 -->
+        <!-- English UI note -->
         <div v-else-if="previewPreset?.roleDefinition" class="max-h-[60vh] overflow-y-auto space-y-4">
           <div>
             <p class="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
@@ -305,7 +305,7 @@ watch(
           </div>
         </div>
 
-        <!-- 底部按钮 -->
+        <!-- English UI note -->
         <div
           v-if="previewPreset && !isPreviewLoading && !previewError"
           class="mt-4 flex justify-end gap-2 border-t border-gray-200 pt-4 dark:border-gray-700"

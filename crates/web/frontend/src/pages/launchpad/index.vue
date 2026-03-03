@@ -9,16 +9,16 @@ import HomeFooter from './components/HomeFooter.vue'
 
 const { t } = useI18n()
 
-// 弹窗引用
+// English engineering note.
 const changelogModalRef = ref<InstanceType<typeof ChangelogModal> | null>(null)
 const agreementModalRef = ref<InstanceType<typeof AgreementModal> | null>(null)
 
-// 打开版本日志弹窗（手动点击时调用）
+// English engineering note.
 async function openChangelog() {
   changelogModalRef.value?.open()
 }
 
-// 打开使用条款弹窗
+// English engineering note.
 function openTerms() {
   agreementModalRef.value?.open()
 }

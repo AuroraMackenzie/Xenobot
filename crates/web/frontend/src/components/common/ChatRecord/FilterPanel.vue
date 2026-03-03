@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * 聊天记录筛选面板
- * 支持消息ID、成员、时间范围、关键词的组合筛选
+ * Chat record filter panel.
+ * Supports message id, time range, and keyword/semantic query filters.
  */
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -12,18 +12,18 @@ import type { ChatRecordQuery, FilterFormData } from './types'
 const { t } = useI18n()
 
 const props = defineProps<{
-  /** 当前查询条件 */
+  /** English note.
   query: ChatRecordQuery
 }>()
 
 const emit = defineEmits<{
-  /** 应用筛选 */
+  /** Emit active filter query. */
   (e: 'apply', query: ChatRecordQuery): void
-  /** 重置筛选 */
+  /** Reset filter fields. */
   (e: 'reset'): void
 }>()
 
-// 本地表单数据
+// Local editable form state.
 const formData = ref<FilterFormData>({
   messageId: '',
   memberName: '',
@@ -32,7 +32,7 @@ const formData = ref<FilterFormData>({
   endDate: '',
 })
 
-// 同步外部 query 到表单
+// Keep form state aligned with external query updates.
 watch(
   () => props.query,
   (query) => {
@@ -49,15 +49,17 @@ watch(
   { immediate: true }
 )
 
-// 应用筛选
+const SEMANTIC_PREFIX = /^(sem|semantic|vector|meaning|语义)\s*:/i
+
+// Build query object from current form values and emit it to parent.
 function applyFilter() {
   const f = formData.value
   const query: ChatRecordQuery = {}
 
-  // 关键词和消息 ID 互斥：如果有关键词，则清空消息 ID
+  // Message-id jump and text search are mutually exclusive.
   const hasKeywords = f.keywords && f.keywords.trim()
 
-  // 消息 ID（只有在没有关键词时才使用）
+  // Message id is only active when no text query is provided.
   if (f.messageId && !hasKeywords) {
     const id = parseInt(f.messageId, 10)
     if (!isNaN(id)) {
@@ -65,26 +67,49 @@ function applyFilter() {
     }
   }
 
-  // 成员名称（需要后续通过 API 获取成员 ID）
+  // Member-name filter is display-only until member-id mapping is wired.
   if (f.memberName) {
     query.memberName = f.memberName
   }
 
-  // 关键词
+  // Parse keyword query.
   if (hasKeywords) {
-    const keywords = f.keywords
-      .split(/[,，]/)
-      .map((k) => k.trim())
-      .filter((k) => k)
+    let rawKeywords = f.keywords.trim()
+    let searchMode: NonNullable<ChatRecordQuery['searchMode']> = 'keyword'
+    if (SEMANTIC_PREFIX.test(rawKeywords)) {
+      rawKeywords = rawKeywords.replace(SEMANTIC_PREFIX, '').trim()
+      searchMode = 'semantic'
+    }
+
+    const keywords =
+      searchMode === 'semantic'
+        ? (rawKeywords ? [rawKeywords] : [])
+        : rawKeywords
+            .split(/[,，]/)
+            .map((k) => k.trim())
+            .filter((k) => k)
+
     if (keywords.length > 0) {
       query.keywords = keywords
-      query.highlightKeywords = keywords
-      // 清空消息 ID（互斥）
+      query.searchMode = searchMode
+      query.highlightKeywords =
+        searchMode === 'semantic'
+          ? keywords[0]
+              .split(/\s+/)
+              .map((k) => k.trim())
+              .filter((k) => k)
+              .slice(0, 12)
+          : keywords
+      if (searchMode === 'semantic') {
+        query.semanticThreshold = 0.45
+      }
+
+      // Clear message id because mixed mode is not supported.
       formData.value.messageId = ''
     }
   }
 
-  // 时间范围
+  // Time-window filter.
   if (f.startDate) {
     query.startTs = dayjs(f.startDate).startOf('day').unix()
   }
@@ -95,7 +120,7 @@ function applyFilter() {
   emit('apply', query)
 }
 
-// 回车搜索
+// Submit with Enter in keyword input.
 function handleKeywordsKeydown(event: KeyboardEvent) {
   if (event.key === 'Enter') {
     event.preventDefault()
@@ -103,7 +128,7 @@ function handleKeywordsKeydown(event: KeyboardEvent) {
   }
 }
 
-// 重置筛选
+// Reset all form controls.
 function resetFilter() {
   formData.value = {
     messageId: '',
@@ -118,7 +143,7 @@ function resetFilter() {
 
 <template>
   <div class="border-b border-gray-200 px-4 py-3 dark:border-gray-800">
-    <!-- 第一行：消息ID、成员、时间范围 -->
+    <!-- English UI note -->
     <div class="flex items-center gap-3">
       <UInput
         v-model="formData.messageId"
@@ -141,11 +166,11 @@ function resetFilter() {
       </div>
     </div>
 
-    <!-- 第二行：关键词和操作按钮 -->
+    <!-- English UI note -->
     <div class="mt-2 flex items-center gap-3">
       <UInput
         v-model="formData.keywords"
-        :placeholder="t('records.filter.keywordsPlaceholder')"
+        :placeholder="`${t('records.filter.keywordsPlaceholder')} · ${t('records.filter.keywordsSemanticHint')}`"
         size="sm"
         class="flex-1"
         @keydown="handleKeywordsKeydown"

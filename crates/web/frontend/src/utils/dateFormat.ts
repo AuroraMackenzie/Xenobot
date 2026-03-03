@@ -1,13 +1,13 @@
 import dayjs from 'dayjs'
 
 /**
- * 日期格式化工具函数
- * 统一处理时间戳的格式化展示
+ * English note.
+ * English note.
  */
 
 /**
- * 格式化为日期 (YYYY-MM-DD)
- * @param ts Unix 时间戳（秒）
+ * English note.
+ * English note.
  */
 export function formatDate(ts: number): string {
   const date = new Date(ts * 1000)
@@ -18,8 +18,8 @@ export function formatDate(ts: number): string {
 }
 
 /**
- * 格式化为日期时间 (YYYY-MM-DD HH:mm)
- * @param ts Unix 时间戳（秒）
+ * English note.
+ * English note.
  */
 export function formatDateTime(ts: number): string {
   const date = new Date(ts * 1000)
@@ -32,17 +32,17 @@ export function formatDateTime(ts: number): string {
 }
 
 /**
- * 格式化为完整日期时间 (YYYY-MM-DD HH:mm:ss)
- * @param ts Unix 时间戳（秒）
+ * English note.
+ * English note.
  */
 export function formatFullDateTime(ts: number): string {
   return dayjs.unix(ts).format('YYYY-MM-DD HH:mm:ss')
 }
 
 /**
- * 格式化时间段
- * @param startTs 开始时间戳（秒）
- * @param endTs 结束时间戳（秒），null 表示至今
+ * English note.
+ * English note.
+ * English note.
  */
 export function formatPeriod(startTs: number, endTs: number | null): string {
   const start = formatDate(startTs)
@@ -57,8 +57,8 @@ export function formatPeriod(startTs: number, endTs: number | null): string {
 }
 
 /**
- * 格式化距今天数
- * @param days 天数
+ * English note.
+ * English note.
  */
 export function formatDaysSince(days: number): string {
   if (days === 0) return '今天'
@@ -69,20 +69,20 @@ export function formatDaysSince(days: number): string {
 }
 
 /**
- * 使用 dayjs 格式化日期
- * @param ts Unix 时间戳（秒）
- * @param format 格式字符串
+ * English note.
+ * English note.
+ * English note.
  */
 export function formatWithDayjs(ts: number, format: string): string {
   return dayjs.unix(ts).format(format)
 }
 
 /**
- * 格式化日期范围（支持自定义格式）
- * @param startTs 开始时间戳（秒）
- * @param endTs 结束时间戳（秒）
- * @param format 日期格式，默认 'YYYY/MM/DD'
- * @param separator 分隔符，默认 ' - '
+ * English note.
+ * English note.
+ * English note.
+ * English note.
+ * English note.
  */
 export function formatDateRange(
   startTs: number,

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * 数据和存储设置 Tab
- * 包含存储管理和会话管理两个子 Tab
+ * English note.
+ * English note.
  */
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -12,20 +12,20 @@ import { useSubTabsScroll } from '@/composables/useSubTabsScroll'
 
 const { t } = useI18n()
 
-// 导航配置
+// English engineering note.
 const navItems = computed(() => [
   { id: 'storage', label: t('settings.tabs.storageManage') },
   { id: 'session', label: t('settings.tabs.sessionManage') },
 ])
 
-// 使用二级导航滚动联动 composable
+// English engineering note.
 const { activeNav, scrollContainerRef, setSectionRef, handleNavChange } = useSubTabsScroll(navItems)
-void scrollContainerRef // 在模板中通过 ref="scrollContainerRef" 使用
+void scrollContainerRef // English engineering note.
 
 // Template refs
 const storageManageRef = ref<InstanceType<typeof StorageManageSection> | null>(null)
 
-// 暴露刷新方法
+// English engineering note.
 defineExpose({
   refresh: () => storageManageRef.value?.refresh(),
 })
@@ -33,23 +33,23 @@ defineExpose({
 
 <template>
   <div class="flex h-full gap-6">
-    <!-- 左侧锚点导航 -->
+    <!-- English UI note -->
     <div class="w-28 shrink-0">
       <SubTabs v-model="activeNav" :items="navItems" orientation="vertical" @change="handleNavChange" />
     </div>
 
-    <!-- 右侧内容区域 -->
+    <!-- English UI note -->
     <div ref="scrollContainerRef" class="min-w-0 flex-1 overflow-y-auto">
       <div class="space-y-8">
-        <!-- 存储管理 -->
+        <!-- English UI note -->
         <div :ref="(el) => setSectionRef('storage', el as HTMLElement)">
           <StorageManageSection ref="storageManageRef" />
         </div>
 
-        <!-- 分隔线 -->
+        <!-- English UI note -->
         <div class="border-t border-gray-200 dark:border-gray-700" />
 
-        <!-- 会话管理 -->
+        <!-- English UI note -->
         <div :ref="(el) => setSectionRef('session', el as HTMLElement)">
           <SessionIndexSection />
         </div>

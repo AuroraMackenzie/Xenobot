@@ -18,55 +18,55 @@ const emit = defineEmits<{
   'config-changed': []
 }>()
 
-// 弹窗状态
+// English engineering note.
 const showEditModal = ref(false)
 const showImportModal = ref(false)
 const editMode = ref<'add' | 'edit'>('add')
 const editingPreset = ref<PromptPreset | null>(null)
 
-/** 打开新增预设弹窗 */
+/** English note.
 function openAddModal() {
   editMode.value = 'add'
   editingPreset.value = null
   showEditModal.value = true
 }
 
-/** 打开编辑预设弹窗 */
+/** English note.
 function openEditModal(preset: PromptPreset) {
   editMode.value = 'edit'
   editingPreset.value = preset
   showEditModal.value = true
 }
 
-/** 处理子弹窗保存后的回调 */
+/** English note.
 function handleModalSaved() {
   emit('config-changed')
 }
 
-/** 设置当前激活的预设 */
+/** English note.
 function setActivePreset(presetId: string) {
   promptStore.setActivePreset(presetId)
   emit('config-changed')
 }
 
-/** 复制选中的预设 */
+/** English note.
 function duplicatePreset(presetId: string) {
   promptStore.duplicatePromptPreset(presetId)
   emit('config-changed')
 }
 
-/** 删除选中的预设 */
+/** English note.
 function deletePreset(presetId: string) {
   promptStore.removePromptPreset(presetId)
   emit('config-changed')
 }
 
-/** 判断预设是否处于激活状态 */
+/** English note.
 function isActivePreset(presetId: string): boolean {
   return aiPromptSettings.value.activePresetId === presetId
 }
 
-/** 导入预设后的回调 */
+/** English note.
 function handleImportPresetAdded() {
   emit('config-changed')
 }
@@ -74,7 +74,7 @@ function handleImportPresetAdded() {
 
 <template>
   <div class="space-y-6">
-    <!-- 系统提示词标题和操作按钮 -->
+    <!-- English UI note -->
     <div class="flex items-center justify-between">
       <h4 class="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
         <UIcon name="i-heroicons-document-text" class="h-4 w-4 text-amber-500" />
@@ -92,7 +92,7 @@ function handleImportPresetAdded() {
       </div>
     </div>
 
-    <!-- 预设列表 -->
+    <!-- English UI note -->
     <div class="space-y-2">
       <div
         v-for="preset in allPromptPresets"
@@ -105,7 +105,7 @@ function handleImportPresetAdded() {
         ]"
         @click="setActivePreset(preset.id)"
       >
-        <!-- 预设信息 -->
+        <!-- English UI note -->
         <div class="flex items-center gap-2">
           <div
             class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
@@ -125,7 +125,7 @@ function handleImportPresetAdded() {
             <UBadge v-if="preset.isBuiltIn" color="gray" variant="soft" size="xs">
               {{ t('settings.aiPrompt.preset.builtIn') }}
             </UBadge>
-            <!-- 适用场景标签（仅非通用预设显示） -->
+            <!-- English UI note -->
             <UBadge
               v-if="!preset.isBuiltIn && preset.applicableTo && preset.applicableTo !== 'common'"
               :color="preset.applicableTo === 'group' ? 'violet' : 'blue'"
@@ -141,7 +141,7 @@ function handleImportPresetAdded() {
           </div>
         </div>
 
-        <!-- 操作按钮 -->
+        <!-- English UI note -->
         <div class="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100" @click.stop>
           <UButton
             color="neutral"
@@ -169,15 +169,15 @@ function handleImportPresetAdded() {
       </div>
     </div>
 
-    <!-- 说明文字 -->
+    <!-- English UI note -->
     <p class="text-xs text-gray-500 dark:text-gray-400">
       {{ t('settings.aiPrompt.presets.description') }}
     </p>
   </div>
 
-  <!-- 编辑/添加弹窗 -->
+  <!-- English UI note -->
   <AIPromptEditModal v-model:open="showEditModal" :mode="editMode" :preset="editingPreset" @saved="handleModalSaved" />
 
-  <!-- 导入预设弹窗 -->
+  <!-- English UI note -->
   <ImportPresetModal v-model:open="showImportModal" @preset-added="handleImportPresetAdded" />
 </template>

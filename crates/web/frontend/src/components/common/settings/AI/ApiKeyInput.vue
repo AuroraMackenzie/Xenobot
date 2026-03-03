@@ -6,9 +6,9 @@ const props = withDefaults(
     modelValue: string
     placeholder?: string
     label?: string
-    optionalText?: string // 有值则显示 optional 标记
+    optionalText?: string // English engineering note.
     hint?: string
-    // 验证相关
+    // English engineering note.
     validateLoading?: boolean
     validateDisabled?: boolean
     validateText?: string
@@ -35,10 +35,10 @@ const emit = defineEmits<{
 
 const attrs = useAttrs()
 
-// 通过检测是否监听了 @validate 事件来决定是否显示验证按钮
+// English engineering note.
 const showValidateButton = computed(() => 'onValidate' in attrs)
 
-// 控制明文/密文显示
+// English engineering note.
 const showPassword = ref(false)
 
 function updateValue(value: string) {
@@ -83,9 +83,9 @@ function updateValue(value: string) {
         {{ validateText }}
       </UButton>
     </div>
-    <!-- 提示文字 -->
+    <!-- English UI note -->
     <p v-if="hint" class="mt-1 text-xs text-gray-500">{{ hint }}</p>
-    <!-- 验证结果 -->
+    <!-- English UI note -->
     <div v-if="validationMessage" class="mt-2">
       <div
         v-if="validationResult === 'valid'"

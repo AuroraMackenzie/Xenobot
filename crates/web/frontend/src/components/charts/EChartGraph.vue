@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * ECharts 关系图组件（支持 circular 和 force 布局）
+ * English note.
  */
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import * as echarts from 'echarts/core'
@@ -10,7 +10,7 @@ import { CanvasRenderer } from 'echarts/renderers'
 import { useDark } from '@vueuse/core'
 import type { EChartsOption } from 'echarts'
 
-// 注册必要的组件
+// English engineering note.
 echarts.use([GraphChart, TooltipComponent, LegendComponent, CanvasRenderer])
 
 type ECOption = EChartsOption
@@ -38,8 +38,8 @@ export interface GraphData {
 interface Props {
   data: GraphData
   height?: number | string
-  layout?: 'circular' | 'force' // 布局类型
-  directed?: boolean // 是否显示箭头（有向图）
+  layout?: 'circular' | 'force' // English engineering note.
+  directed?: boolean // English engineering note.
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -48,7 +48,7 @@ const props = withDefaults(defineProps<Props>(), {
   directed: false,
 })
 
-// 计算高度样式
+// English engineering note.
 const heightStyle = computed(() => {
   if (typeof props.height === 'number') {
     return `${props.height}px`
@@ -60,23 +60,23 @@ const isDark = useDark()
 const chartRef = ref<HTMLElement | null>(null)
 let chartInstance: echarts.ECharts | null = null
 
-// 丰富的调色板（为每个节点分配不同颜色）
+// English engineering note.
 const colorPalette = [
-  '#0ea5c9', // 粉色（主题色）
-  '#5470c6', // 蓝色
-  '#91cc75', // 绿色
-  '#fac858', // 黄色
-  '#ee6666', // 红色
-  '#73c0de', // 青色
-  '#9a60b4', // 紫色
-  '#fc8452', // 橙色
-  '#3ba272', // 深绿
-  '#ea7ccc', // 粉紫
-  '#6e7074', // 灰色
-  '#546570', // 深灰蓝
+  '#0ea5c9', // English engineering note.
+  '#5470c6', // English engineering note.
+  '#91cc75', // English engineering note.
+  '#fac858', // English engineering note.
+  '#ee6666', // English engineering note.
+  '#73c0de', // English engineering note.
+  '#9a60b4', // English engineering note.
+  '#fc8452', // English engineering note.
+  '#3ba272', // English engineering note.
+  '#ea7ccc', // English engineering note.
+  '#6e7074', // English engineering note.
+  '#546570', // English engineering note.
 ]
 
-// 去重后的节点（ECharts 要求节点名称唯一）
+// English engineering note.
 const uniqueNodes = computed(() => {
   const seen = new Set<string>()
   return props.data.nodes.filter((node) => {
@@ -88,7 +88,7 @@ const uniqueNodes = computed(() => {
   })
 })
 
-// 节点名称到颜色的映射
+// English engineering note.
 const nodeColorMap = computed(() => {
   const map = new Map<string, string>()
   uniqueNodes.value.forEach((node, index) => {
@@ -97,10 +97,10 @@ const nodeColorMap = computed(() => {
   return map
 })
 
-// 计算边的宽度（根据 value 归一化）
+// English engineering note.
 function getLinkWidth(value: number, maxValue: number): number {
   if (maxValue <= 0) return 1
-  // 宽度范围 1-6
+  // English engineering note.
   return 1 + (value / maxValue) * 5
 }
 
@@ -124,7 +124,7 @@ const option = computed<ECOption>(() => {
         return ''
       },
     },
-    // 动画效果
+    // English engineering note.
     animationDuration: 1000,
     animationDurationUpdate: 500,
     animationEasingUpdate: 'quinticInOut',
@@ -144,8 +144,8 @@ const option = computed<ECOption>(() => {
             : undefined,
         roam: true,
         scaleLimit: {
-          min: 0.3, // 最小缩放 30%
-          max: 3, // 最大缩放 300%
+          min: 0.3, // English engineering note.
+          max: 3, // English engineering note.
         },
         draggable: true,
         label: {
@@ -159,7 +159,7 @@ const option = computed<ECOption>(() => {
         edgeSymbol: props.directed ? ['none', 'arrow'] : ['none', 'none'],
         edgeSymbolSize: props.directed ? [0, 10] : [0, 0],
         lineStyle: {
-          curveness: 0.3, // 始终使用曲线
+          curveness: 0.3, // English engineering note.
           opacity: 0.5,
         },
         emphasis: {
@@ -178,14 +178,14 @@ const option = computed<ECOption>(() => {
             shadowColor: 'rgba(0, 0, 0, 0.3)',
           },
         },
-        // 节点数据（使用去重后的节点）
+        // English engineering note.
         data: uniqueNodes.value.map((node) => {
           const color = nodeColorMap.value.get(node.name) || colorPalette[0]
           return {
             name: node.name,
             value: node.value,
             symbolSize: node.symbolSize || 30,
-            // circular 布局显示所有标签，force 布局只显示大节点的标签
+            // English engineering note.
             label: {
               show: props.layout === 'circular' ? true : (node.symbolSize || 30) > 30,
             },
@@ -194,11 +194,11 @@ const option = computed<ECOption>(() => {
               borderColor: '#fff',
               borderWidth: 2,
               shadowBlur: 5,
-              shadowColor: `${color}66`, // 同色系阴影
+              shadowColor: `${color}66`, // English engineering note.
             },
           }
         }),
-        // 连接线数据（颜色跟随源节点，过滤掉引用不存在节点的链接）
+        // English engineering note.
         links: props.data.links
           .filter((link) => nodeColorMap.value.has(link.source) && nodeColorMap.value.has(link.target))
           .map((link) => {
@@ -218,7 +218,7 @@ const option = computed<ECOption>(() => {
   }
 })
 
-// 初始化图表
+// English engineering note.
 function initChart() {
   if (!chartRef.value) return
 
@@ -228,18 +228,18 @@ function initChart() {
   chartInstance.setOption(option.value)
 }
 
-// 更新图表
+// English engineering note.
 function updateChart() {
   if (!chartInstance) return
   chartInstance.setOption(option.value, { notMerge: true })
 }
 
-// 响应窗口大小变化
+// English engineering note.
 function handleResize() {
   chartInstance?.resize()
 }
 
-// 重置视图（居中 + 重置缩放）
+// English engineering note.
 function resetView() {
   if (!chartInstance) return
   chartInstance.dispatchAction({
@@ -247,12 +247,12 @@ function resetView() {
   })
 }
 
-// 暴露方法给父组件
+// English engineering note.
 defineExpose({
   resetView,
 })
 
-// 监听数据和主题变化
+// English engineering note.
 watch(
   [() => props.data, () => props.layout, () => props.directed, isDark],
   () => {

@@ -1,24 +1,24 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 
-// 当前平台
+// English engineering note.
 const isMac = ref(false)
 const isMaximized = ref(false)
 
-// 检测平台
+// English engineering note.
 const isWindows = ref(false)
 
 onMounted(() => {
   isMac.value = navigator.platform.toLowerCase().includes('mac')
   isWindows.value = navigator.platform.toLowerCase().includes('win')
 
-  // 监听窗口状态变化
+  // English engineering note.
   window.electron?.ipcRenderer?.on('windowState', (_: unknown, maximized: boolean) => {
     isMaximized.value = maximized
   })
 })
 
-// 窗口控制
+// English engineering note.
 function minimize() {
   window.electron?.ipcRenderer?.send('window-min')
 }
@@ -34,23 +34,23 @@ function close() {
 
 <template>
   <div class="title-bar">
-    <!-- 左侧区域 - macOS 给红绿灯预留空间 -->
+    <!-- English UI note -->
     <div v-if="isMac" class="traffic-light-spacer" />
 
-    <!-- 中间拖拽区域 - 填充剩余空间 -->
+    <!-- English UI note -->
     <div class="drag-region" />
 
-    <!-- Windows: 使用原生窗口按钮（通过 titleBarOverlay），只需预留空间 -->
-    <!-- Linux: 使用自定义窗口按钮 -->
+    <!-- English UI note -->
+    <!-- English UI note -->
     <div v-if="!isMac && !isWindows" class="window-controls">
-      <!-- 最小化 -->
+      <!-- English UI note -->
       <button class="control-btn" @click="minimize">
         <svg width="10" height="1" viewBox="0 0 10 1">
           <path d="M0 0h10v1H0z" fill="currentColor" />
         </svg>
       </button>
 
-      <!-- 最大化/还原 -->
+      <!-- English UI note -->
       <button class="control-btn" @click="maximize">
         <svg v-if="!isMaximized" width="10" height="10" viewBox="0 0 10 10">
           <path d="M0 0v10h10V0H0zm1 1h8v8H1V1z" fill="currentColor" />
@@ -60,7 +60,7 @@ function close() {
         </svg>
       </button>
 
-      <!-- 关闭 -->
+      <!-- English UI note -->
       <button class="control-btn control-btn-close" @click="close">
         <svg width="10" height="10" viewBox="0 0 10 10">
           <path
@@ -86,7 +86,7 @@ function close() {
   -webkit-app-region: drag;
 }
 
-/* macOS 红绿灯预留空间 */
+/* English note.
 .traffic-light-spacer {
   width: 70px;
   height: 100%;
@@ -94,20 +94,20 @@ function close() {
   -webkit-app-region: no-drag;
 }
 
-/* 拖拽区域 - 填充剩余空间 */
+/* English note.
 .drag-region {
   flex: 1;
   height: 100%;
 }
 
-/* Windows 窗口控制按钮容器 */
+/* English note.
 .window-controls {
   display: flex;
   height: 100%;
   -webkit-app-region: no-drag;
 }
 
-/* 窗口控制按钮 */
+/* English note.
 .control-btn {
   width: 46px;
   height: 100%;
@@ -125,7 +125,7 @@ function close() {
   background-color: rgba(0, 0, 0, 0.1);
 }
 
-/* 深色模式 */
+/* English note.
 :global(.dark) .control-btn {
   color: var(--color-gray-400);
 }
@@ -134,7 +134,7 @@ function close() {
   background-color: rgba(255, 255, 255, 0.1);
 }
 
-/* 关闭按钮特殊样式 */
+/* English note.
 .control-btn-close:hover {
   background-color: #e81123;
   color: white;

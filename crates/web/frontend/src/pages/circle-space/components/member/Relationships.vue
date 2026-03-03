@@ -18,7 +18,7 @@ const props = defineProps<{
   timeFilter?: TimeFilter
 }>()
 
-// ==================== @ 互动分析 ====================
+// English engineering note.
 const mentionAnalysis = ref<MentionAnalysis | null>(null)
 const isLoadingMention = ref(false)
 const selectedMemberDetail = ref<MemberMentionDetail | null>(null)
@@ -76,11 +76,11 @@ watch(
 
 <template>
   <div class="main-content space-y-6 p-6">
-    <!-- @ 互动分析模块 -->
+    <!-- English UI note -->
     <LoadingState v-if="isLoadingMention" :text="t('members.relationships.loading')" />
 
     <template v-else-if="mentionAnalysis && mentionAnalysis.totalMentions > 0">
-      <!-- @ 排行榜 -->
+      <!-- English UI note -->
       <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <RankListPro
           v-if="mentionerRankData.length > 0"
@@ -100,8 +100,8 @@ watch(
       </div>
 
       <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <!-- 单向关注 -->
-        <!-- 有严重BUG，很不准，先隐藏 -->
+        <!-- English UI note -->
+        <!-- English UI note -->
         <SectionCard
           v-if="mentionAnalysis.oneWay.length > 0"
           class="hidden"
@@ -114,7 +114,7 @@ watch(
               :key="index"
               class="flex items-center gap-4 px-5 py-3 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50"
             >
-              <!-- 排名 -->
+              <!-- English UI note -->
               <span
                 class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold"
                 :class="
@@ -126,7 +126,7 @@ watch(
                 {{ index + 1 }}
               </span>
 
-              <!-- 关系展示 -->
+              <!-- English UI note -->
               <div class="flex flex-1 items-center gap-2">
                 <button
                   class="font-medium text-gray-900 hover:text-pink-600 dark:text-white dark:hover:text-pink-600"
@@ -146,7 +146,7 @@ watch(
                 </button>
               </div>
 
-              <!-- 反向数据 -->
+              <!-- English UI note -->
               <div class="shrink-0 text-right text-sm text-gray-500">
                 <span v-if="pair.toFromCount === 0" class="text-red-500">
                   {{ t('members.relationships.oneWay.neverRespond') }}
@@ -154,7 +154,7 @@ watch(
                 <span v-else>{{ t('members.relationships.oneWay.reverse', { count: pair.toFromCount }) }}</span>
               </div>
 
-              <!-- 单向比例标签 -->
+              <!-- English UI note -->
               <UBadge color="pink" variant="soft" size="xs">
                 {{ t('members.relationships.oneWay.ratio', { value: Math.round(pair.ratio * 100) }) }}
               </UBadge>
@@ -162,7 +162,7 @@ watch(
           </div>
         </SectionCard>
 
-        <!-- 双向奔赴（CP检测） -->
+        <!-- English UI note -->
         <SectionCard
           v-if="mentionAnalysis.twoWay.length > 0"
           :title="t('members.relationships.twoWay.title')"
@@ -174,7 +174,7 @@ watch(
               :key="index"
               class="flex items-center gap-4 px-5 py-3 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50"
             >
-              <!-- 排名 -->
+              <!-- English UI note -->
               <span
                 class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold"
                 :class="
@@ -190,7 +190,7 @@ watch(
                 {{ index + 1 }}
               </span>
 
-              <!-- CP 关系展示 -->
+              <!-- English UI note -->
               <div class="flex flex-1 items-center gap-2">
                 <button
                   class="font-medium text-gray-900 hover:text-pink-600 dark:text-white dark:hover:text-pink-600"
@@ -211,13 +211,13 @@ watch(
                 </button>
               </div>
 
-              <!-- 总互动次数 -->
+              <!-- English UI note -->
               <div class="shrink-0 text-right">
                 <span class="text-lg font-bold text-pink-600">{{ pair.total }}</span>
                 <span class="ml-1 text-sm text-gray-500">{{ t('members.relationships.twoWay.interactions') }}</span>
               </div>
 
-              <!-- 平衡度标签 -->
+              <!-- English UI note -->
               <UBadge
                 :color="pair.balance >= 0.7 ? 'green' : pair.balance >= 0.5 ? 'blue' : 'gray'"
                 variant="soft"
@@ -235,7 +235,7 @@ watch(
       <EmptyState :text="t('members.relationships.empty')" />
     </SectionCard>
 
-    <!-- 成员 @ 详情弹窗 -->
+    <!-- English UI note -->
     <UModal v-model:open="showMemberDetailModal">
       <template #content>
         <div v-if="selectedMemberDetail" class="p-5">
@@ -243,7 +243,7 @@ watch(
             {{ t('members.relationships.modal.title', { name: selectedMemberDetail.name }) }}
           </h3>
 
-          <!-- 该成员最常 @ 的人 -->
+          <!-- English UI note -->
           <div v-if="selectedMemberDetail.topMentioned.length > 0" class="mb-4">
             <h4 class="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
               {{ t('members.relationships.modal.topMentioned') }}
@@ -264,7 +264,7 @@ watch(
             </div>
           </div>
 
-          <!-- 最常 @ 该成员的人 -->
+          <!-- English UI note -->
           <div v-if="selectedMemberDetail.topMentioners.length > 0">
             <h4 class="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
               {{ t('members.relationships.modal.topMentioners') }}

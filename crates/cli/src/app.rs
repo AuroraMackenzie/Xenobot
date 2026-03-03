@@ -4,9 +4,9 @@
 //! configuration loading, and command dispatch.
 
 use crate::commands::{
-    AccountCommand, Cli, Commands, DecryptArgs, ExportArgs, ExportFormat, ImportArgs, KeyArgs,
-    MonitorArgs, OutputFormat, PlatformFormat, QueryArgs, QueryType, SourceArgs, SourceCommand,
-    WebhookArgs, WebhookCommand,
+    AccountCommand, AdvancedAnalysis, AnalysisType, Cli, Commands, DecryptArgs, ExportArgs,
+    ExportFormat, ImportArgs, KeyArgs, MonitorArgs, OutputFormat, PlatformFormat, QueryArgs,
+    QueryType, SourceArgs, SourceCommand, TimeGranularity, WebhookArgs, WebhookCommand,
 };
 use crate::error::{CliError, Result};
 use clap::Parser;
@@ -238,19 +238,42 @@ impl App {
         let target_data_dir = args
             .data_dir
             .as_ref()
-            .map(|p| p.to_string_lossy().to_string())
-            .unwrap_or_else(default_wechat_data_dir);
+            .cloned()
+            .unwrap_or_else(|| PathBuf::from(default_wechat_data_dir()));
+
+        if target_data_dir.as_os_str().is_empty() {
+            return Err(CliError::Argument(
+                "wechat data dir is empty; provide --data-dir explicitly".to_string(),
+            ));
+        }
 
         println!("decrypt plan generated");
-        println!("data dir: {}", target_data_dir);
+        println!("data dir: {}", target_data_dir.to_string_lossy());
         println!("work dir: {}", args.work_dir.to_string_lossy());
         println!("threads: {}", args.threads);
         println!("overwrite: {}", args.overwrite);
         println!("platform format: {}", platform_format_id(args.format));
         println!("data key: {}", mask_secret(&data_key));
         println!("image key: {}", mask_secret(&image_key));
-        println!("note: full decrypt execution pipeline is still in progress");
-        Ok(())
+        println!("mode: legal-safe authorized export staging");
+
+        #[cfg(feature = "analysis")]
+        {
+            return run_legal_safe_decrypt_stage(
+                &target_data_dir,
+                &args.work_dir,
+                args.overwrite,
+                args.format,
+            );
+        }
+
+        #[cfg(not(feature = "analysis"))]
+        {
+            println!(
+                "decrypt staging runtime is disabled in this build; enable with --features analysis"
+            );
+            Ok(())
+        }
     }
 
     fn handle_monitor(&self, args: &MonitorArgs) -> Result<()> {
@@ -270,19 +293,53 @@ impl App {
         let target_data_dir = args
             .data_dir
             .as_ref()
-            .map(|p| p.to_string_lossy().to_string())
-            .unwrap_or_else(default_wechat_data_dir);
+            .cloned()
+            .unwrap_or_else(|| PathBuf::from(default_wechat_data_dir()));
+
+        if target_data_dir.as_os_str().is_empty() {
+            return Err(CliError::Argument(
+                "wechat watch dir is empty; provide --data-dir explicitly".to_string(),
+            ));
+        }
 
         println!("monitor plan generated");
-        println!("watch dir: {}", target_data_dir);
+        println!("watch dir: {}", target_data_dir.to_string_lossy());
         println!("work dir: {}", args.work_dir.to_string_lossy());
         println!("interval seconds: {}", args.interval);
         println!("start immediately: {}", args.start);
+        println!("write_db: {}", args.write_db);
+        if let Some(path) = args.db_path.as_ref() {
+            println!("db path: {}", path.display());
+        }
         println!("platform format: {}", platform_format_id(args.format));
         println!("data key: {}", mask_secret(&data_key));
         println!("image key: {}", mask_secret(&image_key));
-        println!("note: full monitor execution pipeline is still in progress");
-        Ok(())
+        println!("mode: legal-safe incremental monitor");
+
+        if !args.start {
+            return Ok(());
+        }
+
+        #[cfg(feature = "analysis")]
+        {
+            println!("monitor loop started (Ctrl+C to stop)");
+            return run_legal_safe_monitor_loop(
+                &runtime_platform,
+                &target_data_dir,
+                args.interval,
+                args.write_db,
+                args.db_path.clone(),
+                args.format,
+            );
+        }
+
+        #[cfg(not(feature = "analysis"))]
+        {
+            println!(
+                "monitor runtime is disabled in this build; enable with --features analysis"
+            );
+            Ok(())
+        }
     }
 
     fn handle_non_wechat_decrypt(
@@ -433,6 +490,20 @@ impl App {
                     method.clone(),
                     path.clone(),
                 ),
+                ApiCommand::McpSmoke { url, timeout_ms } => {
+                    run_mcp_smoke_check(url.clone(), *timeout_ms)
+                }
+                ApiCommand::McpPreset {
+                    url,
+                    target,
+                    format,
+                    timeout_ms,
+                } => run_mcp_integration_preset_fetch(
+                    url.clone(),
+                    target.clone(),
+                    format.clone(),
+                    *timeout_ms,
+                ),
             }
         }
 
@@ -444,8 +515,111 @@ impl App {
         }
     }
 
-    fn handle_analyze(&self, _args: &crate::commands::AnalyzeArgs) -> Result<()> {
-        println!("Analysis command not yet implemented");
+    fn handle_analyze(&self, args: &crate::commands::AnalyzeArgs) -> Result<()> {
+        let conn = open_sqlite_read_connection(&args.db_path)?;
+
+        match &args.analysis {
+            AnalysisType::Stats {
+                start_date,
+                end_date,
+                member_id,
+            } => {
+                let start_ts = parse_optional_date_start(start_date.as_deref())?;
+                let end_ts = parse_optional_date_end(end_date.as_deref())?;
+                let member_filter = parse_optional_member_id(member_id.as_deref())?;
+
+                let (total_messages, unique_senders, min_ts, max_ts): (
+                    i64,
+                    i64,
+                    Option<i64>,
+                    Option<i64>,
+                ) = conn
+                    .query_row(
+                        r#"
+                        SELECT
+                            COUNT(*) AS total_messages,
+                            COUNT(DISTINCT sender_id) AS unique_senders,
+                            MIN(ts) AS min_ts,
+                            MAX(ts) AS max_ts
+                        FROM message
+                        WHERE (?1 IS NULL OR ts >= ?1)
+                          AND (?2 IS NULL OR ts <= ?2)
+                          AND (?3 IS NULL OR sender_id = ?3)
+                        "#,
+                        rusqlite::params![start_ts, end_ts, member_filter],
+                        |row| {
+                            Ok((
+                                row.get(0)?,
+                                row.get(1)?,
+                                row.get::<_, Option<i64>>(2)?,
+                                row.get::<_, Option<i64>>(3)?,
+                            ))
+                        },
+                    )
+                    .map_err(|e| CliError::Database(e.to_string()))?;
+
+                let mut stmt = conn
+                    .prepare(
+                        r#"
+                        SELECT
+                            msg.sender_id,
+                            COALESCE(m.account_name, m.group_nickname, m.platform_id, printf('member_%d', msg.sender_id)),
+                            COUNT(*) AS message_count
+                        FROM message msg
+                        LEFT JOIN member m ON m.id = msg.sender_id
+                        WHERE (?1 IS NULL OR msg.ts >= ?1)
+                          AND (?2 IS NULL OR msg.ts <= ?2)
+                          AND (?3 IS NULL OR msg.sender_id = ?3)
+                        GROUP BY msg.sender_id, 2
+                        ORDER BY message_count DESC
+                        LIMIT 20
+                        "#,
+                    )
+                    .map_err(|e| CliError::Database(e.to_string()))?;
+                let rows = stmt
+                    .query_map(
+                        rusqlite::params![start_ts, end_ts, member_filter],
+                        |row| {
+                            Ok(serde_json::json!({
+                                "senderId": row.get::<_, i64>(0)?,
+                                "senderName": row.get::<_, String>(1)?,
+                                "messageCount": row.get::<_, i64>(2)?,
+                            }))
+                        },
+                    )
+                    .map_err(|e| CliError::Database(e.to_string()))?;
+                let mut top_members = Vec::new();
+                for row in rows {
+                    top_members.push(row.map_err(|e| CliError::Database(e.to_string()))?);
+                }
+
+                let payload = serde_json::json!({
+                    "analysis": "stats",
+                    "filters": {
+                        "startDate": start_date,
+                        "endDate": end_date,
+                        "memberId": member_id,
+                    },
+                    "totalMessages": total_messages,
+                    "uniqueSenders": unique_senders,
+                    "timeRange": {
+                        "minTs": min_ts,
+                        "maxTs": max_ts,
+                    },
+                    "topMembers": top_members,
+                });
+                print_analysis_result(&payload, &OutputFormat::Text)?;
+            }
+            AnalysisType::Advanced { analysis, format } => {
+                let payload = run_advanced_analysis(&conn, analysis)?;
+                print_analysis_result(&payload, format)?;
+            }
+            AnalysisType::TimeDistribution { granularity, format } => {
+                let payload = run_time_distribution_analysis(&conn, granularity)?;
+                print_analysis_result(&payload, format)?;
+            }
+        }
+
         Ok(())
     }
 
@@ -1046,43 +1220,49 @@ impl App {
     fn handle_account(&self, args: &crate::commands::AccountArgs) -> Result<()> {
         match &args.command {
             AccountCommand::List { details, format } => {
-                let items = discover_sources_for_all_platforms();
-                if *details {
-                    return print_source_candidates(&items, false, format);
-                }
-
+                let store = read_account_store()?;
+                let source_items = discover_sources_for_all_platforms();
                 let mut grouped: HashMap<String, (usize, usize)> = HashMap::new();
-                for item in items {
+                for item in source_items {
                     let entry = grouped.entry(item.platform_id).or_insert((0, 0));
                     entry.0 += 1;
                     if item.exists && item.readable {
                         entry.1 += 1;
                     }
                 }
+
+                if *details {
+                    return print_account_details_view(&store, &grouped, format);
+                }
+
                 match format {
                     OutputFormat::Json => {
-                        let mut rows = Vec::new();
-                        for (platform, (candidates, available)) in grouped {
-                            rows.push(serde_json::json!({
-                                "platform": platform,
-                                "candidates": candidates,
-                                "available": available,
-                            }));
-                        }
                         println!(
                             "{}",
-                            serde_json::to_string_pretty(&rows)
-                                .map_err(|e| CliError::Parse(e.to_string()))?
+                            serde_json::to_string_pretty(&serde_json::json!({
+                                "activeAccountId": store.active_account_id,
+                                "registeredCount": store.items.len(),
+                                "accounts": store.items,
+                            }))
+                            .map_err(|e| CliError::Parse(e.to_string()))?
                         );
                     }
                     _ => {
-                        println!("platform source summary");
-                        let mut platforms: Vec<_> = grouped.into_iter().collect();
-                        platforms.sort_by(|a, b| a.0.cmp(&b.0));
-                        for (platform, (candidates, available)) in platforms {
+                        println!("registered accounts: {}", store.items.len());
+                        println!(
+                            "active account: {}",
+                            store.active_account_id.as_deref().unwrap_or("none")
+                        );
+                        for item in &store.items {
                             println!(
-                                "- {}: {} available / {} candidates",
-                                platform, available, candidates
+                                "- {} | {} | platform={} | data_dir={}",
+                                item.id,
+                                item.name,
+                                item.platform,
+                                item.data_dir
+                                    .as_ref()
+                                    .map(|v| v.to_string_lossy().to_string())
+                                    .unwrap_or_else(|| "-".to_string())
                             );
                         }
                     }
@@ -1090,8 +1270,36 @@ impl App {
                 Ok(())
             }
             AccountCommand::Switch { account_id } => {
-                println!("active account switch requested: {}", account_id);
-                println!("note: persistent account switching is not yet wired");
+                let mut store = read_account_store()?;
+                let target = account_id.trim();
+                if target.is_empty() {
+                    return Err(CliError::Argument("account id cannot be empty".to_string()));
+                }
+
+                let Some(item) = store.items.iter_mut().find(|item| item.id == target) else {
+                    let known = store
+                        .items
+                        .iter()
+                        .map(|item| item.id.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    return Err(CliError::Argument(format!(
+                        "account id not found: {} (known: [{}])",
+                        target, known
+                    )));
+                };
+
+                item.updated_at = chrono::Utc::now().to_rfc3339();
+                let switched_id = item.id.clone();
+                let switched_name = item.name.clone();
+                let switched_platform = item.platform.clone();
+                store.active_account_id = Some(switched_id.clone());
+                write_account_store(&store)?;
+
+                println!("active account switched");
+                println!("id: {}", switched_id);
+                println!("name: {}", switched_name);
+                println!("platform: {}", switched_platform);
                 Ok(())
             }
             AccountCommand::Add {
@@ -1100,18 +1308,53 @@ impl App {
                 format,
                 wechat_version,
             } => {
-                println!("account registration plan generated");
-                println!("name: {}", name);
-                println!("platform format: {}", platform_format_id(*format));
-                println!("version hint: {}", wechat_version);
+                let mut store = read_account_store()?;
+                let runtime_platform = runtime_platform_from_format(*format);
+                let platform = platform_format_id(*format).to_string();
+                let existing_ids = store
+                    .items
+                    .iter()
+                    .map(|item| item.id.clone())
+                    .collect::<std::collections::HashSet<_>>();
+                let account_id = allocate_account_id(&platform, name, &existing_ids)?;
+                let resolved_data_dir = data_dir
+                    .as_ref()
+                    .cloned()
+                    .or_else(|| first_existing_path(&discover_sources_for_platform(&runtime_platform)));
+                let now = chrono::Utc::now().to_rfc3339();
+                let profile = StoredAccountProfile {
+                    id: account_id.clone(),
+                    name: name.trim().to_string(),
+                    platform: platform.clone(),
+                    data_dir: resolved_data_dir,
+                    wechat_version: wechat_version.to_string(),
+                    created_at: now.clone(),
+                    updated_at: now,
+                };
+
+                store.items.push(profile.clone());
+                if store.active_account_id.is_none() {
+                    store.active_account_id = Some(account_id.clone());
+                }
+                write_account_store(&store)?;
+
+                println!("account registered");
+                println!("id: {}", profile.id);
+                println!("name: {}", profile.name);
+                println!("platform: {}", profile.platform);
+                println!("version hint: {}", profile.wechat_version);
                 println!(
                     "data dir: {}",
-                    data_dir
+                    profile
+                        .data_dir
                         .as_ref()
                         .map(|v| v.to_string_lossy().to_string())
                         .unwrap_or_else(|| "-".to_string())
                 );
-                println!("note: persistent account registry implementation is in progress");
+                println!(
+                    "active account: {}",
+                    store.active_account_id.as_deref().unwrap_or("none")
+                );
                 Ok(())
             }
         }
@@ -1483,6 +1726,23 @@ struct WebhookStore {
     items: Vec<WebhookItem>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct StoredAccountProfile {
+    id: String,
+    name: String,
+    platform: String,
+    data_dir: Option<PathBuf>,
+    wechat_version: String,
+    created_at: String,
+    updated_at: String,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct AccountStore {
+    active_account_id: Option<String>,
+    items: Vec<StoredAccountProfile>,
+}
+
 fn key_store_path() -> Result<PathBuf> {
     let dir = dirs::config_dir()
         .unwrap_or_else(|| PathBuf::from("."))
@@ -1505,6 +1765,33 @@ fn read_key_store() -> Result<KeyStore> {
 
 fn write_key_store(store: &KeyStore) -> Result<()> {
     let path = key_store_path()?;
+    let raw = serde_json::to_string_pretty(store).map_err(|e| CliError::Parse(e.to_string()))?;
+    fs::write(path, raw)?;
+    Ok(())
+}
+
+fn account_store_path() -> Result<PathBuf> {
+    let dir = dirs::config_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("xenobot");
+    fs::create_dir_all(&dir)?;
+    Ok(dir.join("accounts.json"))
+}
+
+fn read_account_store() -> Result<AccountStore> {
+    let path = account_store_path()?;
+    if !path.exists() {
+        return Ok(AccountStore::default());
+    }
+    let raw = fs::read_to_string(path)?;
+    if raw.trim().is_empty() {
+        return Ok(AccountStore::default());
+    }
+    serde_json::from_str(&raw).map_err(|e| CliError::Parse(e.to_string()))
+}
+
+fn write_account_store(store: &AccountStore) -> Result<()> {
+    let path = account_store_path()?;
     let raw = serde_json::to_string_pretty(store).map_err(|e| CliError::Parse(e.to_string()))?;
     fs::write(path, raw)?;
     Ok(())
@@ -1534,6 +1821,118 @@ fn write_webhook_store(store: &WebhookStore) -> Result<()> {
     let path = webhook_store_path()?;
     let raw = serde_json::to_string_pretty(store).map_err(|e| CliError::Parse(e.to_string()))?;
     fs::write(path, raw)?;
+    Ok(())
+}
+
+fn slugify_identifier(input: &str) -> String {
+    let mut out = String::new();
+    let mut last_dash = false;
+    for ch in input.trim().chars() {
+        let lowered = ch.to_ascii_lowercase();
+        if lowered.is_ascii_alphanumeric() {
+            out.push(lowered);
+            last_dash = false;
+        } else if !last_dash {
+            out.push('-');
+            last_dash = true;
+        }
+    }
+    out.trim_matches('-').to_string()
+}
+
+fn allocate_account_id(
+    platform: &str,
+    name: &str,
+    existing_ids: &std::collections::HashSet<String>,
+) -> Result<String> {
+    let platform_slug = slugify_identifier(platform);
+    let name_slug = slugify_identifier(name);
+    if platform_slug.is_empty() || name_slug.is_empty() {
+        return Err(CliError::Argument(
+            "account id generation failed: platform/name are empty after normalization".to_string(),
+        ));
+    }
+
+    let base = format!("{}-{}", platform_slug, name_slug);
+    if !existing_ids.contains(&base) {
+        return Ok(base);
+    }
+
+    for suffix in 2usize..=10_000usize {
+        let candidate = format!("{}-{}", base, suffix);
+        if !existing_ids.contains(&candidate) {
+            return Ok(candidate);
+        }
+    }
+    Err(CliError::Internal(
+        "unable to allocate unique account id".to_string(),
+    ))
+}
+
+fn print_account_details_view(
+    store: &AccountStore,
+    grouped: &HashMap<String, (usize, usize)>,
+    format: &OutputFormat,
+) -> Result<()> {
+    match format {
+        OutputFormat::Json => {
+            let mut platform_rows = Vec::new();
+            for (platform, (candidates, available)) in grouped {
+                platform_rows.push(serde_json::json!({
+                    "platform": platform,
+                    "candidates": candidates,
+                    "available": available,
+                }));
+            }
+            platform_rows.sort_by(|a, b| a["platform"].as_str().cmp(&b["platform"].as_str()));
+
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "activeAccountId": store.active_account_id,
+                    "accounts": store.items,
+                    "platformSourceSummary": platform_rows,
+                }))
+                .map_err(|e| CliError::Parse(e.to_string()))?
+            );
+        }
+        _ => {
+            println!("account registry details");
+            println!(
+                "active account: {}",
+                store.active_account_id.as_deref().unwrap_or("none")
+            );
+            if store.items.is_empty() {
+                println!("registered accounts: none");
+            } else {
+                println!("registered accounts");
+                for item in &store.items {
+                    println!(
+                        "- {} | {} | platform={} | version={} | data_dir={} | updated_at={}",
+                        item.id,
+                        item.name,
+                        item.platform,
+                        item.wechat_version,
+                        item.data_dir
+                            .as_ref()
+                            .map(|v| v.to_string_lossy().to_string())
+                            .unwrap_or_else(|| "-".to_string()),
+                        item.updated_at
+                    );
+                }
+            }
+
+            println!("platform source summary");
+            let mut rows: Vec<_> = grouped.iter().collect();
+            rows.sort_by(|a, b| a.0.cmp(b.0));
+            for (platform, (candidates, available)) in rows {
+                println!(
+                    "- {}: {} available / {} candidates",
+                    platform, available, candidates
+                );
+            }
+        }
+    }
     Ok(())
 }
 
@@ -1952,6 +2351,149 @@ fn collect_candidate_chat_files(root: &Path) -> Result<Vec<PathBuf>> {
     }
 
     Ok(out)
+}
+
+#[cfg(feature = "analysis")]
+fn run_legal_safe_decrypt_stage(
+    input_path: &Path,
+    work_dir: &Path,
+    overwrite: bool,
+    format_hint: PlatformFormat,
+) -> Result<()> {
+    use xenobot_analysis::parsers::ParserRegistry;
+
+    if !input_path.exists() {
+        return Err(CliError::Argument(format!(
+            "data path not found: {}",
+            input_path.display()
+        )));
+    }
+
+    let mut candidates = if input_path.is_file() {
+        vec![input_path.to_path_buf()]
+    } else {
+        collect_candidate_chat_files(input_path)?
+    };
+    candidates.sort();
+
+    if candidates.is_empty() {
+        println!(
+            "no candidate chat files found under {}",
+            input_path.to_string_lossy()
+        );
+        return Ok(());
+    }
+
+    let registry = ParserRegistry::new();
+    let stage_root = work_dir
+        .join("stage")
+        .join(platform_format_id(format_hint).to_string());
+    fs::create_dir_all(&stage_root)?;
+
+    let mut processed = 0usize;
+    let mut staged = 0usize;
+    let mut parse_failed = 0usize;
+    let mut skipped_existing = 0usize;
+    let mut skipped_platform = 0usize;
+    let expected_platform = platform_format_id(format_hint);
+
+    for path in candidates {
+        processed = processed.saturating_add(1);
+        match registry.detect_and_parse(&path) {
+            Ok(chat) => {
+                let parsed_platform = chat.platform.trim().to_ascii_lowercase();
+                if expected_platform != "xenobot" && parsed_platform != expected_platform {
+                    skipped_platform = skipped_platform.saturating_add(1);
+                    println!(
+                        "[skip] {} -> parsed platform={} expected={}",
+                        path.display(),
+                        parsed_platform,
+                        expected_platform
+                    );
+                    continue;
+                }
+
+                let path_hash = short_path_hash(&path);
+                let file_name = format!(
+                    "{}_{}.json",
+                    sanitize_file_component(&chat.chat_name),
+                    path_hash
+                );
+                let output_path = stage_root.join(file_name);
+                if output_path.exists() && !overwrite {
+                    skipped_existing = skipped_existing.saturating_add(1);
+                    println!(
+                        "[skip] {} -> staged file exists (use --overwrite): {}",
+                        path.display(),
+                        output_path.display()
+                    );
+                    continue;
+                }
+
+                let payload = serde_json::json!({
+                    "sourcePath": path.to_string_lossy().to_string(),
+                    "sourcePlatformHint": expected_platform,
+                    "parsedPlatform": chat.platform,
+                    "chatName": chat.chat_name,
+                    "chatType": chat.chat_type,
+                    "members": chat.members,
+                    "messages": chat.messages,
+                    "stagedAt": chrono::Utc::now().to_rfc3339(),
+                });
+                let raw = serde_json::to_vec_pretty(&payload)
+                    .map_err(|e| CliError::Parse(e.to_string()))?;
+                fs::write(&output_path, raw)?;
+                staged = staged.saturating_add(1);
+                println!(
+                    "[ok] {} -> staged {}",
+                    path.display(),
+                    output_path.display()
+                );
+            }
+            Err(err) => {
+                parse_failed = parse_failed.saturating_add(1);
+                println!("[skip] {} -> {}", path.display(), err);
+            }
+        }
+    }
+
+    println!("decrypt staging summary");
+    println!("processed files: {}", processed);
+    println!("staged files: {}", staged);
+    println!("parse failed: {}", parse_failed);
+    println!("platform skipped: {}", skipped_platform);
+    println!("existing skipped: {}", skipped_existing);
+    println!("stage dir: {}", stage_root.display());
+    Ok(())
+}
+
+#[cfg(feature = "analysis")]
+fn sanitize_file_component(input: &str) -> String {
+    let mut out = String::new();
+    let mut last_dash = false;
+    for ch in input.trim().chars() {
+        if ch.is_ascii_alphanumeric() {
+            out.push(ch.to_ascii_lowercase());
+            last_dash = false;
+        } else if !last_dash {
+            out.push('-');
+            last_dash = true;
+        }
+    }
+    let collapsed = out.trim_matches('-');
+    if collapsed.is_empty() {
+        "chat".to_string()
+    } else {
+        collapsed.to_string()
+    }
+}
+
+#[cfg(feature = "analysis")]
+fn short_path_hash(path: &Path) -> String {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    path.to_string_lossy().hash(&mut hasher);
+    let value = hasher.finish();
+    format!("{:08x}", (value & 0xffff_ffff) as u32)
 }
 
 #[cfg(feature = "analysis")]
@@ -2957,6 +3499,297 @@ fn parse_optional_date(raw: Option<&str>, start_of_day: bool) -> Result<Option<i
     Ok(Some(naive_dt.and_utc().timestamp()))
 }
 
+fn print_analysis_result(payload: &serde_json::Value, format: &OutputFormat) -> Result<()> {
+    match format {
+        OutputFormat::Json | OutputFormat::Yaml => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(payload).map_err(|e| CliError::Parse(e.to_string()))?
+            );
+            if matches!(format, OutputFormat::Yaml) {
+                println!("note: yaml renderer is not wired in cli; json is printed instead");
+            }
+        }
+        OutputFormat::Csv => {
+            let rows = payload
+                .get("rows")
+                .and_then(|v| v.as_array())
+                .cloned()
+                .unwrap_or_default();
+            if rows.is_empty() {
+                println!("analysis,rows");
+                println!(
+                    "{},0",
+                    csv_escape(
+                        payload
+                            .get("analysis")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("analysis")
+                    )
+                );
+                return Ok(());
+            }
+
+            let headers = rows[0]
+                .as_object()
+                .map(|obj| obj.keys().cloned().collect::<Vec<_>>())
+                .unwrap_or_default();
+            if headers.is_empty() {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(payload)
+                        .map_err(|e| CliError::Parse(e.to_string()))?
+                );
+                return Ok(());
+            }
+
+            println!("{}", headers.join(","));
+            for row in rows {
+                let obj = row.as_object();
+                let cols = headers
+                    .iter()
+                    .map(|key| {
+                        let value = obj.and_then(|o| o.get(key)).cloned().unwrap_or_default();
+                        match value {
+                            serde_json::Value::Null => "".to_string(),
+                            serde_json::Value::String(s) => csv_escape(&s),
+                            serde_json::Value::Bool(v) => v.to_string(),
+                            serde_json::Value::Number(v) => v.to_string(),
+                            _ => csv_escape(&value.to_string()),
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                println!("{}", cols.join(","));
+            }
+        }
+        OutputFormat::Text | OutputFormat::Table => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(payload).map_err(|e| CliError::Parse(e.to_string()))?
+            );
+        }
+    }
+    Ok(())
+}
+
+fn run_time_distribution_analysis(
+    conn: &rusqlite::Connection,
+    granularity: &TimeGranularity,
+) -> Result<serde_json::Value> {
+    let (bucket_expr, label) = match granularity {
+        TimeGranularity::Hourly => ("%H", "hourly"),
+        TimeGranularity::Daily => ("%Y-%m-%d", "daily"),
+        TimeGranularity::Weekly => ("%Y-W%W", "weekly"),
+        TimeGranularity::Monthly => ("%Y-%m", "monthly"),
+        TimeGranularity::Yearly => ("%Y", "yearly"),
+    };
+
+    let sql = format!(
+        r#"
+        SELECT strftime('{bucket}', datetime(ts, 'unixepoch')) AS bucket, COUNT(*) AS count
+        FROM message
+        GROUP BY bucket
+        ORDER BY bucket ASC
+        "#,
+        bucket = bucket_expr
+    );
+    let mut stmt = conn
+        .prepare(&sql)
+        .map_err(|e| CliError::Database(e.to_string()))?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(serde_json::json!({
+                "bucket": row.get::<_, Option<String>>(0)?.unwrap_or_else(|| "unknown".to_string()),
+                "count": row.get::<_, i64>(1)?,
+            }))
+        })
+        .map_err(|e| CliError::Database(e.to_string()))?;
+
+    let mut items = Vec::new();
+    for row in rows {
+        items.push(row.map_err(|e| CliError::Database(e.to_string()))?);
+    }
+
+    Ok(serde_json::json!({
+        "analysis": format!("time_distribution_{}", label),
+        "rows": items,
+    }))
+}
+
+fn run_advanced_analysis(
+    conn: &rusqlite::Connection,
+    analysis: &AdvancedAnalysis,
+) -> Result<serde_json::Value> {
+    match analysis {
+        AdvancedAnalysis::NightOwl => run_ranked_sender_analysis(
+            conn,
+            "night_owl",
+            "CAST(strftime('%H', datetime(msg.ts, 'unixepoch')) AS INTEGER) BETWEEN 0 AND 5",
+            true,
+            20,
+        ),
+        AdvancedAnalysis::DragonKing => {
+            run_ranked_sender_analysis(conn, "dragon_king", "1=1", true, 20)
+        }
+        AdvancedAnalysis::Diving => run_ranked_sender_analysis(
+            conn,
+            "diving",
+            "1=1",
+            false,
+            20,
+        ),
+        AdvancedAnalysis::Mention => run_ranked_sender_analysis(
+            conn,
+            "mention",
+            "COALESCE(msg.content,'') LIKE '%@%'",
+            true,
+            20,
+        ),
+        AdvancedAnalysis::MemeBattle => run_ranked_sender_analysis(
+            conn,
+            "meme_battle",
+            "(msg.msg_type IN (5, 6) OR LOWER(COALESCE(msg.content,'')) LIKE '%sticker%' OR COALESCE(msg.content,'') LIKE '%[表情]%')",
+            true,
+            20,
+        ),
+        AdvancedAnalysis::Laugh => run_ranked_sender_analysis(
+            conn,
+            "laugh",
+            "(COALESCE(msg.content,'') LIKE '%哈哈%' OR LOWER(COALESCE(msg.content,'')) LIKE '%lol%' OR LOWER(COALESCE(msg.content,'')) LIKE '%haha%' OR COALESCE(msg.content,'') LIKE '%😂%')",
+            true,
+            20,
+        ),
+        AdvancedAnalysis::CheckIn => {
+            let mut stmt = conn
+                .prepare(
+                    r#"
+                    SELECT
+                        msg.sender_id,
+                        COALESCE(m.account_name, m.group_nickname, m.platform_id, printf('member_%d', msg.sender_id)) AS sender_name,
+                        COUNT(DISTINCT strftime('%Y-%m-%d', datetime(msg.ts, 'unixepoch'))) AS active_days,
+                        COUNT(*) AS message_count
+                    FROM message msg
+                    LEFT JOIN member m ON m.id = msg.sender_id
+                    GROUP BY msg.sender_id, sender_name
+                    ORDER BY active_days DESC, message_count DESC
+                    LIMIT 20
+                    "#,
+                )
+                .map_err(|e| CliError::Database(e.to_string()))?;
+            let rows = stmt
+                .query_map([], |row| {
+                    Ok(serde_json::json!({
+                        "senderId": row.get::<_, i64>(0)?,
+                        "senderName": row.get::<_, String>(1)?,
+                        "activeDays": row.get::<_, i64>(2)?,
+                        "messageCount": row.get::<_, i64>(3)?,
+                    }))
+                })
+                .map_err(|e| CliError::Database(e.to_string()))?;
+            let mut items = Vec::new();
+            for row in rows {
+                items.push(row.map_err(|e| CliError::Database(e.to_string()))?);
+            }
+            Ok(serde_json::json!({
+                "analysis": "check_in",
+                "rows": items,
+            }))
+        }
+        AdvancedAnalysis::Repeat | AdvancedAnalysis::Catchphrase => {
+            let analysis_name = if matches!(analysis, AdvancedAnalysis::Repeat) {
+                "repeat"
+            } else {
+                "catchphrase"
+            };
+            let mut stmt = conn
+                .prepare(
+                    r#"
+                    SELECT
+                        TRIM(LOWER(COALESCE(msg.content, ''))) AS phrase,
+                        COUNT(*) AS repeat_count
+                    FROM message msg
+                    WHERE LENGTH(TRIM(COALESCE(msg.content, ''))) BETWEEN 2 AND 80
+                    GROUP BY phrase
+                    HAVING repeat_count >= 2
+                    ORDER BY repeat_count DESC, phrase ASC
+                    LIMIT 50
+                    "#,
+                )
+                .map_err(|e| CliError::Database(e.to_string()))?;
+            let rows = stmt
+                .query_map([], |row| {
+                    Ok(serde_json::json!({
+                        "phrase": row.get::<_, String>(0)?,
+                        "repeatCount": row.get::<_, i64>(1)?,
+                    }))
+                })
+                .map_err(|e| CliError::Database(e.to_string()))?;
+            let mut items = Vec::new();
+            for row in rows {
+                items.push(row.map_err(|e| CliError::Database(e.to_string()))?);
+            }
+            Ok(serde_json::json!({
+                "analysis": analysis_name,
+                "rows": items,
+            }))
+        }
+        AdvancedAnalysis::Cluster => run_ranked_sender_analysis(
+            conn,
+            "cluster_proxy",
+            "COALESCE(msg.content,'') LIKE '%@%'",
+            true,
+            30,
+        ),
+    }
+}
+
+fn run_ranked_sender_analysis(
+    conn: &rusqlite::Connection,
+    analysis_name: &str,
+    predicate_sql: &str,
+    desc: bool,
+    limit: usize,
+) -> Result<serde_json::Value> {
+    let order = if desc { "DESC" } else { "ASC" };
+    let sql = format!(
+        r#"
+        SELECT
+            msg.sender_id,
+            COALESCE(m.account_name, m.group_nickname, m.platform_id, printf('member_%d', msg.sender_id)) AS sender_name,
+            COUNT(*) AS count
+        FROM message msg
+        LEFT JOIN member m ON m.id = msg.sender_id
+        WHERE {predicate}
+        GROUP BY msg.sender_id, sender_name
+        ORDER BY count {order}, msg.sender_id ASC
+        LIMIT {limit}
+        "#,
+        predicate = predicate_sql,
+        order = order,
+        limit = limit
+    );
+    let mut stmt = conn
+        .prepare(&sql)
+        .map_err(|e| CliError::Database(e.to_string()))?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(serde_json::json!({
+                "senderId": row.get::<_, i64>(0)?,
+                "senderName": row.get::<_, String>(1)?,
+                "count": row.get::<_, i64>(2)?,
+            }))
+        })
+        .map_err(|e| CliError::Database(e.to_string()))?;
+    let mut items = Vec::new();
+    for row in rows {
+        items.push(row.map_err(|e| CliError::Database(e.to_string()))?);
+    }
+    Ok(serde_json::json!({
+        "analysis": analysis_name,
+        "rows": items,
+    }))
+}
+
 fn run_message_search(
     conn: &rusqlite::Connection,
     keyword: &str,
@@ -3137,7 +3970,7 @@ fn rewrite_semantic_query(query: &str) -> String {
         ("图片", "图像 照片"),
         ("msg", "message"),
         ("msgs", "messages"),
-        ("chatlog", "chat log"),
+        ("chat_history", "chat log"),
         ("im", "instant message"),
     ];
     for (from, to) in replacements {
@@ -5391,6 +6224,420 @@ fn run_api_smoke_check(db_path: Option<PathBuf>) -> Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "api")]
+fn run_mcp_smoke_check(base_url: String, timeout_ms: u64) -> Result<()> {
+    let base = base_url.trim_end_matches('/').to_string();
+    if base.is_empty() {
+        return Err(CliError::Argument(
+            "mcp smoke requires a non-empty --url".to_string(),
+        ));
+    }
+
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| CliError::Internal(e.to_string()))?;
+
+    let base_for_requests = base.clone();
+    let summary = runtime.block_on(async move {
+        let timeout = std::time::Duration::from_millis(timeout_ms.max(500));
+        let client = reqwest::Client::builder()
+            .timeout(timeout)
+            .build()
+            .map_err(|e| CliError::Internal(format!("failed to build HTTP client: {}", e)))?;
+
+        let health_url = format!("{}/health", base_for_requests);
+        let tools_url = format!("{}/tools", base_for_requests);
+        let integrations_url = format!("{}/integrations", base_for_requests);
+        let mcp_url = format!("{}/mcp", base_for_requests);
+
+        let health_resp = client
+            .get(&health_url)
+            .send()
+            .await
+            .map_err(|e| CliError::Internal(format!("mcp health request failed: {}", e)))?;
+        let health_status = health_resp.status();
+        let health_body = health_resp
+            .text()
+            .await
+            .map_err(|e| CliError::Internal(format!("mcp health read failed: {}", e)))?;
+
+        let tools_resp = client
+            .get(&tools_url)
+            .send()
+            .await
+            .map_err(|e| CliError::Internal(format!("mcp tools request failed: {}", e)))?;
+        let tools_status = tools_resp.status();
+        let tools_json: serde_json::Value = tools_resp
+            .json()
+            .await
+            .map_err(|e| CliError::Internal(format!("mcp tools decode failed: {}", e)))?;
+        let tools = tools_json
+            .get("tools")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default();
+        let tool_names = tools
+            .iter()
+            .filter_map(|v| v.as_str())
+            .map(|s| s.to_string())
+            .collect::<std::collections::HashSet<_>>();
+
+        let mcp_initialize_resp = client
+            .post(&mcp_url)
+            .json(&serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": "mcp-smoke-init",
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2024-11-05"
+                }
+            }))
+            .send()
+            .await
+            .map_err(|e| CliError::Internal(format!("mcp initialize request failed: {}", e)))?;
+        let mcp_initialize_status = mcp_initialize_resp.status();
+        let mcp_initialize_json: serde_json::Value = mcp_initialize_resp
+            .json()
+            .await
+            .map_err(|e| CliError::Internal(format!("mcp initialize decode failed: {}", e)))?;
+
+        let mcp_list_resp = client
+            .post(&mcp_url)
+            .json(&serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": "mcp-smoke-tools-list",
+                "method": "tools/list"
+            }))
+            .send()
+            .await
+            .map_err(|e| CliError::Internal(format!("mcp tools/list request failed: {}", e)))?;
+        let mcp_list_status = mcp_list_resp.status();
+        let mcp_list_json: serde_json::Value = mcp_list_resp
+            .json()
+            .await
+            .map_err(|e| CliError::Internal(format!("mcp tools/list decode failed: {}", e)))?;
+        let mcp_tool_names = mcp_list_json
+            .get("result")
+            .and_then(|v| v.get("tools"))
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|item| {
+                item.get("name")
+                    .and_then(|name| name.as_str())
+                    .or_else(|| item.as_str())
+                    .map(|name| name.to_string())
+            })
+            .collect::<std::collections::HashSet<_>>();
+
+        let mcp_call_resp = client
+            .post(&mcp_url)
+            .json(&serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": "mcp-smoke-tools-call-current-time",
+                "method": "tools/call",
+                "params": {
+                    "name": "get_current_time",
+                    "arguments": {}
+                }
+            }))
+            .send()
+            .await
+            .map_err(|e| CliError::Internal(format!("mcp tools/call request failed: {}", e)))?;
+        let mcp_call_status = mcp_call_resp.status();
+        let mcp_call_json: serde_json::Value = mcp_call_resp
+            .json()
+            .await
+            .map_err(|e| CliError::Internal(format!("mcp tools/call decode failed: {}", e)))?;
+
+        let integrations_resp = client
+            .get(&integrations_url)
+            .send()
+            .await
+            .map_err(|e| CliError::Internal(format!("mcp integrations request failed: {}", e)))?;
+        let integrations_status = integrations_resp.status();
+        let integrations_json: serde_json::Value = integrations_resp
+            .json()
+            .await
+            .map_err(|e| CliError::Internal(format!("mcp integrations decode failed: {}", e)))?;
+        let integration_ids = integrations_json
+            .get("integrations")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|item| item.get("id").and_then(|id| id.as_str()).map(|s| s.to_string()))
+            .collect::<std::collections::HashSet<_>>();
+
+        Ok::<_, CliError>((
+            health_status,
+            health_body,
+            tools_status,
+            tools.len(),
+            tool_names,
+            mcp_initialize_status,
+            mcp_initialize_json,
+            mcp_list_status,
+            mcp_tool_names,
+            mcp_call_status,
+            mcp_call_json,
+            integrations_status,
+            integration_ids,
+        ))
+    })?;
+
+    let (
+        health_status,
+        health_body,
+        tools_status,
+        tool_count,
+        tool_names,
+        mcp_initialize_status,
+        mcp_initialize_json,
+        mcp_list_status,
+        mcp_tool_names,
+        mcp_call_status,
+        mcp_call_json,
+        integrations_status,
+        integration_ids,
+    ) = summary;
+
+    println!("mcp smoke check completed");
+    println!("base: {}", base);
+    println!("GET /health -> {} {}", health_status.as_u16(), health_body.trim());
+    println!("GET /tools -> {} (count={})", tools_status.as_u16(), tool_count);
+    println!(
+        "POST /mcp initialize -> {}",
+        mcp_initialize_status.as_u16()
+    );
+    println!("POST /mcp tools/list -> {}", mcp_list_status.as_u16());
+    println!("POST /mcp tools/call(get_current_time) -> {}", mcp_call_status.as_u16());
+    println!(
+        "GET /integrations -> {} (count={})",
+        integrations_status.as_u16(),
+        integration_ids.len()
+    );
+
+    if health_status != reqwest::StatusCode::OK {
+        return Err(CliError::Internal(format!(
+            "mcp smoke failed: /health expected 200, got {}",
+            health_status
+        )));
+    }
+    if tools_status != reqwest::StatusCode::OK {
+        return Err(CliError::Internal(format!(
+            "mcp smoke failed: /tools expected 200, got {}",
+            tools_status
+        )));
+    }
+    if mcp_initialize_status != reqwest::StatusCode::OK {
+        return Err(CliError::Internal(format!(
+            "mcp smoke failed: /mcp initialize expected 200, got {}",
+            mcp_initialize_status
+        )));
+    }
+    if mcp_list_status != reqwest::StatusCode::OK {
+        return Err(CliError::Internal(format!(
+            "mcp smoke failed: /mcp tools/list expected 200, got {}",
+            mcp_list_status
+        )));
+    }
+    if mcp_call_status != reqwest::StatusCode::OK {
+        return Err(CliError::Internal(format!(
+            "mcp smoke failed: /mcp tools/call expected 200, got {}",
+            mcp_call_status
+        )));
+    }
+    if integrations_status != reqwest::StatusCode::OK {
+        return Err(CliError::Internal(format!(
+            "mcp smoke failed: /integrations expected 200, got {}",
+            integrations_status
+        )));
+    }
+    if !mcp_initialize_json
+        .get("result")
+        .and_then(|v| v.get("protocolVersion"))
+        .and_then(|v| v.as_str())
+        .is_some()
+    {
+        return Err(CliError::Internal(
+            "mcp smoke failed: /mcp initialize missing result.protocolVersion".to_string(),
+        ));
+    }
+    if mcp_call_json
+        .get("result")
+        .and_then(|v| v.get("tool"))
+        .and_then(|v| v.as_str())
+        != Some("get_current_time")
+    {
+        return Err(CliError::Internal(
+            "mcp smoke failed: /mcp tools/call missing result.tool=get_current_time".to_string(),
+        ));
+    }
+    if !mcp_call_json
+        .get("result")
+        .and_then(|v| v.get("structuredContent"))
+        .and_then(|v| v.get("unix"))
+        .is_some_and(|v| v.is_number())
+    {
+        return Err(CliError::Internal(
+            "mcp smoke failed: /mcp tools/call missing structuredContent.unix".to_string(),
+        ));
+    }
+
+    for required in [
+        "current_time",
+        "get_current_time",
+        "query_contacts",
+        "query_groups",
+        "recent_sessions",
+        "query_chats",
+        "chat_records",
+        "chat_history",
+    ] {
+        if !tool_names.contains(required) {
+            return Err(CliError::Internal(format!(
+                "mcp smoke failed: missing required tool '{}'",
+                required
+            )));
+        }
+        if !mcp_tool_names.contains(required) {
+            return Err(CliError::Internal(format!(
+                "mcp smoke failed: /mcp tools/list missing required tool '{}'",
+                required
+            )));
+        }
+    }
+
+    for required in ["claude-desktop", "chatwise", "opencode"] {
+        if !integration_ids.contains(required) {
+            return Err(CliError::Internal(format!(
+                "mcp smoke failed: missing integration preset '{}'",
+                required
+            )));
+        }
+    }
+
+    Ok(())
+}
+
+#[cfg(feature = "api")]
+fn run_mcp_integration_preset_fetch(
+    base_url: String,
+    target: String,
+    format: OutputFormat,
+    timeout_ms: u64,
+) -> Result<()> {
+    let base = base_url.trim_end_matches('/').to_string();
+    if base.is_empty() {
+        return Err(CliError::Argument(
+            "mcp preset requires a non-empty --url".to_string(),
+        ));
+    }
+    let target = target.trim().to_string();
+    if target.is_empty() {
+        return Err(CliError::Argument(
+            "mcp preset requires a non-empty --target".to_string(),
+        ));
+    }
+
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| CliError::Internal(e.to_string()))?;
+
+    let target_for_request = target.clone();
+    let response = runtime.block_on(async move {
+        let timeout = std::time::Duration::from_millis(timeout_ms.max(500));
+        let client = reqwest::Client::builder()
+            .timeout(timeout)
+            .build()
+            .map_err(|e| CliError::Internal(format!("failed to build HTTP client: {}", e)))?;
+        let url = format!("{}/integrations/{}", base, target_for_request);
+        let resp = client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| CliError::Internal(format!("mcp preset request failed: {}", e)))?;
+        let status = resp.status();
+        let json: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| CliError::Internal(format!("mcp preset decode failed: {}", e)))?;
+        Ok::<(reqwest::StatusCode, serde_json::Value), CliError>((status, json))
+    })?;
+
+    let (status, json) = response;
+    if status == reqwest::StatusCode::NOT_FOUND {
+        let supported = json
+            .get("supported")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+            .collect::<Vec<_>>()
+            .join(", ");
+        return Err(CliError::Internal(format!(
+            "mcp preset not found for target '{}'; supported: [{}]",
+            target, supported
+        )));
+    }
+    if status != reqwest::StatusCode::OK {
+        return Err(CliError::Internal(format!(
+            "mcp preset request failed with status {}: {}",
+            status, json
+        )));
+    }
+
+    match format {
+        OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Csv => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json)
+                    .map_err(|e| CliError::Internal(format!("format preset json failed: {}", e)))?
+            );
+        }
+        OutputFormat::Text | OutputFormat::Table => {
+            println!("mcp integration preset");
+            println!(
+                "id: {}",
+                json.get("id").and_then(|v| v.as_str()).unwrap_or_default()
+            );
+            println!(
+                "name: {}",
+                json.get("name").and_then(|v| v.as_str()).unwrap_or_default()
+            );
+            println!(
+                "description: {}",
+                json.get("description")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default()
+            );
+            println!(
+                "transport.sse: {}",
+                json.get("transport")
+                    .and_then(|v| v.get("sse"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default()
+            );
+            println!("configuration:");
+            println!(
+                "{}",
+                serde_json::to_string_pretty(
+                    json.get("configuration")
+                        .unwrap_or(&serde_json::Value::Object(serde_json::Map::new()))
+                )
+                .map_err(|e| CliError::Internal(format!("format configuration failed: {}", e)))?
+            );
+        }
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -5588,6 +6835,121 @@ mod tests {
         assert!(rewritten.contains("聊天"));
         assert!(rewritten.contains("message"));
         assert!(rewritten.contains("音频"));
+    }
+
+    #[test]
+    fn slugify_identifier_normalizes_name() {
+        let slug = slugify_identifier("  Team Account #1 (Primary) ");
+        assert_eq!(slug, "team-account-1-primary");
+    }
+
+    #[test]
+    fn allocate_account_id_adds_suffix_when_conflicted() {
+        let existing = ["wechat-team", "wechat-team-2"]
+            .into_iter()
+            .map(|v| v.to_string())
+            .collect::<std::collections::HashSet<_>>();
+        let id = allocate_account_id("wechat", "Team", &existing)
+            .expect("should allocate a unique account id");
+        assert_eq!(id, "wechat-team-3");
+    }
+
+    #[test]
+    fn allocate_account_id_rejects_empty_after_normalization() {
+        let existing = std::collections::HashSet::new();
+        let err = allocate_account_id("???", "   ", &existing)
+            .expect_err("empty normalized identifier must fail");
+        assert!(err.to_string().contains("account id generation failed"));
+    }
+
+    #[test]
+    fn sanitize_file_component_falls_back_when_empty() {
+        assert_eq!(sanitize_file_component(""), "chat");
+        assert_eq!(sanitize_file_component("   "), "chat");
+        assert_eq!(
+            sanitize_file_component("Team Discussion #1"),
+            "team-discussion-1"
+        );
+    }
+
+    #[test]
+    fn short_path_hash_is_stable_for_same_path() {
+        let path = std::path::Path::new("/tmp/xenobot/chat.json");
+        let first = short_path_hash(path);
+        let second = short_path_hash(path);
+        assert_eq!(first, second);
+        assert_eq!(first.len(), 8);
+    }
+
+    #[test]
+    fn run_time_distribution_analysis_returns_rows() {
+        let conn = rusqlite::Connection::open_in_memory().expect("open in-memory db");
+        conn.execute_batch(
+            r#"
+            CREATE TABLE message (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sender_id INTEGER NOT NULL,
+                ts INTEGER NOT NULL,
+                msg_type INTEGER NOT NULL,
+                content TEXT
+            );
+            INSERT INTO message(sender_id, ts, msg_type, content) VALUES
+              (1, 1704067200, 0, 'a'),
+              (1, 1704067260, 0, 'b'),
+              (2, 1704153600, 0, 'c');
+            "#,
+        )
+        .expect("seed message table");
+
+        let payload = run_time_distribution_analysis(&conn, &TimeGranularity::Daily)
+            .expect("time distribution should succeed");
+        assert_eq!(
+            payload["analysis"].as_str().unwrap_or_default(),
+            "time_distribution_daily"
+        );
+        assert!(payload["rows"]
+            .as_array()
+            .is_some_and(|rows| !rows.is_empty()));
+    }
+
+    #[test]
+    fn run_advanced_analysis_dragon_king_returns_ranked_rows() {
+        let conn = rusqlite::Connection::open_in_memory().expect("open in-memory db");
+        conn.execute_batch(
+            r#"
+            CREATE TABLE member (
+                id INTEGER PRIMARY KEY,
+                account_name TEXT,
+                group_nickname TEXT,
+                platform_id TEXT
+            );
+            CREATE TABLE message (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sender_id INTEGER NOT NULL,
+                ts INTEGER NOT NULL,
+                msg_type INTEGER NOT NULL,
+                content TEXT
+            );
+            INSERT INTO member(id, account_name, group_nickname, platform_id) VALUES
+              (1, 'alice', NULL, 'wechat:alice'),
+              (2, 'bob', NULL, 'wechat:bob');
+            INSERT INTO message(sender_id, ts, msg_type, content) VALUES
+              (1, 1704067200, 0, 'm1'),
+              (1, 1704067260, 0, 'm2'),
+              (2, 1704067320, 0, 'm3');
+            "#,
+        )
+        .expect("seed analysis tables");
+
+        let payload = run_advanced_analysis(&conn, &AdvancedAnalysis::DragonKing)
+            .expect("advanced analysis should succeed");
+        assert_eq!(payload["analysis"].as_str().unwrap_or_default(), "dragon_king");
+        let rows = payload["rows"]
+            .as_array()
+            .expect("rows should be an array")
+            .to_vec();
+        assert!(!rows.is_empty());
+        assert_eq!(rows[0]["senderName"], "alice");
     }
 }
 

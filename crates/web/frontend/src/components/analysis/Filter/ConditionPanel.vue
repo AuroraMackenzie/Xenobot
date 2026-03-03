@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * 条件筛选面板
- * 支持关键词、时间范围、发送者筛选，以及上下文扩展配置
+ * English note.
+ * English note.
  */
 
 import { ref, computed, onMounted, watch } from 'vue'
@@ -19,20 +19,20 @@ const timeRange = defineModel<{ start: number; end: number } | null>('timeRange'
 const senderIds = defineModel<number[]>('senderIds', { default: () => [] })
 const contextSize = defineModel<number>('contextSize', { default: 10 })
 
-// 关键词输入
+// English engineering note.
 const keywordInput = ref('')
 
-// 成员列表
+// English engineering note.
 const members = ref<MemberWithStats[]>([])
 const isLoadingMembers = ref(false)
 
-// 时间范围选择
+// English engineering note.
 type TimeRangePreset = 'all' | 'today' | 'week' | 'month' | '3months' | 'year' | 'custom'
 const timeRangeType = ref<TimeRangePreset>('all')
 const customStartDate = ref('')
 const customEndDate = ref('')
 
-// 时间范围预设选项
+// English engineering note.
 const timeRangePresets = [
   { id: 'all' as TimeRangePreset, label: 'analysis.filter.allTime' },
   { id: 'today' as TimeRangePreset, label: 'analysis.filter.today' },
@@ -43,7 +43,7 @@ const timeRangePresets = [
   { id: 'custom' as TimeRangePreset, label: 'analysis.filter.customTime' },
 ]
 
-// 时间范围 Tabs 选项（用于 Tabs 组件）
+// English engineering note.
 const timeRangeTabItems = computed(() =>
   timeRangePresets.map((preset) => ({
     label: t(preset.label),
@@ -51,15 +51,15 @@ const timeRangeTabItems = computed(() =>
   }))
 )
 
-// 监听时间范围类型变化
+// English engineering note.
 watch(timeRangeType, () => {
   updateTimeRange()
 })
 
-// 数据库时间范围
+// English engineering note.
 const dbTimeRange = ref<{ start: number; end: number } | null>(null)
 
-// 加载成员列表
+// English engineering note.
 async function loadMembers() {
   const sessionId = sessionStore.currentSessionId
   if (!sessionId) return
@@ -74,7 +74,7 @@ async function loadMembers() {
   }
 }
 
-// 加载时间范围
+// English engineering note.
 async function loadTimeRange() {
   const sessionId = sessionStore.currentSessionId
   if (!sessionId) return
@@ -89,7 +89,7 @@ async function loadTimeRange() {
   }
 }
 
-// 添加关键词
+// English engineering note.
 function addKeyword() {
   const kw = keywordInput.value.trim()
   if (kw && !keywords.value.includes(kw)) {
@@ -98,12 +98,12 @@ function addKeyword() {
   }
 }
 
-// 移除关键词
+// English engineering note.
 function removeKeyword(kw: string) {
   keywords.value = keywords.value.filter((k) => k !== kw)
 }
 
-// 处理关键词输入回车
+// English engineering note.
 function handleKeywordKeydown(e: KeyboardEvent) {
   if (e.key === 'Enter') {
     e.preventDefault()
@@ -111,7 +111,7 @@ function handleKeywordKeydown(e: KeyboardEvent) {
   }
 }
 
-// 切换成员选择
+// English engineering note.
 function toggleMember(memberId: number) {
   if (senderIds.value.includes(memberId)) {
     senderIds.value = senderIds.value.filter((id) => id !== memberId)
@@ -120,7 +120,7 @@ function toggleMember(memberId: number) {
   }
 }
 
-// 更新时间范围
+// English engineering note.
 function updateTimeRange() {
   const now = Math.floor(Date.now() / 1000)
   const today = new Date()
@@ -149,14 +149,14 @@ function updateTimeRange() {
     case 'custom':
       if (customStartDate.value && customEndDate.value) {
         const start = new Date(customStartDate.value).getTime() / 1000
-        const end = new Date(customEndDate.value).getTime() / 1000 + 86399 // 当天结束
+        const end = new Date(customEndDate.value).getTime() / 1000 + 86399 // English engineering note.
         timeRange.value = { start, end }
       }
       break
   }
 }
 
-// 成员搜索
+// English engineering note.
 const memberSearch = ref('')
 const filteredMembers = computed(() => {
   if (!memberSearch.value) return members.value
@@ -178,7 +178,7 @@ onMounted(() => {
 
 <template>
   <div class="p-4 space-y-6">
-    <!-- 关键词 -->
+    <!-- English UI note -->
     <div>
       <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
         {{ t('analysis.filter.keywords') }}
@@ -205,17 +205,17 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- 时间范围 -->
+    <!-- English UI note -->
     <div>
       <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
         {{ t('analysis.filter.timeRange') }}
       </label>
 
       <div class="space-y-2">
-        <!-- Tabs 选择器 -->
+        <!-- English UI note -->
         <Tabs v-model="timeRangeType" :items="timeRangeTabItems" size="sm" />
 
-        <!-- 自定义日期选择 -->
+        <!-- English UI note -->
         <div v-if="timeRangeType === 'custom'" class="flex gap-2 items-center">
           <input
             v-model="customStartDate"
@@ -234,7 +234,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- 发送者筛选 -->
+    <!-- English UI note -->
     <div>
       <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
         {{ t('analysis.filter.senders') }}
@@ -281,7 +281,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- 上下文扩展 -->
+    <!-- English UI note -->
     <div>
       <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
         {{ t('analysis.filter.contextSize') }}

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
- * 会话选择面板
- * 允许用户多选会话（对话段落）进行筛选
- * 使用虚拟滚动和 Set 优化性能
+ * English note.
+ * English note.
+ * English note.
  */
 
 import { ref, computed, onMounted, watch } from 'vue'
@@ -13,13 +13,13 @@ import { useVirtualizer } from '@tanstack/vue-virtual'
 const { t } = useI18n()
 const sessionStore = useSessionStore()
 
-// Props - 使用数组作为外部接口
+// English engineering note.
 const selectedIds = defineModel<number[]>('selectedIds', { default: () => [] })
 
-// 内部使用 Set 优化性能
+// English engineering note.
 const selectedSet = ref<Set<number>>(new Set())
 
-// 同步 selectedIds 和 selectedSet
+// English engineering note.
 watch(
   selectedIds,
   (newIds) => {
@@ -28,7 +28,7 @@ watch(
   { immediate: true }
 )
 
-// 会话列表
+// English engineering note.
 interface ChatSession {
   id: number
   startTs: number
@@ -40,10 +40,10 @@ interface ChatSession {
 const sessions = ref<ChatSession[]>([])
 const isLoading = ref(false)
 
-// 虚拟滚动容器
+// English engineering note.
 const scrollContainerRef = ref<HTMLElement | null>(null)
 
-// 扁平化的列表项（包含日期标题和会话）
+// English engineering note.
 interface ListItem {
   type: 'date' | 'session'
   date?: string
@@ -51,11 +51,11 @@ interface ListItem {
   sessionCount?: number
 }
 
-// 按日期分组并扁平化为列表项
+// English engineering note.
 const flatItems = computed<ListItem[]>(() => {
   const groups: Record<string, ChatSession[]> = {}
 
-  // 按日期分组
+  // English engineering note.
   for (const session of sessions.value) {
     const date = new Date(session.startTs * 1000).toLocaleDateString()
     if (!groups[date]) {
@@ -64,12 +64,12 @@ const flatItems = computed<ListItem[]>(() => {
     groups[date].push(session)
   }
 
-  // 按日期倒序排列
+  // English engineering note.
   const sortedDates = Object.keys(groups).sort((a, b) => {
     return new Date(b).getTime() - new Date(a).getTime()
   })
 
-  // 扁平化为列表
+  // English engineering note.
   const items: ListItem[] = []
   for (const date of sortedDates) {
     items.push({ type: 'date', date, sessionCount: groups[date].length })
@@ -81,7 +81,7 @@ const flatItems = computed<ListItem[]>(() => {
   return items
 })
 
-// 虚拟滚动配置
+// English engineering note.
 const virtualizer = useVirtualizer(
   computed(() => ({
     count: flatItems.value.length,
@@ -93,7 +93,7 @@ const virtualizer = useVirtualizer(
 
 const virtualItems = computed(() => virtualizer.value.getVirtualItems())
 
-// 加载会话列表
+// English engineering note.
 async function loadSessions() {
   const sessionId = sessionStore.currentSessionId
   if (!sessionId) return
@@ -108,12 +108,12 @@ async function loadSessions() {
   }
 }
 
-// 检查会话是否选中（O(1)）
+// English engineering note.
 function isSelected(id: number): boolean {
   return selectedSet.value.has(id)
 }
 
-// 切换会话选择
+// English engineering note.
 function toggleSession(id: number) {
   const newSet = new Set(selectedSet.value)
   if (newSet.has(id)) {
@@ -125,24 +125,24 @@ function toggleSession(id: number) {
   selectedIds.value = Array.from(newSet)
 }
 
-// 获取某天的所有会话 ID
+// English engineering note.
 function getSessionIdsForDate(date: string): number[] {
   return flatItems.value.filter((item) => item.type === 'session' && item.date === date).map((item) => item.session!.id)
 }
 
-// 全选/取消当天
+// English engineering note.
 function selectDate(date: string) {
   const sessionIds = getSessionIdsForDate(date)
   const allSelected = sessionIds.every((id) => selectedSet.value.has(id))
 
   const newSet = new Set(selectedSet.value)
   if (allSelected) {
-    // 取消选择
+    // English engineering note.
     for (const id of sessionIds) {
       newSet.delete(id)
     }
   } else {
-    // 全选
+    // English engineering note.
     for (const id of sessionIds) {
       newSet.add(id)
     }
@@ -151,13 +151,13 @@ function selectDate(date: string) {
   selectedIds.value = Array.from(newSet)
 }
 
-// 检查某天是否全选（O(n) 但 n 是当天会话数，通常很小）
+// English engineering note.
 function isDateFullySelected(date: string): boolean {
   const sessionIds = getSessionIdsForDate(date)
   return sessionIds.length > 0 && sessionIds.every((id) => selectedSet.value.has(id))
 }
 
-// 格式化时间
+// English engineering note.
 function formatTime(ts: number): string {
   return new Date(ts * 1000).toLocaleTimeString('zh-CN', {
     hour: '2-digit',
@@ -165,7 +165,7 @@ function formatTime(ts: number): string {
   })
 }
 
-// 格式化时长
+// English engineering note.
 function formatDuration(startTs: number, endTs: number): string {
   const diff = endTs - startTs
   if (diff < 60) return `${diff}秒`
@@ -180,12 +180,12 @@ onMounted(() => {
 
 <template>
   <div class="p-4 flex flex-col h-full min-h-0">
-    <!-- 选中数量 -->
+    <!-- English UI note -->
     <div v-if="selectedIds.length > 0" class="flex-none mb-2 text-sm text-primary-500">
       {{ t('analysis.filter.selectedSessions', { count: selectedIds.length }) }}
     </div>
 
-    <!-- 会话列表（虚拟滚动） -->
+    <!-- English UI note -->
     <div class="flex-1 min-h-0">
       <div v-if="isLoading" class="flex items-center justify-center h-full">
         <UIcon name="i-heroicons-arrow-path" class="w-6 h-6 animate-spin text-gray-400" />
@@ -208,7 +208,7 @@ onMounted(() => {
               transform: `translateY(${virtualRow.start}px)`,
             }"
           >
-            <!-- 日期标题 -->
+            <!-- English UI note -->
             <div
               v-if="flatItems[virtualRow.index].type === 'date'"
               class="flex items-center justify-between px-2 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-md cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700"
@@ -229,7 +229,7 @@ onMounted(() => {
               </div>
             </div>
 
-            <!-- 会话项 -->
+            <!-- English UI note -->
             <label
               v-else
               class="flex items-center gap-3 px-3 py-2 ml-2 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer border border-transparent"

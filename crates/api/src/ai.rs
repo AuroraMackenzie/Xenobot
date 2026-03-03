@@ -138,7 +138,9 @@ struct SemanticSearchMessagesRequest {
     query: String,
     filter: Option<TimeFilter>,
     limit: Option<u32>,
+    offset: Option<u32>,
     threshold: Option<f32>,
+    sender_id: Option<i32>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -413,7 +415,7 @@ fn rewrite_semantic_query(query: &str) -> String {
         ("图片", "图像 照片"),
         ("msg", "message"),
         ("msgs", "messages"),
-        ("chatlog", "chat log"),
+        ("chat_history", "chat log"),
         ("im", "instant message"),
     ];
     for (from, to) in replacements {
@@ -896,13 +898,16 @@ async fn semantic_search_messages(
     let pool = get_pool().await?;
     let threshold = req.threshold.unwrap_or(0.7).clamp(-1.0, 1.0);
     let limit = req.limit.unwrap_or(20).max(1).min(200);
-    let lexical_prefilter_limit = (limit as usize).saturating_mul(300).clamp(500, 20_000) as u32;
+    let offset = req.offset.unwrap_or(0);
+    let sender_ids = req.sender_id.map(|v| vec![v]);
+    let semantic_window = (offset as usize).saturating_add(limit as usize);
+    let lexical_prefilter_limit = semantic_window.saturating_mul(300).clamp(500, 20_000) as u32;
 
     let candidates = query_messages(
         pool.as_ref(),
         meta_id,
         req.filter.as_ref(),
-        None,
+        sender_ids.as_deref(),
         &[],
         Some(lexical_prefilter_limit),
         Some(0),
@@ -936,11 +941,20 @@ async fn semantic_search_messages(
             .then_with(|| b.message.timestamp.cmp(&a.message.timestamp))
             .then_with(|| b.message.id.cmp(&a.message.id))
     });
-    scored.truncate(limit as usize);
+    let total_count = scored.len();
+    let paged_messages = scored
+        .into_iter()
+        .skip(offset as usize)
+        .take(limit as usize)
+        .collect::<Vec<_>>();
+    let page_count = paged_messages.len();
 
     Ok(Json(serde_json::json!({
-        "messages": scored,
-        "count": scored.len(),
+        "messages": paged_messages,
+        "count": page_count,
+        "totalCount": total_count,
+        "limit": limit,
+        "offset": offset,
         "threshold": threshold,
         "queryRewritten": rewritten_query,
         "prefilterCount": lexical_prefilter_limit,

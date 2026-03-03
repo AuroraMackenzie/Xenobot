@@ -21,6 +21,7 @@ axum = { workspace = true }
 tungstenite = { workspace = true }
 reqwest = { workspace = true }
 rusqlite = { workspace = true }
+tower = { workspace = true, features = ["util"] }
 
 chrono = { workspace = true }
 dirs = { workspace = true }

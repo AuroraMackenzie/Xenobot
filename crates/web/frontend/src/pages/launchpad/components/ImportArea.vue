@@ -16,7 +16,7 @@ const {
   isBatchImporting,
   batchFiles,
   batchImportResult,
-  // 合并导入
+  // English engineering note.
   isMergeImporting,
   mergeFiles,
   mergeStage,
@@ -24,11 +24,11 @@ const {
   mergeResult,
 } = storeToRefs(sessionStore)
 
-// 聊天选择器状态（多聊天格式通用）
+// English engineering note.
 const showChatSelector = ref(false)
 const chatSelectorFilePath = ref('')
 
-// 自动生成会话索引（与 importFileFromPath 保持一致）
+// English engineering note.
 async function autoGenerateSessionIndex(sessionId: string) {
   try {
     const savedThreshold = localStorage.getItem('sessionGapThreshold')
@@ -52,15 +52,15 @@ const importDiagnostics = ref<{
 
 const router = useRouter()
 
-// 更多选项展开状态
+// English engineering note.
 
-// 合并导入开关
+// English engineering note.
 const mergeImportEnabled = ref(false)
 
-// 计算是否正在导入（单文件、批量或合并）
+// English engineering note.
 const isAnyImporting = computed(() => isImporting.value || isBatchImporting.value || isMergeImporting.value)
 
-// 计算批量导入进度
+// English engineering note.
 const batchProgress = computed(() => {
   if (!isBatchImporting.value || batchFiles.value.length === 0) return null
 
@@ -91,7 +91,7 @@ function translateError(error: string): string {
   return error
 }
 
-// 根据会话类型导航到对应页面
+// English engineering note.
 async function navigateToSession(sessionId: string) {
   const session = await window.chatApi.getSession(sessionId)
   if (session) {
@@ -100,20 +100,20 @@ async function navigateToSession(sessionId: string) {
   }
 }
 
-// 检查是否有导入日志
+// English engineering note.
 async function checkImportLog() {
   const result = await window.cacheApi.getLatestImportLog()
   hasImportLog.value = result.success && !!result.path
 }
 
-// 处理文件选择（点击选择）- 支持多选
+// English engineering note.
 async function handleClickImport() {
   importError.value = null
   diagnosisSuggestion.value = null
   hasImportLog.value = false
   importDiagnostics.value = null
 
-  // 使用系统对话框选择多个文件
+  // English engineering note.
   const result = await window.api.dialog.showOpenDialog({
     title: t('home.import.selectFiles'),
     properties: ['openFile', 'multiSelections'],
@@ -130,7 +130,7 @@ async function handleClickImport() {
   await processFilePaths(result.filePaths)
 }
 
-// 处理文件拖拽 - 支持多选
+// English engineering note.
 async function handleFileDrop({ paths }: { files: File[]; paths: string[] }) {
   if (paths.length === 0) {
     importError.value = t('home.import.cannotReadPath')
@@ -145,12 +145,12 @@ async function handleFileDrop({ paths }: { files: File[]; paths: string[] }) {
   await processFilePaths(paths)
 }
 
-// 统一处理文件路径（单文件或多文件）
+// English engineering note.
 async function processFilePaths(paths: string[]) {
-  // 单文件 或 未启用合并导入 - 使用原有逻辑
+  // English engineering note.
   if (paths.length === 1 || !mergeImportEnabled.value) {
     if (paths.length === 1) {
-      // 检测是否为多聊天格式（需要弹出聊天选择器）
+      // English engineering note.
       const format = await window.chatApi.detectFormat(paths[0])
       if (format?.multiChat) {
         chatSelectorFilePath.value = paths[0]
@@ -158,14 +158,14 @@ async function processFilePaths(paths: string[]) {
         return
       }
 
-      // 单文件导入
+      // English engineering note.
       const result = await sessionStore.importFileFromPath(paths[0])
       if (!result.success && result.error) {
         importError.value = translateError(result.error)
         if (result.diagnosisSuggestion) {
           diagnosisSuggestion.value = result.diagnosisSuggestion
         }
-        // 保存诊断信息
+        // English engineering note.
         if (result.diagnostics) {
           importDiagnostics.value = {
             logFile: result.diagnostics.logFile,
@@ -174,7 +174,7 @@ async function processFilePaths(paths: string[]) {
             messagesWritten: result.diagnostics.messagesWritten,
             messagesSkipped: result.diagnostics.messagesSkipped,
           }
-          // 如果有日志文件，显示查看日志按钮
+          // English engineering note.
           hasImportLog.value = !!result.diagnostics.logFile
         } else {
           await checkImportLog()
@@ -183,24 +183,24 @@ async function processFilePaths(paths: string[]) {
         await navigateToSession(sessionStore.currentSessionId)
       }
     } else {
-      // 多文件批量导入（未启用合并）
+      // English engineering note.
       await sessionStore.importFilesFromPaths(paths)
     }
     return
   }
 
-  // 多文件 + 合并导入（调用 store 方法）
+  // English engineering note.
   await sessionStore.mergeImportFiles(paths)
 }
 
-// 聊天选择后的导入处理（通用，适用于 Telegram 等多聊天格式）
+// English engineering note.
 async function handleChatSelect(selectedChats: ChatInfo[]) {
   if (selectedChats.length === 0) return
 
   const filePath = chatSelectorFilePath.value
 
   if (selectedChats.length === 1) {
-    // 单个聊天：直接导入
+    // English engineering note.
     isImporting.value = true
     importProgress.value = { stage: 'detecting', progress: 0, message: '' }
 
@@ -221,7 +221,7 @@ async function handleChatSelect(selectedChats: ChatInfo[]) {
       if (result.success && result.sessionId) {
         await sessionStore.loadSessions()
         sessionStore.selectSession(result.sessionId)
-        // 自动生成会话索引
+        // English engineering note.
         await autoGenerateSessionIndex(result.sessionId)
         await navigateToSession(result.sessionId)
       } else {
@@ -236,7 +236,7 @@ async function handleChatSelect(selectedChats: ChatInfo[]) {
       }, 500)
     }
   } else {
-    // 多个聊天：逐个导入（类似批量导入）
+    // English engineering note.
     isBatchImporting.value = true
     batchFiles.value = selectedChats.map((chat) => ({
       path: `${filePath}#${chat.index}`,
@@ -264,7 +264,7 @@ async function handleChatSelect(selectedChats: ChatInfo[]) {
           batchFiles.value[i].status = 'success'
           batchFiles.value[i].sessionId = result.sessionId
           successCount++
-          // 自动生成会话索引
+          // English engineering note.
           await autoGenerateSessionIndex(result.sessionId)
         } else {
           batchFiles.value[i].status = 'failed'
@@ -279,10 +279,10 @@ async function handleChatSelect(selectedChats: ChatInfo[]) {
       }
     }
 
-    // 刷新会话列表
+    // English engineering note.
     await sessionStore.loadSessions()
 
-    // 转为结果状态
+    // English engineering note.
     isBatchImporting.value = false
     batchImportResult.value = {
       total: selectedChats.length,
@@ -300,7 +300,7 @@ async function handleChatSelect(selectedChats: ChatInfo[]) {
   }
 }
 
-// 关闭合并结果并跳转
+// English engineering note.
 async function handleMergeGoToSession() {
   if (mergeResult.value?.sessionId) {
     const sessionId = mergeResult.value.sessionId
@@ -309,41 +309,41 @@ async function handleMergeGoToSession() {
   }
 }
 
-// 关闭合并结果
+// English engineering note.
 function closeMergeResult() {
   sessionStore.clearMergeImportResult()
 }
 
-// 取消批量导入
+// English engineering note.
 function handleCancelBatchImport() {
   sessionStore.cancelBatchImport()
 }
 
-// 关闭结果摘要
+// English engineering note.
 function handleCloseResult() {
   sessionStore.clearBatchImportResult()
 }
 
-// 跳转到指定会话
+// English engineering note.
 async function handleGoToSession(sessionId: string) {
   sessionStore.clearBatchImportResult()
   await navigateToSession(sessionId)
 }
 
-// 教程链接：根据语言动态生成
+// English engineering note.
 const tutorialUrl = computed(() => {
   const { locale } = useI18n()
   const langPath = locale.value === 'zh-CN' ? '/cn' : ''
   return `https://xenobot.app${langPath}/usage/how-to-export.html?utm_source=app`
 })
 
-// 打开最新的导入日志文件
+// English engineering note.
 async function openLatestImportLog() {
   const result = await window.cacheApi.getLatestImportLog()
   if (result.success && result.path) {
     await window.cacheApi.showInFolder(result.path)
   } else {
-    // 没有日志文件时，打开日志目录
+    // English engineering note.
     await window.cacheApi.openDir('logs')
   }
 }
@@ -386,7 +386,7 @@ function getProgressDetail(): string {
   return importProgress.value.message || ''
 }
 
-// 文件状态配置
+// English engineering note.
 const STATUS_CONFIG: Record<string, { icon: string; class: string }> = {
   pending: { icon: 'i-heroicons-clock', class: 'text-gray-400' },
   importing: { icon: 'i-heroicons-arrow-path', class: 'text-pink-500 animate-spin' },
@@ -400,13 +400,13 @@ const STATUS_CONFIG: Record<string, { icon: string; class: string }> = {
 const getStatusIcon = (status: string) => STATUS_CONFIG[status]?.icon ?? 'i-heroicons-question-mark-circle'
 const getStatusClass = (status: string) => STATUS_CONFIG[status]?.class ?? 'text-gray-400'
 
-// 获取批量导入文件进度描述
+// English engineering note.
 function getBatchFileProgressText(file: BatchFileInfo): string {
   if (file.status === 'pending') return t('home.import.batch.waiting')
   if (file.status === 'cancelled') return t('home.import.batch.skipped')
   if (file.status === 'success') return t('home.import.batch.success')
   if (file.status === 'failed') return translateError(file.error || 'error.import_failed')
-  // importing 状态
+  // English engineering note.
   if (file.progress) {
     const { stage, messagesProcessed } = file.progress
     if (stage === 'parsing' && messagesProcessed) {
@@ -417,19 +417,19 @@ function getBatchFileProgressText(file: BatchFileInfo): string {
   return ''
 }
 
-// 获取合并文件进度描述
+// English engineering note.
 const getMergeFileProgressText = (file: MergeFileInfo) =>
   file.info ? t('home.import.merge.messageCount', { count: file.info.messageCount.toLocaleString() }) : ''
 </script>
 
 <template>
   <div class="flex flex-col items-center space-y-6">
-    <!-- 批量导入进度（导入中） -->
+    <!-- English UI note -->
     <div
       v-if="isBatchImporting && batchFiles.length > 0"
       class="w-full max-w-4xl rounded-3xl border border-gray-200/50 bg-gray-100/50 px-8 py-6 backdrop-blur-md dark:border-white/10 dark:bg-gray-800/40"
     >
-      <!-- 标题和进度 -->
+      <!-- English UI note -->
       <div class="mb-4 flex items-center justify-between">
         <div class="flex items-center gap-3">
           <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-pink-50 dark:bg-pink-500/10">
@@ -454,7 +454,7 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
         </UButton>
       </div>
 
-      <!-- 文件列表 -->
+      <!-- English UI note -->
       <div class="max-h-52 space-y-2 overflow-y-auto">
         <FileListItem
           v-for="(file, index) in batchFiles"
@@ -470,12 +470,12 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
       </div>
     </div>
 
-    <!-- 合并导入进度 -->
+    <!-- English UI note -->
     <div
       v-else-if="isMergeImporting && mergeStage !== 'done'"
       class="w-full max-w-4xl rounded-3xl border border-gray-200/50 bg-gray-100/50 px-8 py-6 backdrop-blur-md dark:border-white/10 dark:bg-gray-800/40"
     >
-      <!-- 标题 -->
+      <!-- English UI note -->
       <div class="mb-4 flex items-center justify-between">
         <div class="flex items-center gap-3">
           <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-pink-50 dark:bg-pink-500/10">
@@ -507,7 +507,7 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
         />
       </div>
 
-      <!-- 文件列表 -->
+      <!-- English UI note -->
       <div class="max-h-52 space-y-2 overflow-y-auto">
         <FileListItem
           v-for="(file, index) in mergeFiles"
@@ -523,7 +523,7 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
       </div>
     </div>
 
-    <!-- 合并导入完成 -->
+    <!-- English UI note -->
     <div
       v-else-if="isMergeImporting && mergeStage === 'done' && mergeResult"
       class="w-full max-w-4xl rounded-3xl border border-gray-200/50 bg-gray-100/50 px-8 py-6 backdrop-blur-md dark:border-white/10 dark:bg-gray-800/40"
@@ -551,12 +551,12 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
       </div>
     </div>
 
-    <!-- 批量导入结果摘要 -->
+    <!-- English UI note -->
     <div
       v-else-if="batchImportResult"
       class="w-full max-w-4xl rounded-3xl border border-gray-200/50 bg-gray-100/50 px-8 py-6 backdrop-blur-md dark:border-white/10 dark:bg-gray-800/40"
     >
-      <!-- 标题 -->
+      <!-- English UI note -->
       <div class="mb-4 flex items-center justify-between">
         <div class="flex items-center gap-3">
           <div
@@ -593,7 +593,7 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
         <UButton color="neutral" variant="ghost" size="sm" icon="i-heroicons-x-mark" @click="handleCloseResult" />
       </div>
 
-      <!-- 文件列表 -->
+      <!-- English UI note -->
       <div class="max-h-52 space-y-2 overflow-y-auto">
         <FileListItem
           v-for="(file, index) in batchImportResult.files"
@@ -621,7 +621,7 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
       </div>
     </div>
 
-    <!-- 默认导入区域（非批量状态） -->
+    <!-- English UI note -->
     <FileDropZone
       v-else
       :accept="['.json', '.jsonl', '.txt']"
@@ -640,7 +640,7 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
           }"
           @click="!isAnyImporting && handleClickImport()"
         >
-          <!-- 上传图标容器 -->
+          <!-- English UI note -->
           <div
             class="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl transition-transform duration-300 group-hover:scale-105"
             :class="{ 'scale-105': isDragOver && !isAnyImporting, 'animate-pulse': isImporting }"
@@ -656,7 +656,7 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
           <!-- Text -->
           <div class="w-full min-w-80 text-center">
             <template v-if="isImporting && importProgress">
-              <!-- 导入中显示进度 -->
+              <!-- English UI note -->
               <p class="mb-4 text-lg font-semibold text-gray-900 dark:text-white">{{ getProgressText() }}</p>
               <div class="mx-auto w-full max-w-md">
                 <UProgress v-model="importProgress.progress" size="md" />
@@ -666,7 +666,7 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
               </p>
             </template>
             <template v-else>
-              <!-- 默认状态 -->
+              <!-- English UI note -->
               <p class="text-lg font-semibold text-gray-900 dark:text-white">
                 {{ isDragOver ? t('home.import.dropHint') : t('home.import.clickHint') }}
               </p>
@@ -679,7 +679,7 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
       </template>
     </FileDropZone>
 
-    <!-- 合并导入选项 -->
+    <!-- English UI note -->
     <div v-if="!isAnyImporting && !batchImportResult" class="flex items-center justify-center">
       <div class="flex items-center gap-2">
         <UCheckbox
@@ -712,7 +712,7 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
         <UIcon name="i-heroicons-exclamation-circle" class="h-5 w-5 shrink-0" />
         <span>{{ importError }}</span>
       </div>
-      <!-- 诊断信息（如果有） -->
+      <!-- English UI note -->
       <div
         v-if="importDiagnostics"
         class="w-full rounded-md bg-gray-100 px-3 py-2 text-xs text-gray-700 dark:bg-gray-800 dark:text-gray-300"
@@ -731,7 +731,7 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
           </div>
         </div>
       </div>
-      <!-- 诊断建议（如果有） -->
+      <!-- English UI note -->
       <div
         v-if="diagnosisSuggestion"
         class="w-full rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-200"
@@ -748,7 +748,7 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
       {{ t('home.import.tutorial') }}
     </UButton>
 
-    <!-- 聊天选择器（多聊天格式通用） -->
+    <!-- English UI note -->
     <ChatSelector v-model:open="showChatSelector" :file-path="chatSelectorFilePath" @select="handleChatSelect" />
   </div>
 </template>

@@ -8,7 +8,7 @@ export interface CaptureOptions {
   embedFonts?: boolean
   compress?: boolean
   filename?: string
-  /** 是否捕获完整的可滚动内容（默认 true） */
+  /** English note.
   fullContent?: boolean
 }
 
@@ -34,28 +34,28 @@ function triggerDownload(href: string, filename: string) {
 }
 
 /**
- * 捕获元素为图片数据，返回 base64 字符串
- * @param rootEl 要捕获的 DOM 元素
- * @param options 捕获选项
- * @returns Promise<string> 图片的 data URL (base64)
+ * English note.
+ * English note.
+ * English note.
+ * English note.
  */
 export async function captureAsImageData(rootEl: HTMLElement, options?: CaptureOptions): Promise<string> {
-  // 提高默认清晰度：maxExportWidth 2160（2K），minScale 1（不缩小）
+  // English engineering note.
   const maxExportWidth = options?.maxExportWidth ?? 2160
   const minScale = options?.minScale ?? 1
-  const fullContent = options?.fullContent !== false // 默认为 true
+  const fullContent = options?.fullContent !== false // English engineering note.
 
-  // 获取元素的实际背景色（优先用户指定，否则自动检测）
+  // English engineering note.
   const bgColor = options?.backgroundColor ?? getEffectiveBackground(rootEl)
 
-  // 计算元素尺寸：如果需要完整内容，使用 scrollWidth/scrollHeight
+  // English engineering note.
   const elementWidth = fullContent ? rootEl.scrollWidth : rootEl.getBoundingClientRect().width
   let captureScale = Math.min(1, maxExportWidth / Math.max(1, elementWidth))
   captureScale = Math.max(minScale, captureScale)
 
   const snapOptions: Record<string, unknown> = {
     scale: captureScale,
-    // 禁用字体嵌入可以避免某些 Unicode 字符导致的 encodeURIComponent 错误
+    // English engineering note.
     embedFonts: options?.embedFonts ?? false,
     compress: options?.compress ?? true,
     backgroundColor: bgColor,
@@ -127,22 +127,22 @@ export async function captureAsImageData(rootEl: HTMLElement, options?: CaptureO
 }
 
 export async function captureAndDownloadPng(rootEl: HTMLElement, options?: CaptureOptions): Promise<void> {
-  // 提高默认清晰度：maxExportWidth 2160（2K），minScale 1（不缩小）
+  // English engineering note.
   const maxExportWidth = options?.maxExportWidth ?? 2160
   const minScale = options?.minScale ?? 1
-  const fullContent = options?.fullContent !== false // 默认为 true
+  const fullContent = options?.fullContent !== false // English engineering note.
 
-  // 获取元素的实际背景色（优先用户指定，否则自动检测）
+  // English engineering note.
   const bgColor = options?.backgroundColor ?? getEffectiveBackground(rootEl)
 
-  // 计算元素尺寸：如果需要完整内容，使用 scrollWidth/scrollHeight
+  // English engineering note.
   const elementWidth = fullContent ? rootEl.scrollWidth : rootEl.getBoundingClientRect().width
   let captureScale = Math.min(1, maxExportWidth / Math.max(1, elementWidth))
   captureScale = Math.max(minScale, captureScale)
 
   const snapOptions: Record<string, unknown> = {
     scale: captureScale,
-    // 禁用字体嵌入可以避免某些 Unicode 字符导致的 encodeURIComponent 错误
+    // English engineering note.
     embedFonts: options?.embedFonts ?? false,
     compress: options?.compress ?? true,
     backgroundColor: bgColor,

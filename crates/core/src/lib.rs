@@ -1,8 +1,8 @@
 //! Core types, errors, and configuration for Xenobot
 //!
 //! This crate provides the foundational types and error handling used throughout
-//! the Xenobot application, which combines Xenobot's multi-platform parsing
-//! with chatlog's real-time WeChat extraction capabilities.
+//! the Xenobot application, including multi-platform parsing and
+//! legal-safe local ingestion capabilities.
 
 pub mod config;
 pub mod constants;

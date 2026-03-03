@@ -1,37 +1,37 @@
 /**
- * Xenobot 分析结果类型定义
- * 包含：各类榜单分析、统计结果
+ * English note.
+ * English note.
  */
 
-// ==================== 基础分析类型 ====================
+// English engineering note.
 
 /**
- * 成员活跃度统计
+ * English note.
  */
 export interface MemberActivity {
   memberId: number
   platformId: string
   name: string
   messageCount: number
-  percentage: number // 占总消息的百分比
-  avatar?: string | null // 成员头像（base64 Data URL）
+  percentage: number // English engineering note.
+  avatar?: string | null // English engineering note.
 }
 
 /**
- * 成员信息（含统计数据和别名，用于成员管理）
+ * English note.
  */
 export interface MemberWithStats {
   id: number
   platformId: string
-  accountName: string | null // 账号名称
-  groupNickname: string | null // 群昵称
-  aliases: string[] // 用户自定义别名
+  accountName: string | null // English engineering note.
+  groupNickname: string | null // English engineering note.
+  aliases: string[] // English engineering note.
   messageCount: number
-  avatar: string | null // 头像（base64 Data URL）
+  avatar: string | null // English engineering note.
 }
 
 /**
- * 时段活跃度统计
+ * English note.
  */
 export interface HourlyActivity {
   hour: number // 0-23
@@ -39,7 +39,7 @@ export interface HourlyActivity {
 }
 
 /**
- * 日期活跃度统计
+ * English note.
  */
 export interface DailyActivity {
   date: string // YYYY-MM-DD
@@ -47,15 +47,15 @@ export interface DailyActivity {
 }
 
 /**
- * 星期活跃度统计
+ * English note.
  */
 export interface WeekdayActivity {
-  weekday: number // 1-7，1=周一，7=周日
+  weekday: number // English engineering note.
   messageCount: number
 }
 
 /**
- * 月份活跃度统计
+ * English note.
  */
 export interface MonthlyActivity {
   month: number // 1-12
@@ -63,181 +63,181 @@ export interface MonthlyActivity {
 }
 
 /**
- * 成员历史昵称记录
+ * English note.
  */
 export interface MemberNameHistory {
-  nameType: 'account_name' | 'group_nickname' // 名称类型
-  name: string // 昵称
-  startTs: number // 开始使用时间戳（秒）
-  endTs: number | null // 停止使用时间戳（秒），null 表示当前昵称
+  nameType: 'account_name' | 'group_nickname' // English engineering note.
+  name: string // English engineering note.
+  startTs: number // English engineering note.
+  endTs: number | null // English engineering note.
 }
 
-// ==================== 夜猫分析类型 ====================
+// English engineering note.
 
 /**
- * 夜猫称号等级
+ * English note.
  */
 export type NightOwlTitle = '养生达人' | '偶尔失眠' | '经常失眠' | '夜猫子' | '秃头预备役' | '修仙练习生' | '守夜冠军'
 
 /**
- * 修仙排行榜项
+ * English note.
  */
 export interface NightOwlRankItem {
   memberId: number
   platformId: string
   name: string
-  totalNightMessages: number // 深夜发言总数
-  title: NightOwlTitle // 称号
+  totalNightMessages: number // English engineering note.
+  title: NightOwlTitle // English engineering note.
   hourlyBreakdown: {
-    // 各时段分布
+    // English engineering note.
     h23: number // 23:00-24:00
     h0: number // 00:00-01:00
     h1: number // 01:00-02:00
     h2: number // 02:00-03:00
     h3to4: number // 03:00-05:00
   }
-  percentage: number // 占该用户总发言的百分比
+  percentage: number // English engineering note.
 }
 
 /**
- * 最晚/最早发言排行项
+ * English note.
  */
 export interface TimeRankItem {
   memberId: number
   platformId: string
   name: string
-  count: number // 成为最晚/最早发言者的次数
-  avgTime: string // 平均时间，格式 "HH:MM"
-  extremeTime: string // 最极端时间，格式 "HH:MM"
-  percentage: number // 占总天数的百分比
+  count: number // English engineering note.
+  avgTime: string // English engineering note.
+  extremeTime: string // English engineering note.
+  percentage: number // English engineering note.
 }
 
 /**
- * 连续修仙记录
+ * English note.
  */
 export interface ConsecutiveNightRecord {
   memberId: number
   platformId: string
   name: string
-  maxConsecutiveDays: number // 最长连续修仙天数
-  currentStreak: number // 当前连续天数（如果还在持续）
+  maxConsecutiveDays: number // English engineering note.
+  currentStreak: number // English engineering note.
 }
 
 /**
- * 修仙王者项（综合排名）
+ * English note.
  */
 export interface NightOwlChampion {
   memberId: number
   platformId: string
   name: string
-  score: number // 综合得分
-  nightMessages: number // 深夜发言数
-  lastSpeakerCount: number // 最晚下班次数
-  consecutiveDays: number // 最长连续天数
+  score: number // English engineering note.
+  nightMessages: number // English engineering note.
+  lastSpeakerCount: number // English engineering note.
+  consecutiveDays: number // English engineering note.
 }
 
 /**
- * 夜猫分析完整结果
+ * English note.
  */
 export interface NightOwlAnalysis {
-  /** 修仙排行榜 */
+  /** English note.
   nightOwlRank: NightOwlRankItem[]
-  /** 最晚下班排名 */
+  /** English note.
   lastSpeakerRank: TimeRankItem[]
-  /** 最早上班排名 */
+  /** English note.
   firstSpeakerRank: TimeRankItem[]
-  /** 连续修仙记录 */
+  /** English note.
   consecutiveRecords: ConsecutiveNightRecord[]
-  /** 修仙王者（综合排名） */
+  /** English note.
   champions: NightOwlChampion[]
-  /** 统计的总天数 */
+  /** English note.
   totalDays: number
 }
 
 /**
- * 龙王排名项（每天发言最多的人）
+ * English note.
  */
 export interface DragonKingRankItem {
   memberId: number
   platformId: string
   name: string
-  count: number // 成为龙王的天数
-  percentage: number // 占总天数的百分比
+  count: number // English engineering note.
+  percentage: number // English engineering note.
 }
 
 /**
- * 龙王分析结果
+ * English note.
  */
 export interface DragonKingAnalysis {
   rank: DragonKingRankItem[]
-  totalDays: number // 统计的总天数
+  totalDays: number // English engineering note.
 }
 
 /**
- * 潜水排名项（最后发言时间）
+ * English note.
  */
 export interface DivingRankItem {
   memberId: number
   platformId: string
   name: string
-  lastMessageTs: number // 最后发言时间戳（秒）
-  daysSinceLastMessage: number // 距离最后发言的天数
+  lastMessageTs: number // English engineering note.
+  daysSinceLastMessage: number // English engineering note.
 }
 
 /**
- * 潜水分析结果
+ * English note.
  */
 export interface DivingAnalysis {
   rank: DivingRankItem[]
 }
 
-// ==================== 复读分析类型 ====================
+// English engineering note.
 
 /**
- * 复读统计项（单个成员）- 绝对次数
+ * English note.
  */
 export interface RepeatStatItem {
   memberId: number
   platformId: string
   name: string
-  count: number // 统计次数
-  percentage: number // 占总复读链的百分比
+  count: number // English engineering note.
+  percentage: number // English engineering note.
 }
 
 /**
- * 复读率统计项（单个成员）- 相对比例
+ * English note.
  */
 export interface RepeatRateItem {
   memberId: number
   platformId: string
   name: string
-  count: number // 复读相关次数
-  totalMessages: number // 该成员总发言数
-  rate: number // 复读率（百分比）
+  count: number // English engineering note.
+  totalMessages: number // English engineering note.
+  rate: number // English engineering note.
 }
 
 /**
- * 复读链长度分布项
+ * English note.
  */
 export interface ChainLengthDistribution {
-  length: number // 复读链长度（参与人数）
-  count: number // 出现次数
+  length: number // English engineering note.
+  count: number // English engineering note.
 }
 
 /**
- * 热门复读内容项
+ * English note.
  */
 export interface HotRepeatContent {
-  content: string // 复读内容
-  count: number // 被复读次数
-  maxChainLength: number // 最长复读链长度
-  originatorName: string // 最长链的原创者名称
-  lastTs: number // 最近一次发生的时间戳（秒）
-  firstMessageId: number // 最长链的第一条消息 ID（用于跳转查看上下文）
+  content: string // English engineering note.
+  count: number // English engineering note.
+  maxChainLength: number // English engineering note.
+  originatorName: string // English engineering note.
+  lastTs: number // English engineering note.
+  firstMessageId: number // English engineering note.
 }
 
 /**
- * 成员口头禅项
+ * English note.
  */
 export interface MemberCatchphrase {
   memberId: number
@@ -250,93 +250,93 @@ export interface MemberCatchphrase {
 }
 
 /**
- * 口头禅分析结果
+ * English note.
  */
 export interface CatchphraseAnalysis {
   members: MemberCatchphrase[]
 }
 
 /**
- * 最快复读选手统计项
+ * English note.
  */
 export interface FastestRepeaterItem {
   memberId: number
   platformId: string
   name: string
-  count: number // 参与复读次数
-  avgTimeDiff: number // 平均反应时间（毫秒）
+  count: number // English engineering note.
+  avgTimeDiff: number // English engineering note.
 }
 
 /**
- * 复读分析结果
+ * English note.
  */
 export interface RepeatAnalysis {
-  /** 谁的聊天最容易产生复读（原创者）- 绝对次数 */
+  /** English note.
   originators: RepeatStatItem[]
-  /** 谁最喜欢挑起复读（第二个复读的人）- 绝对次数 */
+  /** English note.
   initiators: RepeatStatItem[]
-  /** 谁喜欢打断复读（终结者）- 绝对次数 */
+  /** English note.
   breakers: RepeatStatItem[]
-  /** 最快复读选手（平均反应时间） */
+  /** English note.
   fastestRepeaters: FastestRepeaterItem[]
 
-  /** 被复读率排名（相对比例） */
+  /** English note.
   originatorRates: RepeatRateItem[]
-  /** 挑起复读率排名（相对比例） */
+  /** English note.
   initiatorRates: RepeatRateItem[]
-  /** 打断复读率排名（相对比例） */
+  /** English note.
   breakerRates: RepeatRateItem[]
 
-  /** 复读链长度分布 */
+  /** English note.
   chainLengthDistribution: ChainLengthDistribution[]
-  /** 最火复读内容 TOP 10 */
+  /** English note.
   hotContents: HotRepeatContent[]
-  /** 平均复读链长度 */
+  /** English note.
   avgChainLength: number
 
-  /** 复读链总数 */
+  /** English note.
   totalRepeatChains: number
 }
 
-// ==================== @ 互动分析类型 ====================
+// English engineering note.
 
 /**
- * @ 排行榜项
+ * English note.
  */
 export interface MentionRankItem {
   memberId: number
   platformId: string
   name: string
-  count: number // @ 次数
-  percentage: number // 占比
+  count: number // English engineering note.
+  percentage: number // English engineering note.
 }
 
 /**
- * @ 关系对（谁 @ 谁）
+ * English note.
  */
 export interface MentionPair {
   fromMemberId: number
   fromName: string
   toMemberId: number
   toName: string
-  count: number // @ 次数
+  count: number // English engineering note.
 }
 
 /**
- * 单向关注
+ * English note.
  */
 export interface OneWayMention {
   fromMemberId: number
   fromName: string
   toMemberId: number
   toName: string
-  fromToCount: number // A @ B 的次数
-  toFromCount: number // B @ A 的次数
-  ratio: number // 单向比例 (fromToCount / (fromToCount + toFromCount))
+  fromToCount: number // English engineering note.
+  toFromCount: number // English engineering note.
+  ratio: number // English engineering note.
 }
 
 /**
- * 双向奔赴（CP检测）
+ * English note.
  */
 export interface TwoWayMention {
   member1Id: number
@@ -345,162 +345,162 @@ export interface TwoWayMention {
   member2Name: string
   member1To2: number // A @ B
   member2To1: number // B @ A
-  total: number // 总互动次数
-  balance: number // 平衡度 (较小值 / 较大值)，越接近 1 越平衡
+  total: number // English engineering note.
+  balance: number // English engineering note.
 }
 
 /**
- * 成员的 @ 详情（点击成员查看其 @ 关系）
+ * English note.
  */
 export interface MemberMentionDetail {
   memberId: number
   name: string
-  /** 该成员最常 @ 的人 TOP N */
+  /** English note.
   topMentioned: MentionPair[]
-  /** 最常 @ 该成员的人 TOP N */
+  /** English note.
   topMentioners: MentionPair[]
 }
 
 /**
- * @ 互动分析结果
+ * English note.
  */
 export interface MentionAnalysis {
-  /** 发起 @ 最多的人排行 */
+  /** English note.
   topMentioners: MentionRankItem[]
-  /** 被 @ 最多的人排行 */
+  /** English note.
   topMentioned: MentionRankItem[]
-  /** 单向关注列表 */
+  /** English note.
   oneWay: OneWayMention[]
-  /** 双向奔赴列表（CP检测） */
+  /** English note.
   twoWay: TwoWayMention[]
-  /** @ 总次数 */
+  /** English note.
   totalMentions: number
-  /** 所有成员的 @ 详情（用于点击查看详细关系） */
+  /** English note.
   memberDetails: MemberMentionDetail[]
 }
 
-// ==================== 含笑量分析类型 ====================
+// English engineering note.
 
 /**
- * 含笑量排名项
+ * English note.
  */
 export interface LaughRankItem {
   memberId: number
   platformId: string
   name: string
-  laughCount: number // 笑声关键词出现次数
-  messageCount: number // 该成员总消息数
-  laughRate: number // 含笑率（laughCount / messageCount * 100）
-  percentage: number // 贡献占比（laughCount / 全群总笑声 * 100）
+  laughCount: number // English engineering note.
+  messageCount: number // English engineering note.
+  laughRate: number // English engineering note.
+  percentage: number // English engineering note.
   keywordDistribution: Array<{
     keyword: string
     count: number
     percentage: number
-  }> // 各关键词分布
+  }> // English engineering note.
 }
 
 /**
- * 笑声类型分布项
+ * English note.
  */
 export interface LaughTypeDistribution {
-  type: string // 关键词类型（如 "哈哈"、"233" 等）
-  count: number // 出现次数
-  percentage: number // 占比
+  type: string // English engineering note.
+  count: number // English engineering note.
+  percentage: number // English engineering note.
 }
 
 /**
- * 含笑量分析结果
+ * English note.
  */
 export interface LaughAnalysis {
-  /** 按含笑率排序的排行榜 */
+  /** English note.
   rankByRate: LaughRankItem[]
-  /** 按贡献度排序的排行榜 */
+  /** English note.
   rankByCount: LaughRankItem[]
-  /** 笑声类型分布 */
+  /** English note.
   typeDistribution: LaughTypeDistribution[]
-  /** 全群总笑声次数 */
+  /** English note.
   totalLaughs: number
-  /** 全群总消息数 */
+  /** English note.
   totalMessages: number
-  /** 群整体含笑率 */
+  /** English note.
   groupLaughRate: number
 }
 
-// ==================== 斗图分析类型 ====================
+// English engineering note.
 
 /**
- * 斗图达人榜项
+ * English note.
  */
 export interface MemeBattleRankItem {
   memberId: number
   platformId: string
   name: string
-  count: number // 参与场次 或 图片总数
-  percentage: number // 占比
+  count: number // English engineering note.
+  percentage: number // English engineering note.
 }
 
 /**
- * 斗图记录（一场）
+ * English note.
  */
 export interface MemeBattleRecord {
-  startTime: number // 开始时间戳
-  endTime: number // 结束时间戳
-  totalImages: number // 总图片数
-  participantCount: number // 参与人数
+  startTime: number // English engineering note.
+  endTime: number // English engineering note.
+  totalImages: number // English engineering note.
+  participantCount: number // English engineering note.
   participants: Array<{
     memberId: number
     name: string
-    imageCount: number // 在该场斗图中发的图片数
+    imageCount: number // English engineering note.
   }>
 }
 
 /**
- * 斗图分析结果
+ * English note.
  */
 export interface MemeBattleAnalysis {
-  topBattles: MemeBattleRecord[] // 史诗级斗图榜（前30）
-  rankByCount: MemeBattleRankItem[] // 按参与场次排名
-  rankByImageCount: MemeBattleRankItem[] // 按图片总数排名
-  totalBattles: number // 总斗图场次
+  topBattles: MemeBattleRecord[] // English engineering note.
+  rankByCount: MemeBattleRankItem[] // English engineering note.
+  rankByImageCount: MemeBattleRankItem[] // English engineering note.
+  totalBattles: number // English engineering note.
 }
 
-// ==================== 打卡分析类型 ====================
+// English engineering note.
 
 /**
- * 火花榜项（连续发言天数）
+ * English note.
  */
 export interface StreakRankItem {
   memberId: number
   name: string
-  maxStreak: number // 最长连续天数
-  maxStreakStart: string // 最长连续开始日期 (YYYY-MM-DD)
-  maxStreakEnd: string // 最长连续结束日期 (YYYY-MM-DD)
-  currentStreak: number // 当前连续天数（0表示已中断）
+  maxStreak: number // English engineering note.
+  maxStreakStart: string // English engineering note.
+  maxStreakEnd: string // English engineering note.
+  currentStreak: number // English engineering note.
 }
 
 /**
- * 忠臣榜项（累计发言天数）
+ * English note.
  */
 export interface LoyaltyRankItem {
   memberId: number
   name: string
-  totalDays: number // 累计发言天数
-  percentage: number // 相对于第一名的百分比
+  totalDays: number // English engineering note.
+  percentage: number // English engineering note.
 }
 
 /**
- * 打卡分析结果
+ * English note.
  */
 export interface CheckInAnalysis {
-  streakRank: StreakRankItem[] // 火花榜 - 连续发言天数排名
-  loyaltyRank: LoyaltyRankItem[] // 忠臣榜 - 累计发言天数排名
-  totalDays: number // 群聊总天数
+  streakRank: StreakRankItem[] // English engineering note.
+  loyaltyRank: LoyaltyRankItem[] // English engineering note.
+  totalDays: number // English engineering note.
 }
 
-// ==================== 关键词模板 ====================
+// English engineering note.
 
 /**
- * 自定义关键词模板
+ * English note.
  */
 export interface KeywordTemplate {
   id: string
@@ -508,22 +508,22 @@ export interface KeywordTemplate {
   keywords: string[]
 }
 
-// ==================== 小团体关系图类型 ====================
+// English engineering note.
 
 /**
- * 小团体关系图参数
+ * English note.
  */
 export interface ClusterGraphOptions {
-  /** 向后看几个不同发言者（默认3） */
+  /** English note.
   lookAhead?: number
-  /** 时间衰减常数（秒，默认120） */
+  /** English note.
   decaySeconds?: number
-  /** 最多保留边数（默认100） */
+  /** English note.
   topEdges?: number
 }
 
 /**
- * 小团体图节点
+ * English note.
  */
 export interface ClusterGraphNode {
   id: number
@@ -535,7 +535,7 @@ export interface ClusterGraphNode {
 }
 
 /**
- * 小团体图边
+ * English note.
  */
 export interface ClusterGraphLink {
   source: string
@@ -547,7 +547,7 @@ export interface ClusterGraphLink {
 }
 
 /**
- * 小团体图社区
+ * English note.
  */
 export interface ClusterGraphCommunity {
   id: number
@@ -556,7 +556,7 @@ export interface ClusterGraphCommunity {
 }
 
 /**
- * 小团体图统计
+ * English note.
  */
 export interface ClusterGraphStats {
   totalMembers: number
@@ -567,7 +567,7 @@ export interface ClusterGraphStats {
 }
 
 /**
- * 小团体关系图结果
+ * English note.
  */
 export interface ClusterGraphData {
   nodes: ClusterGraphNode[]

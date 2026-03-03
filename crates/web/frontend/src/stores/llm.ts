@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 
 /**
- * LLM 服务配置（展示用，不含敏感信息）
+ * English note.
  */
 export interface AIServiceConfigDisplay {
   id: string
@@ -16,7 +16,7 @@ export interface AIServiceConfigDisplay {
 }
 
 /**
- * LLM 提供商信息
+ * English note.
  */
 export interface LLMProvider {
   id: string
@@ -27,42 +27,42 @@ export interface LLMProvider {
 }
 
 /**
- * LLM 配置状态管理
- * 集中管理 LLM 配置的获取、切换和刷新
+ * English note.
+ * English note.
  */
 export const useLLMStore = defineStore('llm', () => {
-  // ============ 状态 ============
+  // English engineering note.
 
-  /** 所有配置列表 */
+  /** English note.
   const configs = ref<AIServiceConfigDisplay[]>([])
 
-  /** 所有提供商列表 */
+  /** English note.
   const providers = ref<LLMProvider[]>([])
 
-  /** 当前激活配置 ID */
+  /** English note.
   const activeConfigId = ref<string | null>(null)
 
-  /** 是否正在加载 */
+  /** English note.
   const isLoading = ref(false)
 
-  /** 是否已初始化 */
+  /** English note.
   const isInitialized = ref(false)
 
-  // ============ 计算属性 ============
+  // English engineering note.
 
-  /** 当前激活的配置 */
+  /** English note.
   const activeConfig = computed(() => configs.value.find((c) => c.id === activeConfigId.value) || null)
 
-  /** 是否有可用配置 */
+  /** English note.
   const hasConfig = computed(() => !!activeConfigId.value)
 
-  /** 是否达到最大配置数量 */
+  /** English note.
   const isMaxConfigs = computed(() => configs.value.length >= 10)
 
-  // ============ 方法 ============
+  // English engineering note.
 
   /**
-   * 初始化加载配置（仅首次调用生效）
+   * English note.
    */
   async function init() {
     if (isInitialized.value) return
@@ -71,7 +71,7 @@ export const useLLMStore = defineStore('llm', () => {
   }
 
   /**
-   * 加载所有配置和提供商
+   * English note.
    */
   async function loadConfigs() {
     isLoading.value = true
@@ -92,9 +92,9 @@ export const useLLMStore = defineStore('llm', () => {
   }
 
   /**
-   * 切换激活配置
-   * @param id 配置 ID
-   * @returns 是否成功
+   * English note.
+   * English note.
+   * English note.
    */
   async function setActiveConfig(id: string): Promise<boolean> {
     try {
@@ -112,34 +112,34 @@ export const useLLMStore = defineStore('llm', () => {
   }
 
   /**
-   * 刷新配置列表
-   * 供外部（如设置页面修改后）调用
+   * English note.
+   * English note.
    */
   async function refreshConfigs() {
     await loadConfigs()
   }
 
   /**
-   * 获取提供商名称
-   * @param providerId 提供商 ID
-   * @returns 提供商名称
+   * English note.
+   * English note.
+   * English note.
    */
   function getProviderName(providerId: string): string {
     return providers.value.find((p) => p.id === providerId)?.name || providerId
   }
 
   return {
-    // 状态
+    // English engineering note.
     configs,
     providers,
     activeConfigId,
     isLoading,
     isInitialized,
-    // 计算属性
+    // English engineering note.
     activeConfig,
     hasConfig,
     isMaxConfigs,
-    // 方法
+    // English engineering note.
     init,
     loadConfigs,
     setActiveConfig,

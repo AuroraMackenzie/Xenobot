@@ -1,8 +1,8 @@
 /**
- * SQL 实验室共享类型定义
+ * English note.
  */
 
-// Schema 类型
+// English engineering note.
 export interface TableSchema {
   name: string
   columns: ColumnSchema[]
@@ -15,7 +15,7 @@ export interface ColumnSchema {
   pk: boolean
 }
 
-// AI 历史记录类型
+// English engineering note.
 export interface AIHistory {
   id: string
   prompt: string
@@ -24,7 +24,7 @@ export interface AIHistory {
   timestamp: number
 }
 
-// SQL 执行结果类型
+// English engineering note.
 export interface SQLResult {
   columns: string[]
   rows: any[][]
@@ -33,7 +33,7 @@ export interface SQLResult {
   limited: boolean
 }
 
-// 表/列的多语言标签映射
+// English engineering note.
 type LocaleType = 'zh-CN' | 'en-US'
 
 export const TABLE_LABELS: Record<LocaleType, Record<string, string>> = {
@@ -118,12 +118,12 @@ export const COLUMN_LABELS: Record<LocaleType, Record<string, Record<string, str
   },
 }
 
-// 获取表的标签
+// English engineering note.
 export function getTableLabel(tableName: string, locale: LocaleType = 'zh-CN'): string {
   return TABLE_LABELS[locale]?.[tableName] || tableName
 }
 
-// 获取列的标签
+// English engineering note.
 export function getColumnLabel(tableName: string, columnName: string, locale: LocaleType = 'zh-CN'): string {
   return COLUMN_LABELS[locale]?.[tableName]?.[columnName] || columnName
 }

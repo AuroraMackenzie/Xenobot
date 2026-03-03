@@ -25,41 +25,41 @@ const llmStore = useLLMStore()
 const { aiPromptSettings, activePreset, aiGlobalSettings } = storeToRefs(promptStore)
 const { configs, activeConfig, isLoading: isLoadingLLM } = storeToRefs(llmStore)
 
-// 当前类型对应的预设列表（根据 applicableTo 过滤）
+// English engineering note.
 const currentPresets = computed(() => promptStore.getPresetsForChatType(props.chatType))
 
-// 当前激活的预设 ID
+// English engineering note.
 const currentActivePresetId = computed(() => aiPromptSettings.value.activePresetId)
 
-// 当前激活的预设（如果当前激活的预设不适用于当前类型，使用第一个可用预设）
+// English engineering note.
 const currentActivePreset = computed(() => {
   const activeInList = currentPresets.value.find((p) => p.id === currentActivePresetId.value)
   return activeInList || activePreset.value
 })
 
-// 下拉菜单状态
+// English engineering note.
 const isPresetPopoverOpen = ref(false)
 const isModelPopoverOpen = ref(false)
 const isOpeningLog = ref(false)
 
-// 设置激活预设
+// English engineering note.
 function setActivePreset(presetId: string) {
   promptStore.setActivePreset(presetId)
   isPresetPopoverOpen.value = false
 }
 
-// 打开设置弹窗并跳转到预设配置
+// English engineering note.
 function openPresetSettings() {
   isPresetPopoverOpen.value = false
   layoutStore.openSettingAt('ai', 'preset')
 }
 
-// 打开设置弹窗并跳转到对话配置（消息条数限制）
+// English engineering note.
 function openChatSettings() {
   layoutStore.openSettingAt('ai', 'chat')
 }
 
-// 切换 AI 模型配置
+// English engineering note.
 async function switchModelConfig(configId: string) {
   const success = await llmStore.setActiveConfig(configId)
   if (success) {
@@ -74,13 +74,13 @@ async function switchModelConfig(configId: string) {
   }
 }
 
-// 打开设置弹窗并跳转到模型配置
+// English engineering note.
 function openModelSettings() {
   isModelPopoverOpen.value = false
   layoutStore.openSettingAt('ai', 'model')
 }
 
-// 打开当前 AI 日志文件并定位到文件
+// English engineering note.
 async function openAiLogFile() {
   if (isOpeningLog.value) return
   isOpeningLog.value = true
@@ -112,7 +112,7 @@ async function openAiLogFile() {
 
 <template>
   <div class="flex items-center justify-between px-1">
-    <!-- 左侧：预设选择器 + 模型切换器 -->
+    <!-- English UI note -->
     <div class="flex items-center gap-1">
       <UPopover v-model:open="isPresetPopoverOpen" :ui="{ content: 'p-0' }">
         <button
@@ -154,10 +154,10 @@ async function openAiLogFile() {
               <span class="truncate">{{ preset.name }}</span>
             </button>
 
-            <!-- 分隔线 -->
+            <!-- English UI note -->
             <div class="my-1 border-t border-gray-200 dark:border-gray-700" />
 
-            <!-- 管理预设按钮 -->
+            <!-- English UI note -->
             <button
               class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-300"
               @click="openPresetSettings"
@@ -169,7 +169,7 @@ async function openAiLogFile() {
         </template>
       </UPopover>
 
-      <!-- 模型切换器 -->
+      <!-- English UI note -->
       <UPopover v-model:open="isModelPopoverOpen" :ui="{ content: 'p-0' }">
         <button
           class="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-300"
@@ -187,7 +187,7 @@ async function openAiLogFile() {
               {{ t('ai.chat.statusBar.model.title') }}
             </div>
 
-            <!-- 配置列表 -->
+            <!-- English UI note -->
             <template v-if="configs.length > 0">
               <button
                 v-for="config in configs"
@@ -209,15 +209,15 @@ async function openAiLogFile() {
               </button>
             </template>
 
-            <!-- 空状态 -->
+            <!-- English UI note -->
             <div v-else class="px-3 py-2 text-sm text-gray-400 dark:text-gray-500">
               {{ t('ai.chat.statusBar.model.empty') }}
             </div>
 
-            <!-- 分隔线 -->
+            <!-- English UI note -->
             <div class="my-1 border-t border-gray-200 dark:border-gray-700" />
 
-            <!-- 管理配置按钮 -->
+            <!-- English UI note -->
             <button
               class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-300"
               @click="openModelSettings"
@@ -230,9 +230,9 @@ async function openAiLogFile() {
       </UPopover>
     </div>
 
-    <!-- 右侧：配置状态指示 -->
+    <!-- English UI note -->
     <div class="flex items-center gap-1">
-      <!-- 消息条数限制（点击跳转设置） -->
+      <!-- English UI note -->
       <button
         class="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
         :title="t('ai.chat.statusBar.messageLimit.title')"
@@ -240,7 +240,7 @@ async function openAiLogFile() {
       >
         <span>{{ t('ai.chat.statusBar.messageLimit.label') }}{{ aiGlobalSettings.maxMessagesPerRequest }}</span>
       </button>
-      <!-- 日志按钮 -->
+      <!-- English UI note -->
       <button
         class="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-gray-800 dark:hover:text-gray-300"
         :title="t('ai.chat.statusBar.log.title')"

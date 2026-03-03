@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * TopN 数量选择器
- * 用于控制排行榜显示的数量
+ * English note.
+ * English note.
  */
 const modelValue = defineModel<number>({ default: 10 })
 

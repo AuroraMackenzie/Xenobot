@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import type { ChatRecordQuery } from '@/types/format'
 
 /**
- * 全局界面状态（侧边栏、弹窗、聊天记录抽屉等）
+ * English note.
  */
 export const useLayoutStore = defineStore(
   'layout',
@@ -15,24 +15,24 @@ export const useLayoutStore = defineStore(
     const showChatRecordDrawer = ref(false)
     const chatRecordQuery = ref<ChatRecordQuery | null>(null)
 
-    // 设置弹窗定位目标（用于从外部跳转到设置的特定位置）
+    // English engineering note.
     const settingTarget = ref<{
       tab: 'settings' | 'ai' | 'storage' | 'about'
-      section?: string // AI tab 下的子锚点，如 'model', 'chat', 'preset'
+      section?: string // English engineering note.
     } | null>(null)
 
-    // 截图设置
-    const screenshotMobileAdapt = ref(true) // 截图时开启移动端适配，默认开启
+    // English engineering note.
+    const screenshotMobileAdapt = ref(true) // English engineering note.
 
     /**
-     * 切换侧边栏展开/折叠状态
+     * English note.
      */
     function toggleSidebar() {
       isSidebarCollapsed.value = !isSidebarCollapsed.value
     }
 
     /**
-     * 打开截屏预览弹窗
+     * English note.
      */
     function openScreenCaptureModal(imageData: string) {
       screenCaptureImage.value = imageData
@@ -40,7 +40,7 @@ export const useLayoutStore = defineStore(
     }
 
     /**
-     * 关闭截屏预览弹窗
+     * English note.
      */
     function closeScreenCaptureModal() {
       showScreenCaptureModal.value = false
@@ -50,7 +50,7 @@ export const useLayoutStore = defineStore(
     }
 
     /**
-     * 打开聊天记录抽屉并设置查询参数
+     * English note.
      */
     function openChatRecordDrawer(query: ChatRecordQuery) {
       chatRecordQuery.value = query
@@ -58,7 +58,7 @@ export const useLayoutStore = defineStore(
     }
 
     /**
-     * 关闭聊天记录抽屉并重置查询
+     * English note.
      */
     function closeChatRecordDrawer() {
       showChatRecordDrawer.value = false
@@ -68,9 +68,9 @@ export const useLayoutStore = defineStore(
     }
 
     /**
-     * 打开设置弹窗并定位到指定位置
-     * @param tab 要跳转的 Tab（settings, ai, storage, about）
-     * @param section 子锚点（仅 ai tab 支持：model, chat, preset）
+     * English note.
+     * English note.
+     * English note.
      */
     function openSettingAt(tab: 'settings' | 'ai' | 'storage' | 'about', section?: string) {
       settingTarget.value = { tab, section }
@@ -78,7 +78,7 @@ export const useLayoutStore = defineStore(
     }
 
     /**
-     * 清空设置目标（弹窗关闭后调用）
+     * English note.
      */
     function clearSettingTarget() {
       settingTarget.value = null

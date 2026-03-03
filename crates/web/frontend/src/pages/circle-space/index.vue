@@ -28,18 +28,18 @@ const sessionStore = useSessionStore()
 const layoutStore = useLayoutStore()
 const { currentSessionId } = storeToRefs(sessionStore)
 
-// 会话索引弹窗状态
+// English engineering note.
 const showSessionIndexModal = ref(false)
 
-// 增量导入弹窗状态
+// English engineering note.
 const showIncrementalImportModal = ref(false)
 
-// 打开聊天记录查看器
+// English engineering note.
 function openChatRecordViewer() {
   layoutStore.openChatRecordDrawer({})
 }
 
-// 数据状态
+// English engineering note.
 const isLoading = ref(true)
 const session = ref<AnalysisSession | null>(null)
 const memberActivity = ref<MemberActivity[]>([])
@@ -48,7 +48,7 @@ const dailyActivity = ref<DailyActivity[]>([])
 const messageTypes = ref<Array<{ type: MessageType; count: number }>>([])
 const isInitialLoad = ref(true)
 
-// Tab 配置
+// English engineering note.
 const allTabs = [
   { id: 'overview', labelKey: 'analysis.tabs.overview', icon: 'i-heroicons-chart-pie' },
   { id: 'view', labelKey: 'analysis.tabs.view', icon: 'i-heroicons-presentation-chart-bar' },
@@ -57,12 +57,12 @@ const allTabs = [
   { id: 'ai', labelKey: 'analysis.tabs.ai', icon: 'i-heroicons-sparkles' },
 ]
 
-// Tab 列表
+// English engineering note.
 const tabs = computed(() => allTabs)
 
 const activeTab = ref((route.query.tab as string) || 'overview')
 
-// 时间范围筛选（composable 统一管理状态、派生计算、URL 同步）
+// English engineering note.
 const { timeRangeValue, fullTimeRange, availableYears, timeFilter, selectedYearForOverview, initialTimeState } =
   useTimeSelect(route, router, {
     activeTab,
@@ -71,19 +71,19 @@ const { timeRangeValue, fullTimeRange, availableYears, timeFilter, selectedYearF
     onTimeRangeChange: () => loadAnalysisData(),
   })
 
-// 计算属性
+// English engineering note.
 const topMembers = computed(() => memberActivity.value.slice(0, 3))
 const bottomMembers = computed(() => {
   if (memberActivity.value.length <= 1) return []
   return [...memberActivity.value].sort((a, b) => a.messageCount - b.messageCount).slice(0, 1)
 })
 
-// 当前筛选后的消息总数
+// English engineering note.
 const filteredMessageCount = computed(() => {
   return memberActivity.value.reduce((sum, m) => sum + m.messageCount, 0)
 })
 
-// 当前筛选后的活跃成员数
+// English engineering note.
 const filteredMemberCount = computed(() => {
   return memberActivity.value.filter((m) => m.messageCount > 0).length
 })
@@ -100,7 +100,7 @@ function syncSession() {
   }
 }
 
-// 加载基础数据（仅会话信息，时间范围由 TimeSelect 内部拉取）
+// English engineering note.
 async function loadBaseData() {
   if (!currentSessionId.value) return
 
@@ -112,7 +112,7 @@ async function loadBaseData() {
   }
 }
 
-// 加载分析数据（受年份筛选影响）
+// English engineering note.
 async function loadAnalysisData() {
   if (!currentSessionId.value) return
 
@@ -139,7 +139,7 @@ async function loadAnalysisData() {
   }
 }
 
-// 加载所有数据
+// English engineering note.
 async function loadData() {
   if (!currentSessionId.value) return
 
@@ -148,14 +148,14 @@ async function loadData() {
   isInitialLoad.value = false
 }
 
-// 监听路由参数变化
+// English engineering note.
 watch(
   () => route.params.id,
   () => {
-    // 切换会话时，重置 activeTab 为默认值（如果 URL 中没有 tab 参数）
-    // 注意：sidebar 导航通常会 push 新的 URL，不带 query 参数，所以这里会自动重置
-    // 但为了保险，我们可以在这里强制重置，或者依赖 activeTab 的初始化逻辑（它只在组件创建时初始化）
-    // 由于组件是复用的，我们需要手动处理
+    // English engineering note.
+    // English engineering note.
+    // English engineering note.
+    // English engineering note.
     if (!route.query.tab) {
       activeTab.value = 'overview'
     } else {
@@ -165,7 +165,7 @@ watch(
   }
 )
 
-// 监听会话变化（切换会话时由 TimeSelect 自行发出新范围，避免 Tab Content 双重重建）
+// English engineering note.
 watch(
   currentSessionId,
   () => {
@@ -248,7 +248,7 @@ onMounted(() => {
               <span class="whitespace-nowrap">{{ t(tab.labelKey) }}</span>
             </button>
           </div>
-          <!-- 时间范围选择器靠右（AI实验室时隐藏） -->
+          <!-- English UI note -->
           <TimeSelect
             v-model="timeRangeValue"
             :session-id="currentSessionId ?? undefined"
@@ -319,10 +319,10 @@ onMounted(() => {
       <p class="text-gray-500">{{ t('analysis.groupChat.loadError') }}</p>
     </div>
 
-    <!-- 会话索引弹窗（内部自动检测并弹出） -->
+    <!-- English UI note -->
     <SessionIndexModal v-if="currentSessionId" v-model="showSessionIndexModal" :session-id="currentSessionId" />
 
-    <!-- 增量导入弹窗 -->
+    <!-- English UI note -->
     <IncrementalImportModal
       v-if="currentSessionId && session"
       v-model="showIncrementalImportModal"

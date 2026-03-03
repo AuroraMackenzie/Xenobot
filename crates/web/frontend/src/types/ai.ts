@@ -1,49 +1,49 @@
 /**
- * Xenobot AI 相关类型定义
- * 包含：提示词预设、AI 配置
+ * English note.
+ * English note.
  */
 
-// ==================== AI 提示词预设 ====================
+// English engineering note.
 
 /**
- * 预设适用的聊天类型
- * - 'group': 仅群聊
- * - 'private': 仅私聊
- * - 'common': 通用（群聊和私聊都适用）
+ * English note.
+ * English note.
+ * English note.
+ * English note.
  */
 export type PresetApplicableType = 'group' | 'private' | 'common'
 
 /**
- * AI 提示词预设
+ * English note.
  *
- * applicableTo 表示预设适用的场景：
- * - 'common' 表示群聊和私聊都适用（默认）
- * - 'group' 表示仅群聊
- * - 'private' 表示仅私聊
+ * English note.
+ * English note.
+ * English note.
+ * English note.
  *
- * 后端会根据运行时的 chatType 自动处理差异化内容（如成员查询策略）。
+ * English note.
  */
 export interface PromptPreset {
   id: string
-  name: string // 预设名称
-  roleDefinition: string // 角色定义（可编辑）
-  responseRules: string // 回答要求（可编辑）
-  isBuiltIn: boolean // 是否内置（内置不可删除）
-  applicableTo?: PresetApplicableType // 适用场景，默认 'common'
+  name: string // English engineering note.
+  roleDefinition: string // English engineering note.
+  responseRules: string // English engineering note.
+  isBuiltIn: boolean // English engineering note.
+  applicableTo?: PresetApplicableType // English engineering note.
   createdAt: number
   updatedAt: number
 }
 
 /**
- * AI 提示词配置（激活的预设）
+ * English note.
  */
 export interface AIPromptSettings {
-  activePresetId: string // 当前激活的预设ID
+  activePresetId: string // English engineering note.
 }
 
-// ==================== 兼容旧版本 ====================
+// English engineering note.
 
 /**
- * @deprecated 使用 PresetApplicableType 代替
+ * English note.
  */
 export type PromptPresetChatType = 'group' | 'private'

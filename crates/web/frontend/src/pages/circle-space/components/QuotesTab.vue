@@ -16,7 +16,7 @@ const props = defineProps<{
   timeFilter?: TimeFilter
 }>()
 
-// 子 Tab 配置
+// English engineering note.
 const subTabs = computed(() => [
   { id: 'wordcloud', label: t('analysis.subTabs.quotes.wordcloud'), icon: 'i-heroicons-cloud' },
   { id: 'hot-repeat', label: t('analysis.subTabs.quotes.hotRepeat'), icon: 'i-heroicons-fire' },
@@ -33,34 +33,34 @@ const activeSubTab = ref('wordcloud')
 
 <template>
   <div class="flex h-full flex-col">
-    <!-- 子 Tab 导航 -->
+    <!-- English UI note -->
     <SubTabs v-model="activeSubTab" :items="subTabs" persist-key="quotesTab" />
 
-    <!-- 子 Tab 内容 -->
+    <!-- English UI note -->
     <div class="flex-1 min-h-0 overflow-auto">
       <Transition name="fade" mode="out-in">
-        <!-- 口头禅分析 -->
+        <!-- English UI note -->
         <CatchphraseTab
           v-if="activeSubTab === 'catchphrase'"
           :session-id="props.sessionId"
           :time-filter="props.timeFilter"
         />
 
-        <!-- 最火复读内容 -->
+        <!-- English UI note -->
         <HotRepeatTab
           v-else-if="activeSubTab === 'hot-repeat'"
           :session-id="props.sessionId"
           :time-filter="props.timeFilter"
         />
 
-        <!-- 词云分析 -->
+        <!-- English UI note -->
         <WordcloudTab
           v-else-if="activeSubTab === 'wordcloud'"
           :session-id="props.sessionId"
           :time-filter="props.timeFilter"
         />
 
-        <!-- 关键词分析 -->
+        <!-- English UI note -->
         <div v-else-if="activeSubTab === 'keyword'" class="main-content mx-auto max-w-3xl p-6">
           <KeywordAnalysis :session-id="props.sessionId" :time-filter="props.timeFilter" />
         </div>

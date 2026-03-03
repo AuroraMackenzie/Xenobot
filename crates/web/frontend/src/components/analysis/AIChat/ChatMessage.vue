@@ -15,35 +15,35 @@ const props = defineProps<{
   content: string
   timestamp: number
   isStreaming?: boolean
-  /** AI 消息的混合内容块（按时序排列的文本和工具调用） */
+  /** English note.
   contentBlocks?: ContentBlock[]
-  /** 是否显示截屏按钮（仅 AI 回复） */
+  /** English note.
   showCaptureButton?: boolean
 }>()
 
-// 格式化时间
+// English engineering note.
 const formattedTime = computed(() => {
   return dayjs(props.timestamp).format('HH:mm')
 })
 
-// 是否是用户消息
+// English engineering note.
 const isUser = computed(() => props.role === 'user')
 
-// 创建 markdown-it 实例
+// English engineering note.
 const md = new MarkdownIt({
-  html: false, // 禁用 HTML 标签
-  breaks: true, // 将换行转为 <br>
-  linkify: true, // 自动将 URL 转为链接
-  typographer: true, // 启用排版优化
+  html: false, // English engineering note.
+  breaks: true, // English engineering note.
+  linkify: true, // English engineering note.
+  typographer: true, // English engineering note.
 })
 
-// 渲染 Markdown 文本
+// English engineering note.
 function renderMarkdown(text: string): string {
   if (!text) return ''
   return md.render(text)
 }
 
-// 思考标签名称映射
+// English engineering note.
 function getThinkLabel(tag: string): string {
   const normalized = tag?.toLowerCase() || 'think'
   if (normalized === 'analysis') return t('ai.chat.message.think.labels.analysis')
@@ -55,20 +55,20 @@ function getThinkLabel(tag: string): string {
   return t('ai.chat.message.think.labels.other', { tag })
 }
 
-// 格式化思考耗时（毫秒 -> 秒）
+// English engineering note.
 function formatThinkDuration(durationMs?: number): string {
   if (!durationMs) return ''
   const seconds = (durationMs / 1000).toFixed(1)
   return t('ai.chat.message.think.duration', { seconds })
 }
 
-// 渲染后的 HTML（用于用户消息或纯文本 AI 消息）
+// English engineering note.
 const renderedContent = computed(() => {
   if (!props.content) return ''
   return md.render(props.content)
 })
 
-// 过滤无内容的文本/思考块，避免显示空气泡
+// English engineering note.
 const visibleBlocks = computed(() => {
   const blocks = props.contentBlocks || []
   return blocks.filter((block) => {
@@ -79,14 +79,25 @@ const visibleBlocks = computed(() => {
   })
 })
 
-// 是否使用 contentBlocks 渲染（AI 消息且有内容块）
+// English engineering note.
 const useBlocksRendering = computed(() => {
   return props.role === 'assistant' && visibleBlocks.value.length > 0
 })
 
-// 格式化时间参数显示
+// English engineering note.
 function formatTimeParams(params: Record<string, unknown>): string {
-  // 优先使用 start_time/end_time
+  const startTs = params.startTs || params.start_ts
+  const endTs = params.endTs || params.end_ts
+  if (startTs || endTs) {
+    const start = startTs ? String(startTs) : ''
+    const end = endTs ? String(endTs) : ''
+    if (start && end) {
+      return `${start} ~ ${end}`
+    }
+    return start || end
+  }
+
+  // English engineering note.
   if (params.start_time || params.end_time) {
     const start = params.start_time ? String(params.start_time) : ''
     const end = params.end_time ? String(params.end_time) : ''
@@ -96,7 +107,7 @@ function formatTimeParams(params: Record<string, unknown>): string {
     return start || end
   }
 
-  // 使用 year/month/day/hour 组合
+  // English engineering note.
   if (params.year) {
     if (locale.value === 'zh-CN') {
       let result = `${params.year}年`
@@ -136,18 +147,21 @@ function formatTimeParams(params: Record<string, unknown>): string {
   return ''
 }
 
-// 格式化工具参数显示
+// English engineering note.
 function formatToolParams(tool: ToolBlockContent): string {
   if (!tool.params) return ''
 
   const name = tool.name
   const params = tool.params
 
-  if (name === 'search_messages') {
-    const keywords = params.keywords as string[] | undefined
+  if (name === 'search_messages' || name === 'semantic_search') {
+    const keywords = (params.keywords as string[] | undefined) || []
+    const query = params.query ? String(params.query) : ''
     const parts: string[] = []
 
-    if (keywords && keywords.length > 0) {
+    if (query) {
+      parts.push(`${t('ai.chat.message.toolParams.keywords')}: ${query}`)
+    } else if (keywords && keywords.length > 0) {
       parts.push(`${t('ai.chat.message.toolParams.keywords')}: ${keywords.join(', ')}`)
     }
 
@@ -171,8 +185,13 @@ function formatToolParams(tool: ToolBlockContent): string {
     return parts.join(' | ')
   }
 
-  if (name === 'get_conversation_between') {
+  if (name === 'conversation_between' || name === 'get_conversation_between') {
     const parts: string[] = []
+    const memberId1 = params.memberId1 || params.member_id_1
+    const memberId2 = params.memberId2 || params.member_id_2
+    if (memberId1 || memberId2) {
+      parts.push(`${t('ai.chat.message.toolParams.memberId')}: ${memberId1 ?? '?'} ↔ ${memberId2 ?? '?'}`)
+    }
 
     const timeStr = formatTimeParams(params)
     if (timeStr) {
@@ -186,33 +205,48 @@ function formatToolParams(tool: ToolBlockContent): string {
     return parts.join(' | ')
   }
 
-  if (name === 'get_message_context') {
-    const ids = params.message_ids as number[] | undefined
-    const size = params.context_size || 20
+  if (name === 'message_context' || name === 'get_message_context') {
+    const ids = (params.messageIds as number[] | undefined) || (params.message_ids as number[] | undefined)
+    const singleId = params.messageId || params.message_id
+    const size = params.contextSize || params.context_size || 20
     if (ids && ids.length > 0) {
       return t('ai.chat.message.toolParams.contextWithMessages', { msgCount: ids.length, contextSize: size })
+    }
+    if (singleId) {
+      return `${t('ai.chat.message.toolParams.memberId')}: ${singleId} | ${t('ai.chat.message.toolParams.context', { size })}`
     }
     return t('ai.chat.message.toolParams.context', { size })
   }
 
-  if (name === 'get_member_stats') {
-    return t('ai.chat.message.toolParams.topMembers', { count: params.top_n || 10 })
+  if (name === 'member_stats' || name === 'get_member_stats') {
+    return t('ai.chat.message.toolParams.topMembers', { count: params.topN || params.top_n || 10 })
   }
 
-  if (name === 'get_time_stats') {
-    const typeKey = params.type as string
-    return t(`ai.chat.message.toolParams.timeStats.${typeKey}`) || String(params.type)
+  if (name === 'time_stats' || name === 'get_time_stats') {
+    const typeKey = (params.type || params.dimension) as string
+    if (typeKey) {
+      return t(`ai.chat.message.toolParams.timeStats.${typeKey}`) || String(typeKey)
+    }
+    return ''
   }
 
-  if (name === 'get_group_members') {
+  if (name === 'member_list' || name === 'get_group_members') {
     if (params.search) {
       return `${t('ai.chat.message.toolParams.search')}: ${params.search}`
     }
     return t('ai.chat.message.toolParams.getMemberList')
   }
 
-  if (name === 'get_member_name_history') {
-    return `${t('ai.chat.message.toolParams.memberId')}: ${params.member_id}`
+  if (name === 'nickname_history' || name === 'get_member_name_history') {
+    return `${t('ai.chat.message.toolParams.memberId')}: ${params.memberId || params.member_id || '?'}`
+  }
+
+  if (name === 'search_sessions') {
+    return t('ai.chat.message.toolParams.limit', { count: params.limit || 20 })
+  }
+
+  if (name === 'get_session_messages' || name === 'get_session_summary') {
+    return `${t('ai.chat.message.toolParams.memberId')}: ${params.chatSessionId || params.chat_session_id || '?'}`
   }
 
   return ''
@@ -221,7 +255,7 @@ function formatToolParams(tool: ToolBlockContent): string {
 
 <template>
   <div class="flex items-start gap-3" :class="[isUser ? 'flex-row-reverse' : '']">
-    <!-- 头像 -->
+    <!-- English UI note -->
     <div v-if="isUser" class="h-8 w-8 shrink-0 overflow-hidden rounded-full">
       <img :src="userAvatar" :alt="t('ai.chat.message.userAvatar')" class="h-full w-full object-cover" />
     </div>
@@ -232,20 +266,20 @@ function formatToolParams(tool: ToolBlockContent): string {
       <UIcon name="i-heroicons-sparkles" class="h-4 w-4 text-white" />
     </div>
 
-    <!-- 消息内容 -->
+    <!-- English UI note -->
     <div class="max-w-[80%] min-w-0">
-      <!-- 用户消息：简单气泡 -->
+      <!-- English UI note -->
       <template v-if="isUser">
         <div class="rounded-2xl rounded-tr-sm bg-blue-500 px-4 py-3 text-white">
           <div class="prose prose-sm prose-invert max-w-none leading-relaxed" v-html="renderedContent" />
         </div>
       </template>
 
-      <!-- AI 消息：混合内容块布局 -->
+      <!-- English UI note -->
       <template v-else-if="useBlocksRendering">
         <div class="space-y-3">
           <template v-for="(block, idx) in visibleBlocks" :key="idx">
-            <!-- 文本块 -->
+            <!-- English UI note -->
             <div
               v-if="block.type === 'text'"
               class="rounded-2xl rounded-tl-sm bg-gray-100 px-4 py-3 text-gray-900 dark:bg-gray-800 dark:text-gray-100"
@@ -254,14 +288,14 @@ function formatToolParams(tool: ToolBlockContent): string {
                 class="prose prose-sm dark:prose-invert max-w-none leading-relaxed"
                 v-html="renderMarkdown(block.text)"
               />
-              <!-- 流式输出光标（只在最后一个文本块显示） -->
+              <!-- English UI note -->
               <span
                 v-if="isStreaming && idx === visibleBlocks.length - 1"
                 class="ml-1 inline-block h-4 w-1.5 animate-pulse rounded-sm bg-cyan-500"
               />
             </div>
 
-            <!-- 思考块（默认折叠） -->
+            <!-- English UI note -->
             <details
               v-else-if="block.type === 'think'"
               class="rounded-2xl px-2 py-1 text-xs text-gray-600 dark:text-gray-400"
@@ -288,7 +322,7 @@ function formatToolParams(tool: ToolBlockContent): string {
               </div>
             </details>
 
-            <!-- 工具块 -->
+            <!-- English UI note -->
             <div
               v-else-if="block.type === 'tool'"
               class="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm"
@@ -300,7 +334,7 @@ function formatToolParams(tool: ToolBlockContent): string {
                     : 'border-red-200 bg-red-50 dark:border-red-800/50 dark:bg-red-900/20',
               ]"
             >
-              <!-- 状态图标 -->
+              <!-- English UI note -->
               <UIcon
                 :name="
                   block.tool.status === 'running'
@@ -318,9 +352,9 @@ function formatToolParams(tool: ToolBlockContent): string {
                       : 'text-red-500',
                 ]"
               />
-              <!-- 工具信息 -->
+              <!-- English UI note -->
               <div class="min-w-0 flex-1">
-                <!-- 调用前缀 -->
+                <!-- English UI note -->
                 <span class="text-xs text-gray-400 dark:text-gray-500 mr-1">{{ t('ai.chat.message.calling') }}</span>
                 <span class="font-medium text-gray-700 dark:text-gray-300">
                   {{
@@ -336,7 +370,7 @@ function formatToolParams(tool: ToolBlockContent): string {
             </div>
           </template>
 
-          <!-- 流式处理中指示器（当最后一个块是已完成的工具块时显示） -->
+          <!-- English UI note -->
           <div
             v-if="isStreaming && visibleBlocks.length > 0 && visibleBlocks[visibleBlocks.length - 1].type === 'tool'"
             class="flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-600 dark:bg-gray-800 dark:text-gray-400"
@@ -351,7 +385,7 @@ function formatToolParams(tool: ToolBlockContent): string {
         </div>
       </template>
 
-      <!-- AI 消息：传统纯文本渲染（向后兼容） -->
+      <!-- English UI note -->
       <template v-else>
         <div class="rounded-2xl rounded-tl-sm bg-gray-100 px-4 py-3 text-gray-900 dark:bg-gray-800 dark:text-gray-100">
           <div class="prose prose-sm dark:prose-invert max-w-none leading-relaxed" v-html="renderedContent" />
@@ -359,10 +393,10 @@ function formatToolParams(tool: ToolBlockContent): string {
         </div>
       </template>
 
-      <!-- 时间戳 + 操作按钮 -->
+      <!-- English UI note -->
       <div class="mt-1 flex items-center gap-2 px-1" :class="[isUser ? 'flex-row-reverse' : '']">
         <span class="text-xs text-gray-400">{{ formattedTime }}</span>
-        <!-- 截屏按钮（仅 AI 回复显示） -->
+        <!-- English UI note -->
         <CaptureButton
           v-if="showCaptureButton && !isUser && !isStreaming"
           size="xs"
@@ -374,4 +408,4 @@ function formatToolParams(tool: ToolBlockContent): string {
   </div>
 </template>
 
-<!-- Markdown 样式已提取到全局 src/assets/styles/markdown.css -->
+<!-- English UI note -->

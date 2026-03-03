@@ -31,12 +31,12 @@ pub fn router() -> Router {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct FileParseInfo {
-    name: String,   // 群名
-    format: String, // 格式名称
+    name: String,   // English engineering note.
+    format: String, // English engineering note.
     platform: String,
     message_count: u32,
     member_count: u32,
-    file_size: Option<u64>, // 文件大小（字节）
+    file_size: Option<u64>, // English engineering note.
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,7 +55,7 @@ struct MergeConflict {
 #[serde(rename_all = "camelCase")]
 struct ConflictCheckResult {
     conflicts: Vec<MergeConflict>,
-    total_messages: u32, // 合并后预计消息数
+    total_messages: u32, // English engineering note.
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

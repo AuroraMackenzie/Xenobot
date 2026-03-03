@@ -3,10 +3,10 @@ import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 /**
- * 轻量级子标签页组件
- * 适用于页面内部的二级导航,使用原生样式
- * 支持通过 persistKey 将选中状态同步到 URL 查询参数
- * 支持水平和垂直两种方向
+ * English note.
+ * English note.
+ * English note.
+ * English note.
  */
 interface TabItem {
   id: string
@@ -17,9 +17,9 @@ interface TabItem {
 interface Props {
   modelValue: string
   items: TabItem[]
-  /** 持久化 key，设置后会将当前 tab 状态同步到 URL 查询参数 */
+  /** English note.
   persistKey?: string
-  /** 方向：horizontal（水平）或 vertical（垂直） */
+  /** English note.
   orientation?: 'horizontal' | 'vertical'
 }
 
@@ -36,17 +36,17 @@ const emit = defineEmits<Emits>()
 const route = useRoute()
 const router = useRouter()
 
-// 是否为垂直模式
+// English engineering note.
 const isVertical = computed(() => props.orientation === 'vertical')
 
-// Tab 按钮引用
+// English engineering note.
 const tabRefs = ref<Record<string, HTMLElement | null>>({})
 const containerRef = ref<HTMLElement | null>(null)
 
-// 激活指示器的样式
+// English engineering note.
 const indicatorStyle = ref<Record<string, string>>({})
 
-// 计算内部值
+// English engineering note.
 const activeTab = computed({
   get: () => props.modelValue,
   set: (value) => {
@@ -55,7 +55,7 @@ const activeTab = computed({
   },
 })
 
-// 更新指示器位置
+// English engineering note.
 function updateIndicator() {
   const activeButton = tabRefs.value[activeTab.value]
   if (activeButton && containerRef.value) {
@@ -63,7 +63,7 @@ function updateIndicator() {
     const buttonRect = activeButton.getBoundingClientRect()
 
     if (isVertical.value) {
-      // 垂直模式：指示器在右侧
+      // English engineering note.
       indicatorStyle.value = {
         top: `${buttonRect.top - containerRect.top}px`,
         height: `${buttonRect.height}px`,
@@ -71,7 +71,7 @@ function updateIndicator() {
         width: '2px',
       }
     } else {
-      // 水平模式：指示器在底部
+      // English engineering note.
       indicatorStyle.value = {
         left: `${buttonRect.left - containerRect.left}px`,
         width: `${buttonRect.width}px`,
@@ -82,37 +82,37 @@ function updateIndicator() {
   }
 }
 
-// 点击标签
+// English engineering note.
 const handleTabClick = (tabId: string) => {
   activeTab.value = tabId
 }
 
-// 设置 tab 引用
+// English engineering note.
 function setTabRef(id: string, el: HTMLElement | null) {
   tabRefs.value[id] = el
 }
 
-// 从 URL 查询参数恢复 tab 状态
+// English engineering note.
 onMounted(() => {
   if (props.persistKey) {
     const savedTab = route.query[props.persistKey] as string
-    // 验证 savedTab 是否在 items 中存在
+    // English engineering note.
     if (savedTab && props.items.some((item) => item.id === savedTab)) {
       activeTab.value = savedTab
     }
   }
-  // 初始更新指示器位置
+  // English engineering note.
   nextTick(() => {
     updateIndicator()
   })
 })
 
-// 监听 tab 变化，同步到 URL 查询参数并更新指示器
+// English engineering note.
 watch(
   () => props.modelValue,
   (newValue) => {
     if (props.persistKey && newValue) {
-      // 使用 replace 而不是 push，避免产生大量历史记录
+      // English engineering note.
       router.replace({
         query: {
           ...route.query,
@@ -120,14 +120,14 @@ watch(
         },
       })
     }
-    // 更新指示器位置
+    // English engineering note.
     nextTick(() => {
       updateIndicator()
     })
   }
 )
 
-// 监听 items 变化，更新指示器位置
+// English engineering note.
 watch(
   () => props.items,
   () => {
@@ -164,10 +164,10 @@ watch(
         <UIcon v-if="tab.icon" :name="tab.icon" class="h-4 w-4" />
         {{ tab.label }}
       </button>
-      <!-- 滑动指示器 -->
+      <!-- English UI note -->
       <div class="absolute bg-primary-500 transition-all duration-300 ease-out" :style="indicatorStyle" />
     </div>
-    <!-- 右侧插槽（水平模式可用） -->
+    <!-- English UI note -->
     <slot v-if="!isVertical" name="right" />
   </div>
 </template>

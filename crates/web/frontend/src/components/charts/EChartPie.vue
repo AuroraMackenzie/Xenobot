@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * ECharts 饼图/环形图组件
+ * English note.
  */
 import { computed } from 'vue'
 import type { EChartsOption } from 'echarts'
@@ -14,11 +14,11 @@ export interface EChartPieData {
 interface Props {
   data: EChartPieData
   height?: number
-  /** 是否为环形图 */
+  /** English note.
   doughnut?: boolean
-  /** 内圈半径（环形图时生效） */
+  /** English note.
   innerRadius?: string
-  /** 是否显示图例 */
+  /** English note.
   showLegend?: boolean
 }
 
@@ -29,7 +29,7 @@ const props = withDefaults(defineProps<Props>(), {
   showLegend: true,
 })
 
-// 颜色方案
+// English engineering note.
 const colors = [
   '#6366f1', // indigo
   '#8b5cf6', // violet

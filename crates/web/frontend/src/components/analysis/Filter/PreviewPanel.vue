@@ -1,9 +1,9 @@
 <script setup lang="ts">
 /**
- * 预览面板
- * 左右结构：左侧对话块列表（虚拟滚动），右侧消息内容（复用 MessageList）
- * 支持连续滚动：滚动到底部时自动加载下一个对话块
- * 支持分页加载：滚动到左侧列表底部时触发加载更多
+ * English note.
+ * English note.
+ * English note.
+ * English note.
  */
 
 import { computed, ref, watch, nextTick } from 'vue'
@@ -15,7 +15,7 @@ import type { ChatRecordMessage } from '@/types/format'
 
 const { t } = useI18n()
 
-// 分页信息类型
+// English engineering note.
 interface PaginationInfo {
   page: number
   pageSize: number
@@ -64,44 +64,44 @@ const emit = defineEmits<{
   (e: 'load-more'): void
 }>()
 
-// 当前选中的对话块索引（用于左侧高亮和右侧显示）
+// English engineering note.
 const selectedBlockIndex = ref(0)
 
-// 防止块切换时的循环触发
+// English engineering note.
 let isBlockSwitching = false
 
-// 需要滚动到的消息 ID（选择块后滚动到第一条命中消息）
+// English engineering note.
 const pendingScrollToMessageId = ref<number | null>(null)
 
-// MessageList 组件引用
+// English engineering note.
 const messageListRef = ref<InstanceType<typeof MessageList> | null>(null)
 
-// 左侧列表滚动容器
+// English engineering note.
 const blockListRef = ref<HTMLElement | null>(null)
 
-// 获取反转索引对应的原始块（避免复制整个数组）
+// English engineering note.
 function getBlockAtReversedIndex(index: number) {
   if (!props.result) return null
   const originalIndex = props.result.blocks.length - 1 - index
   return props.result.blocks[originalIndex]
 }
 
-// 块数量
+// English engineering note.
 const blockCount = computed(() => props.result?.blocks.length ?? 0)
 
-// 虚拟滚动配置（对话块列表）
+// English engineering note.
 const blockVirtualizer = useVirtualizer(
   computed(() => ({
     count: blockCount.value,
     getScrollElement: () => blockListRef.value,
-    estimateSize: () => 72, // 估算每个块项高度
+    estimateSize: () => 72, // English engineering note.
     overscan: 5,
   }))
 )
 
 const virtualBlocks = computed(() => blockVirtualizer.value.getVirtualItems())
 
-// Token 进度条颜色
+// English engineering note.
 const tokenProgressColor = computed(() => {
   switch (props.tokenStatus) {
     case 'green':
@@ -115,12 +115,12 @@ const tokenProgressColor = computed(() => {
   }
 })
 
-// Token 进度百分比（最大 100000）
+// English engineering note.
 const tokenProgressPercent = computed(() => {
   return Math.min((props.estimatedTokens / 100000) * 100, 100)
 })
 
-// 当前块的消息列表（使用反转后的索引）
+// English engineering note.
 const currentBlockMessages = computed<ChatRecordMessage[]>(() => {
   if (blockCount.value === 0) return []
   const block = getBlockAtReversedIndex(selectedBlockIndex.value)
@@ -141,7 +141,7 @@ const currentBlockMessages = computed<ChatRecordMessage[]>(() => {
   }))
 })
 
-// 当前块的命中消息 ID 列表（使用反转后的索引）
+// English engineering note.
 const hitMessageIds = computed<number[]>(() => {
   if (blockCount.value === 0) return []
   const block = getBlockAtReversedIndex(selectedBlockIndex.value)
@@ -150,11 +150,11 @@ const hitMessageIds = computed<number[]>(() => {
   return block.messages.filter((msg) => msg.isHit).map((msg) => msg.id)
 })
 
-// 空查询对象（MessageList 外部模式需要）
+// English engineering note.
 const emptyQuery = { startTs: 0, endTs: 0 }
 
-// 判断是否需要显示年份（如果对话块跨越多个年份则显示）
-// 优化：只检查第一个和最后一个块
+// English engineering note.
+// English engineering note.
 const shouldShowYear = computed(() => {
   if (!props.result || props.result.blocks.length === 0) return false
 
@@ -165,7 +165,7 @@ const shouldShowYear = computed(() => {
   return firstYear !== lastYear
 })
 
-// 格式化时间
+// English engineering note.
 function formatDateTime(ts: number): string {
   const options: Intl.DateTimeFormatOptions = {
     month: 'short',
@@ -188,11 +188,11 @@ function formatDuration(startTs: number, endTs: number): string {
   return `${Math.floor(diff / 3600)}h${Math.floor((diff % 3600) / 60)}m`
 }
 
-// 选择对话块（点击左侧列表项）
+// English engineering note.
 function selectBlock(index: number) {
   selectedBlockIndex.value = index
 
-  // 找到该块中第一条命中的消息
+  // English engineering note.
   const block = getBlockAtReversedIndex(index)
   if (block) {
     const firstHitMessage = block.messages.find((msg) => msg.isHit)
@@ -202,33 +202,33 @@ function selectBlock(index: number) {
   }
 }
 
-// 切换到下一个对话块（滚动到底部时触发）
+// English engineering note.
 function goToNextBlock() {
-  if (isBlockSwitching) return // 防止循环触发
+  if (isBlockSwitching) return // English engineering note.
   if (blockCount.value === 0) return
   if (selectedBlockIndex.value < blockCount.value - 1) {
     isBlockSwitching = true
     selectedBlockIndex.value++
     scrollToBlockInList(selectedBlockIndex.value)
-    // 延迟解除锁定，等待 MessageList 完成加载
+    // English engineering note.
     setTimeout(() => {
       isBlockSwitching = false
     }, 300)
   }
 }
 
-// 原本是跳转到上一个块，但体验不好，暂时禁用
+// English engineering note.
 
 function goToPrevBlock() {
-  // 禁用向上跳转，用户可以通过点击左侧列表手动切换
+  // English engineering note.
 }
 
-// 滚动左侧列表以显示指定块
+// English engineering note.
 function scrollToBlockInList(index: number) {
   blockVirtualizer.value.scrollToIndex(index, { align: 'center' })
 }
 
-// 监听 result 变化，重置选中索引
+// English engineering note.
 watch(
   () => props.result,
   () => {
@@ -237,11 +237,11 @@ watch(
   }
 )
 
-// 监听待滚动的消息 ID，在消息列表加载后执行滚动
+// English engineering note.
 watch(pendingScrollToMessageId, async (messageId) => {
   if (messageId !== null) {
     await nextTick()
-    // 等待 MessageList 加载完成
+    // English engineering note.
     setTimeout(() => {
       messageListRef.value?.scrollToMessage(messageId)
       pendingScrollToMessageId.value = null
@@ -249,12 +249,12 @@ watch(pendingScrollToMessageId, async (messageId) => {
   }
 })
 
-// 处理左侧块列表滚动，接近底部时自动加载更多
+// English engineering note.
 function handleBlockListScroll(event: Event) {
   const target = event.target as HTMLElement
   if (!target || !props.result?.pagination?.hasMore || props.isLoadingMore) return
 
-  // 距离底部 100px 时触发加载
+  // English engineering note.
   const threshold = 100
   const { scrollTop, scrollHeight, clientHeight } = target
   if (scrollHeight - scrollTop - clientHeight < threshold) {
@@ -265,7 +265,7 @@ function handleBlockListScroll(event: Event) {
 
 <template>
   <div class="flex-1 flex flex-col overflow-hidden bg-gray-50 dark:bg-gray-900">
-    <!-- 统计信息栏 -->
+    <!-- English UI note -->
     <div
       v-if="result && result.blocks.length > 0"
       class="flex-none px-4 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700"
@@ -300,7 +300,7 @@ function handleBlockListScroll(event: Event) {
         </div>
       </div>
 
-      <!-- Token 预估进度条 -->
+      <!-- English UI note -->
       <div class="flex items-center gap-3">
         <span class="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">
           {{ t('analysis.filter.stats.tokens') }}:
@@ -325,7 +325,7 @@ function handleBlockListScroll(event: Event) {
         <span class="text-xs text-gray-500 whitespace-nowrap">10K</span>
       </div>
 
-      <!-- Token 状态提示 -->
+      <!-- English UI note -->
       <div v-if="tokenStatus === 'yellow'" class="mt-2 text-xs text-yellow-600 dark:text-yellow-400">
         {{ t('analysis.filter.tokenWarning.yellow') }}
       </div>
@@ -334,12 +334,12 @@ function handleBlockListScroll(event: Event) {
       </div>
     </div>
 
-    <!-- 主内容区：左右结构 -->
+    <!-- English UI note -->
     <div class="flex-1 min-h-0 flex overflow-hidden">
-      <!-- 加载状态 -->
+      <!-- English UI note -->
       <LoadingState v-if="isLoading" variant="page" :text="t('analysis.filter.filtering')" />
 
-      <!-- 空状态 -->
+      <!-- English UI note -->
       <div v-else-if="!result" class="w-full h-full flex items-center justify-center">
         <div class="text-center text-gray-400">
           <UIcon name="i-heroicons-funnel" class="w-12 h-12 mb-3 mx-auto" />
@@ -347,7 +347,7 @@ function handleBlockListScroll(event: Event) {
         </div>
       </div>
 
-      <!-- 无结果 -->
+      <!-- English UI note -->
       <div v-else-if="result.blocks.length === 0" class="flex-1 flex items-center justify-center">
         <div class="text-center text-gray-400">
           <UIcon name="i-heroicons-magnifying-glass" class="w-12 h-12 mb-3 mx-auto" />
@@ -355,9 +355,9 @@ function handleBlockListScroll(event: Event) {
         </div>
       </div>
 
-      <!-- 有结果：左右结构 -->
+      <!-- English UI note -->
       <template v-else>
-        <!-- 左侧：对话块列表（虚拟滚动） -->
+        <!-- English UI note -->
         <div
           class="w-64 flex-none border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col"
         >
@@ -424,7 +424,7 @@ function handleBlockListScroll(event: Event) {
               </div>
             </div>
 
-            <!-- 加载更多提示 -->
+            <!-- English UI note -->
             <div
               v-if="result.pagination?.hasMore"
               class="py-3 text-center text-sm text-gray-500 dark:text-gray-400 border-t border-gray-100 dark:border-gray-700"
@@ -448,7 +448,7 @@ function handleBlockListScroll(event: Event) {
           </div>
         </div>
 
-        <!-- 右侧：消息内容（复用 MessageList） -->
+        <!-- English UI note -->
         <div class="flex-1 overflow-hidden">
           <MessageList
             v-if="currentBlockMessages.length > 0"

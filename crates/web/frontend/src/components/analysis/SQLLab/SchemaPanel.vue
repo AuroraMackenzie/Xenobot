@@ -17,23 +17,23 @@ const emit = defineEmits<{
   insertColumn: [tableName: string, columnName: string]
 }>()
 
-// 状态
+// English engineering note.
 const isCollapsed = ref(false)
 const schema = ref<TableSchema[]>([])
 const expandedTables = ref<Set<string>>(new Set())
 
-// 加载 Schema
+// English engineering note.
 async function loadSchema() {
   try {
     schema.value = await window.chatApi.getSchema(props.sessionId)
-    // 默认展开所有表
+    // English engineering note.
     schema.value.forEach((table) => expandedTables.value.add(table.name))
   } catch (err) {
     console.error('加载 Schema 失败:', err)
   }
 }
 
-// 切换表展开状态
+// English engineering note.
 function toggleTable(tableName: string) {
   if (expandedTables.value.has(tableName)) {
     expandedTables.value.delete(tableName)
@@ -42,18 +42,18 @@ function toggleTable(tableName: string) {
   }
 }
 
-// 展开表（从折叠状态点击时使用）
+// English engineering note.
 function expandTable(tableName: string) {
   isCollapsed.value = false
   expandedTables.value.add(tableName)
 }
 
-// 处理双击插入列名
+// English engineering note.
 function handleInsertColumn(tableName: string, columnName: string) {
   emit('insertColumn', tableName, columnName)
 }
 
-// 暴露方法供父组件调用
+// English engineering note.
 defineExpose({
   loadSchema,
   schema,
@@ -69,7 +69,7 @@ onMounted(() => {
     class="flex flex-col border-r border-gray-200 bg-white transition-all dark:border-gray-800 dark:bg-gray-900"
     :class="isCollapsed ? 'w-10' : 'w-56'"
   >
-    <!-- 面板头部 -->
+    <!-- English UI note -->
     <div class="flex items-center justify-between border-b border-gray-200 p-2 dark:border-gray-800">
       <span v-if="!isCollapsed" class="text-xs font-medium text-gray-500 dark:text-gray-400">
         {{ t('ai.sqlLab.schema.tables') }}
@@ -82,10 +82,10 @@ onMounted(() => {
       </button>
     </div>
 
-    <!-- Schema 列表 -->
+    <!-- English UI note -->
     <div v-if="!isCollapsed" class="flex-1 overflow-y-auto p-2">
       <div v-for="table in schema" :key="table.name" class="mb-2">
-        <!-- 表名 -->
+        <!-- English UI note -->
         <button
           class="flex w-full items-center gap-1 rounded px-2 py-1.5 text-left transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
           @click="toggleTable(table.name)"
@@ -101,7 +101,7 @@ onMounted(() => {
           </span>
         </button>
 
-        <!-- 列列表 -->
+        <!-- English UI note -->
         <div v-if="expandedTables.has(table.name)" class="ml-4 mt-1 space-y-0.5">
           <button
             v-for="column in table.columns"
@@ -125,7 +125,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- 折叠时显示图标列表 -->
+    <!-- English UI note -->
     <div v-else class="flex flex-1 flex-col items-center gap-2 overflow-y-auto py-2">
       <button
         v-for="table in schema"

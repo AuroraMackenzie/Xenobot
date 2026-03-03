@@ -12,17 +12,17 @@
 
 ```typescript
 interface DoughnutChartData {
-  labels: string[] // 标签数组
-  values: number[] // 数值数组
-  colors?: string[] // 可选，自定义颜色数组
+  labels: string[] // label buckets for each slice
+  values: number[] // numeric payload for slices
+  colors?: string[] // optional custom color palette
 }
 
 interface Props {
   data: DoughnutChartData
-  cutout?: number | string // 中心空洞大小，默认 '60%'
-  height?: number // 高度（px），默认 256
-  showLegend?: boolean // 是否显示图例，默认 true
-  legendPosition?: 'top' | 'bottom' | 'left' | 'right' // 图例位置，默认 'bottom'
+  cutout?: number | string // inner radius size, default '60%'
+  height?: number // component height in px, default 256
+  showLegend?: boolean // toggle legend, default true
+  legendPosition?: 'top' | 'bottom' | 'left' | 'right' // legend anchor, default 'bottom'
 }
 ```
 
@@ -54,16 +54,16 @@ const chartData: DoughnutChartData = {
 
 ```typescript
 interface HorizontalBarChartData {
-  labels: string[] // 标签数组
-  values: number[] // 数值数组
-  colors?: string[] // 可选，自定义颜色数组
+  labels: string[] // axis labels for ranked bars
+  values: number[] // metric values for ranking
+  colors?: string[] // optional custom color palette
 }
 
 interface Props {
   data: HorizontalBarChartData
-  height?: number // 高度（px），默认 320
-  showLegend?: boolean // 是否显示图例，默认 false
-  borderRadius?: number // 圆角大小，默认 8
+  height?: number // component height in px, default 320
+  showLegend?: boolean // toggle legend, default false
+  borderRadius?: number // bar corner radius, default 8
 }
 ```
 
@@ -95,19 +95,19 @@ const chartData: HorizontalBarChartData = {
 
 ```typescript
 interface LineChartData {
-  labels: string[] // X 轴标签数组
-  values: number[] // Y 轴数值数组
+  labels: string[] // x-axis labels
+  values: number[] // y-axis measurements
 }
 
 interface Props {
   data: LineChartData
-  height?: number // 高度（px），默认 288
-  fill?: boolean // 是否填充区域，默认 true
-  lineColor?: string // 线条颜色，默认 '#6366f1'
-  fillColor?: string // 填充颜色，默认 'rgba(99, 102, 241, 0.1)'
-  tension?: number // 曲线张力，默认 0.4
-  showLegend?: boolean // 是否显示图例，默认 false
-  xAxisRotation?: number // X 轴标签旋转角度，默认 45
+  height?: number // component height in px, default 288
+  fill?: boolean // draw filled area under curve, default true
+  lineColor?: string // stroke color, default '#6366f1'
+  fillColor?: string // area fill color, default 'rgba(99, 102, 241, 0.1)'
+  tension?: number // curve smoothing factor, default 0.4
+  showLegend?: boolean // toggle legend, default false
+  xAxisRotation?: number // label rotation angle for x-axis, default 45
 }
 ```
 
@@ -139,18 +139,18 @@ const chartData: LineChartData = {
 
 ```typescript
 interface BarChartData {
-  labels: string[] // X 轴标签数组
-  values: number[] // Y 轴数值数组
-  colors?: string[] // 可选，自定义颜色数组
+  labels: string[] // x-axis labels
+  values: number[] // y-axis values
+  colors?: string[] // optional custom color palette
 }
 
 interface Props {
   data: BarChartData
-  height?: number // 高度（px），默认 256
-  showLegend?: boolean // 是否显示图例，默认 false
-  borderRadius?: number // 圆角大小，默认 4
-  colorMode?: 'static' | 'gradient' // 颜色模式，默认 'gradient'
-  xLabelFilter?: (label: string, index: number) => string // X 轴标签过滤器
+  height?: number // component height in px, default 256
+  showLegend?: boolean // toggle legend, default false
+  borderRadius?: number // bar corner radius, default 4
+  colorMode?: 'static' | 'gradient' // color rendering mode, default 'gradient'
+  xLabelFilter?: (label: string, index: number) => string // x-axis label filter callback
 }
 ```
 
@@ -184,16 +184,16 @@ const hourlyData: BarChartData = {
 
 ```typescript
 interface MemberRankItem {
-  id: string // 唯一标识
-  name: string // 成员名称
-  value: number // 数值（如消息数）
-  percentage: number // 百分比（0-100）
+  id: string // stable unique id
+  name: string // member display name
+  value: number // measured value (for example, message count)
+  percentage: number // normalized ratio (0-100)
 }
 
 interface Props {
   members: MemberRankItem[]
-  showAvatar?: boolean // 是否显示头像，默认 true
-  rankLimit?: number // 显示数量限制，0 表示不限制，默认 0
+  showAvatar?: boolean // toggle avatar rendering, default true
+  rankLimit?: number // number of rows to show, 0 means no cap, default 0
 }
 ```
 
@@ -212,10 +212,10 @@ const members: MemberRankItem[] = [
 </script>
 
 <template>
-  <!-- 显示所有成员 -->
+  <!-- render the full member list -->
   <MemberRankList :members="members" />
 
-  <!-- 只显示前5名 -->
+  <!-- render only top five members -->
   <MemberRankList :members="members" :rank-limit="5" />
 </template>
 ```
@@ -230,11 +230,11 @@ const members: MemberRankItem[] = [
 
 ```typescript
 interface Props {
-  percentage: number // 百分比（0-100）
-  color?: string // 渐变色类名，默认 'from-indigo-500 to-purple-500'
-  height?: number // 高度（px），默认 8
-  showLabel?: boolean // 是否显示百分比标签，默认 false
-  animated?: boolean // 是否启用动画，默认 true
+  percentage: number // normalized ratio (0-100)
+  color?: string // gradient utility classes, default 'from-indigo-500 to-purple-500'
+  height?: number // component height in px, default 8
+  showLabel?: boolean // toggle percent text, default false
+  animated?: boolean // enable transition animation, default true
 }
 ```
 
@@ -246,10 +246,10 @@ import { ProgressBar } from '@/components/charts'
 </script>
 
 <template>
-  <!-- 基础用法 -->
+  <!-- basic usage -->
   <ProgressBar :percentage="75" />
 
-  <!-- 自定义颜色和显示标签 -->
+  <!-- custom gradient with value label -->
   <ProgressBar :percentage="85" color="from-amber-400 to-orange-500" :show-label="true" />
 </template>
 ```
@@ -283,10 +283,10 @@ import { ProgressBar } from '@/components/charts'
 ## 📚 完整导入示例
 
 ```typescript
-// 单个导入
+// direct component imports
 import { DoughnutChart, LineChart, MemberRankList } from '@/components/charts'
 
-// 类型导入
+// type-only imports
 import type { DoughnutChartData, LineChartData, MemberRankItem } from '@/components/charts'
 ```
 

@@ -1,5 +1,5 @@
 /**
- * SQL 实验室组件统一导出
+ * English note.
  */
 
 export { default as SchemaPanel } from './SchemaPanel.vue'

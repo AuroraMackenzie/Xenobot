@@ -28,18 +28,18 @@ const sessionStore = useSessionStore()
 const layoutStore = useLayoutStore()
 const { currentSessionId } = storeToRefs(sessionStore)
 
-// 会话索引弹窗状态
+// English engineering note.
 const showSessionIndexModal = ref(false)
 
-// 增量导入弹窗状态
+// English engineering note.
 const showIncrementalImportModal = ref(false)
 
-// 打开聊天记录查看器
+// English engineering note.
 function openChatRecordViewer() {
   layoutStore.openChatRecordDrawer({})
 }
 
-// 数据状态
+// English engineering note.
 const isLoading = ref(true)
 const session = ref<AnalysisSession | null>(null)
 const memberActivity = ref<MemberActivity[]>([])
@@ -48,7 +48,7 @@ const dailyActivity = ref<DailyActivity[]>([])
 const messageTypes = ref<Array<{ type: MessageType; count: number }>>([])
 const isInitialLoad = ref(true)
 
-// Tab 配置 - 私聊有总览、视图、语录、成员、AI实验室
+// English engineering note.
 const tabs = [
   { id: 'overview', labelKey: 'analysis.tabs.overview', icon: 'i-heroicons-chart-pie' },
   { id: 'view', labelKey: 'analysis.tabs.view', icon: 'i-heroicons-presentation-chart-bar' },
@@ -59,7 +59,7 @@ const tabs = [
 
 const activeTab = ref((route.query.tab as string) || 'overview')
 
-// 时间范围筛选（composable 统一管理状态、派生计算、URL 同步）
+// English engineering note.
 const { timeRangeValue, fullTimeRange, timeFilter, selectedYearForOverview, initialTimeState } = useTimeSelect(
   route,
   router,
@@ -71,12 +71,12 @@ const { timeRangeValue, fullTimeRange, timeFilter, selectedYearForOverview, init
   }
 )
 
-// 当前筛选后的消息总数
+// English engineering note.
 const filteredMessageCount = computed(() => {
   return memberActivity.value.reduce((sum, m) => sum + m.messageCount, 0)
 })
 
-// 当前筛选后的活跃成员数
+// English engineering note.
 const filteredMemberCount = computed(() => {
   return memberActivity.value.filter((m) => m.messageCount > 0).length
 })
@@ -93,7 +93,7 @@ function syncSession() {
   }
 }
 
-// 加载基础数据（仅会话信息，时间范围由 TimeSelect 内部拉取）
+// English engineering note.
 async function loadBaseData() {
   if (!currentSessionId.value) return
 
@@ -105,7 +105,7 @@ async function loadBaseData() {
   }
 }
 
-// 加载分析数据（受时间范围筛选影响）
+// English engineering note.
 async function loadAnalysisData() {
   if (!currentSessionId.value) return
 
@@ -132,7 +132,7 @@ async function loadAnalysisData() {
   }
 }
 
-// 加载所有数据
+// English engineering note.
 async function loadData() {
   if (!currentSessionId.value) return
 
@@ -141,7 +141,7 @@ async function loadData() {
   isInitialLoad.value = false
 }
 
-// 监听路由参数变化
+// English engineering note.
 watch(
   () => route.params.id,
   () => {
@@ -154,7 +154,7 @@ watch(
   }
 )
 
-// 监听会话变化（切换会话时由 TimeSelect 自行发出新范围，避免 Tab Content 双重重建）
+// English engineering note.
 watch(
   currentSessionId,
   () => {
@@ -163,25 +163,25 @@ watch(
   { immediate: true }
 )
 
-// 获取对方头像
+// English engineering note.
 const otherMemberAvatar = computed(() => {
   if (!session.value || memberActivity.value.length === 0) return null
 
-  // 1. 优先尝试排除 ownerId
+  // English engineering note.
   if (session.value.ownerId) {
     const other = memberActivity.value.find((m) => m.platformId !== session.value?.ownerId)
     if (other?.avatar) return other.avatar
   }
 
-  // 2. 尝试匹配会话名称 (通常私聊名称就是对方昵称)
+  // English engineering note.
   const sameName = memberActivity.value.find((m) => m.name === session.value?.name)
   if (sameName?.avatar) return sameName.avatar
 
-  // 3. 如果只有两个成员，取另一个
+  // English engineering note.
   if (memberActivity.value.length === 2) {
-    // 这里很难判断谁是"另一个"，因为不知道谁是"我"
-    // 但通常 memberActivity 是按消息数排序的，或者按 ID 排序
-    // 暂时不盲目取
+    // English engineering note.
+    // English engineering note.
+    // English engineering note.
   }
 
   return null
@@ -260,7 +260,7 @@ onMounted(() => {
               <span class="whitespace-nowrap">{{ t(tab.labelKey) }}</span>
             </button>
           </div>
-          <!-- 时间范围选择器靠右（AI实验室时隐藏） -->
+          <!-- English UI note -->
           <TimeSelect
             v-model="timeRangeValue"
             :session-id="currentSessionId ?? undefined"
@@ -326,10 +326,10 @@ onMounted(() => {
       <p class="text-gray-500">{{ t('analysis.privateChat.loadError') }}</p>
     </div>
 
-    <!-- 会话索引弹窗（内部自动检测并弹出） -->
+    <!-- English UI note -->
     <SessionIndexModal v-if="currentSessionId" v-model="showSessionIndexModal" :session-id="currentSessionId" />
 
-    <!-- 增量导入弹窗 -->
+    <!-- English UI note -->
     <IncrementalImportModal
       v-if="currentSessionId && session"
       v-model="showIncrementalImportModal"

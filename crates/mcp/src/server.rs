@@ -124,225 +124,52 @@ impl McpServer {
             }),
         )
         .await?;
-
         self.register_tool(
-            "list_sessions".to_string(),
+            "get_current_time".to_string(),
             Box::new(|args| {
-                let limit = parse_limit(&args, 20, 200)?;
-                let conn = open_xenobot_db()?;
-                let mut stmt = conn
-                    .prepare(
-                        "SELECT id, name, platform, chat_type, imported_at
-                         FROM meta
-                         ORDER BY imported_at DESC, id DESC
-                         LIMIT ?1",
-                    )
-                    .map_err(|e| McpError::Tool(format!("prepare list_sessions failed: {e}")))?;
-                let rows = stmt
-                    .query_map(params![limit], |row| {
-                        Ok(serde_json::json!({
-                            "id": row.get::<_, i64>(0)?,
-                            "name": row.get::<_, String>(1)?,
-                            "platform": row.get::<_, String>(2)?,
-                            "chatType": row.get::<_, String>(3)?,
-                            "importedAt": row.get::<_, i64>(4)?,
-                        }))
-                    })
-                    .map_err(|e| McpError::Tool(format!("query list_sessions failed: {e}")))?;
-
-                let mut items = Vec::new();
-                for row in rows {
-                    items.push(row.map_err(|e| {
-                        McpError::Tool(format!("read list_sessions row failed: {e}"))
-                    })?);
-                }
+                // Alias for clients that use verb-style tool naming.
+                let _ = args;
+                let now = chrono::Utc::now();
                 Ok(serde_json::json!({
-                    "count": items.len(),
-                    "sessions": items,
+                    "unix": now.timestamp(),
+                    "iso8601": now.to_rfc3339(),
+                    "timezone": "UTC",
                 }))
             }),
         )
         .await?;
 
-        self.register_tool(
-            "list_contacts".to_string(),
-            Box::new(|args| {
-                let limit = parse_limit(&args, 50, 500)?;
-                let session_id = args.get("session_id").and_then(|v| v.as_i64());
-                let conn = open_xenobot_db()?;
+        self.register_tool("list_sessions".to_string(), Box::new(list_sessions_tool))
+            .await?;
 
-                let mut items = Vec::new();
-                if let Some(meta_id) = session_id {
-                    let mut stmt = conn
-                        .prepare(
-                            "SELECT
-                                m.id,
-                                m.platform_id,
-                                m.account_name,
-                                m.group_nickname,
-                                m.avatar,
-                                COUNT(*) as message_count
-                             FROM member m
-                             JOIN message msg ON msg.sender_id = m.id
-                             WHERE msg.meta_id = ?1
-                             GROUP BY m.id, m.platform_id, m.account_name, m.group_nickname, m.avatar
-                             ORDER BY message_count DESC, m.id ASC
-                             LIMIT ?2",
-                        )
-                        .map_err(|e| McpError::Tool(format!("prepare list_contacts failed: {e}")))?;
-                    let rows = stmt
-                        .query_map(params![meta_id, limit], |row| {
-                            Ok(serde_json::json!({
-                                "id": row.get::<_, i64>(0)?,
-                                "platformId": row.get::<_, String>(1)?,
-                                "accountName": row.get::<_, Option<String>>(2)?,
-                                "groupNickname": row.get::<_, Option<String>>(3)?,
-                                "avatar": row.get::<_, Option<String>>(4)?,
-                                "messageCount": row.get::<_, i64>(5)?,
-                            }))
-                        })
-                        .map_err(|e| McpError::Tool(format!("query list_contacts failed: {e}")))?;
-                    for row in rows {
-                        items.push(
-                            row.map_err(|e| McpError::Tool(format!("read list_contacts row failed: {e}")))?,
-                        );
-                    }
-                } else {
-                    let mut stmt = conn
-                        .prepare(
-                            "SELECT id, platform_id, account_name, group_nickname, avatar
-                             FROM member
-                             ORDER BY id DESC
-                             LIMIT ?1",
-                        )
-                        .map_err(|e| McpError::Tool(format!("prepare list_contacts failed: {e}")))?;
-                    let rows = stmt
-                        .query_map(params![limit], |row| {
-                            Ok(serde_json::json!({
-                                "id": row.get::<_, i64>(0)?,
-                                "platformId": row.get::<_, String>(1)?,
-                                "accountName": row.get::<_, Option<String>>(2)?,
-                                "groupNickname": row.get::<_, Option<String>>(3)?,
-                                "avatar": row.get::<_, Option<String>>(4)?,
-                            }))
-                        })
-                        .map_err(|e| McpError::Tool(format!("query list_contacts failed: {e}")))?;
-                    for row in rows {
-                        items.push(
-                            row.map_err(|e| McpError::Tool(format!("read list_contacts row failed: {e}")))?,
-                        );
-                    }
-                }
-
-                Ok(serde_json::json!({
-                    "count": items.len(),
-                    "contacts": items,
-                }))
-            }),
-        )
-        .await?;
+        self.register_tool("list_contacts".to_string(), Box::new(list_contacts_tool))
+            .await?;
 
         self.register_tool(
             "recent_messages".to_string(),
-            Box::new(|args| {
-                let meta_id = parse_required_i64(&args, "session_id")?;
-                let limit = parse_limit(&args, 50, 500)?;
-                let conn = open_xenobot_db()?;
-                let mut stmt = conn
-                    .prepare(
-                        "SELECT
-                            msg.id,
-                            msg.ts,
-                            msg.msg_type,
-                            COALESCE(msg.content, ''),
-                            COALESCE(msg.sender_group_nickname, msg.sender_account_name, m.group_nickname, m.account_name, m.platform_id, '') as sender_name,
-                            COALESCE(m.platform_id, '')
-                         FROM message msg
-                         LEFT JOIN member m ON m.id = msg.sender_id
-                         WHERE msg.meta_id = ?1
-                         ORDER BY msg.ts DESC, msg.id DESC
-                         LIMIT ?2",
-                    )
-                    .map_err(|e| McpError::Tool(format!("prepare recent_messages failed: {e}")))?;
-                let rows = stmt
-                    .query_map(params![meta_id, limit], |row| {
-                        Ok(serde_json::json!({
-                            "id": row.get::<_, i64>(0)?,
-                            "timestamp": row.get::<_, i64>(1)?,
-                            "msgType": row.get::<_, i64>(2)?,
-                            "content": row.get::<_, String>(3)?,
-                            "senderName": row.get::<_, String>(4)?,
-                            "senderPlatformId": row.get::<_, String>(5)?,
-                        }))
-                    })
-                    .map_err(|e| McpError::Tool(format!("query recent_messages failed: {e}")))?;
-
-                let mut items = Vec::new();
-                for row in rows {
-                    items.push(
-                        row.map_err(|e| McpError::Tool(format!("read recent_messages row failed: {e}")))?,
-                    );
-                }
-                Ok(serde_json::json!({
-                    "count": items.len(),
-                    "messages": items,
-                }))
-            }),
+            Box::new(recent_messages_tool),
         )
         .await?;
 
         self.register_tool(
             "search_messages".to_string(),
-            Box::new(|args| {
-                let meta_id = parse_required_i64(&args, "session_id")?;
-                let keyword = parse_keyword(&args)?;
-                let limit = parse_limit(&args, 50, 500)?;
-                let conn = open_xenobot_db()?;
-                let pattern = format!("%{}%", keyword);
-                let mut stmt = conn
-                    .prepare(
-                        "SELECT
-                            msg.id,
-                            msg.ts,
-                            msg.msg_type,
-                            COALESCE(msg.content, ''),
-                            COALESCE(msg.sender_group_nickname, msg.sender_account_name, m.group_nickname, m.account_name, m.platform_id, '') as sender_name,
-                            COALESCE(m.platform_id, '')
-                         FROM message msg
-                         LEFT JOIN member m ON m.id = msg.sender_id
-                         WHERE msg.meta_id = ?1
-                           AND COALESCE(msg.content, '') LIKE ?2
-                         ORDER BY msg.ts DESC, msg.id DESC
-                         LIMIT ?3",
-                    )
-                    .map_err(|e| McpError::Tool(format!("prepare search_messages failed: {e}")))?;
-                let rows = stmt
-                    .query_map(params![meta_id, pattern, limit], |row| {
-                        Ok(serde_json::json!({
-                            "id": row.get::<_, i64>(0)?,
-                            "timestamp": row.get::<_, i64>(1)?,
-                            "msgType": row.get::<_, i64>(2)?,
-                            "content": row.get::<_, String>(3)?,
-                            "senderName": row.get::<_, String>(4)?,
-                            "senderPlatformId": row.get::<_, String>(5)?,
-                        }))
-                    })
-                    .map_err(|e| McpError::Tool(format!("query search_messages failed: {e}")))?;
-
-                let mut items = Vec::new();
-                for row in rows {
-                    items.push(
-                        row.map_err(|e| McpError::Tool(format!("read search_messages row failed: {e}")))?,
-                    );
-                }
-                Ok(serde_json::json!({
-                    "keyword": keyword,
-                    "count": items.len(),
-                    "messages": items,
-                }))
-            }),
+            Box::new(search_messages_tool),
         )
         .await?;
+
+        // MCP first-batch tool aliases aligned with 10.2 contract names.
+        self.register_tool("query_contacts".to_string(), Box::new(list_contacts_tool))
+            .await?;
+        self.register_tool("recent_sessions".to_string(), Box::new(list_sessions_tool))
+            .await?;
+        self.register_tool("query_chats".to_string(), Box::new(list_sessions_tool))
+            .await?;
+        self.register_tool("query_groups".to_string(), Box::new(query_groups_tool))
+            .await?;
+        self.register_tool("chat_records".to_string(), Box::new(chat_records_tool))
+            .await?;
+        self.register_tool("chat_history".to_string(), Box::new(chat_records_tool))
+            .await?;
 
         Ok(())
     }
@@ -378,6 +205,8 @@ impl McpServer {
             .route("/ws", get(handle_websocket))
             // SSE endpoint
             .route("/sse", get(handle_sse))
+            // Streamable HTTP JSON-RPC endpoint
+            .route("/mcp", post(handle_streamable_http_rpc))
             // HTTP endpoint for tool calls
             .route("/tools/:tool_name", post(handle_http_tool_call))
             // HTTP endpoint for listing available tools
@@ -658,32 +487,350 @@ fn open_xenobot_db() -> Result<Connection> {
         .map_err(|e| McpError::Tool(format!("open database {:?} failed: {e}", db_path)))
 }
 
+fn list_sessions_tool(args: Value) -> Result<Value> {
+    let limit = parse_limit(&args, 20, 200)?;
+    let conn = open_xenobot_db()?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, name, platform, chat_type, imported_at
+             FROM meta
+             ORDER BY imported_at DESC, id DESC
+             LIMIT ?1",
+        )
+        .map_err(|e| McpError::Tool(format!("prepare list_sessions failed: {e}")))?;
+    let rows = stmt
+        .query_map(params![limit], |row| {
+            Ok(serde_json::json!({
+                "id": row.get::<_, i64>(0)?,
+                "name": row.get::<_, String>(1)?,
+                "platform": row.get::<_, String>(2)?,
+                "chatType": row.get::<_, String>(3)?,
+                "importedAt": row.get::<_, i64>(4)?,
+            }))
+        })
+        .map_err(|e| McpError::Tool(format!("query list_sessions failed: {e}")))?;
+
+    let mut items = Vec::new();
+    for row in rows {
+        items.push(row.map_err(|e| McpError::Tool(format!("read list_sessions row failed: {e}")))?);
+    }
+    Ok(serde_json::json!({
+        "count": items.len(),
+        "sessions": items,
+    }))
+}
+
+fn list_contacts_tool(args: Value) -> Result<Value> {
+    let limit = parse_limit(&args, 50, 500)?;
+    let session_id = parse_optional_i64(&args, "session_id");
+    let conn = open_xenobot_db()?;
+
+    let mut items = Vec::new();
+    if let Some(meta_id) = session_id {
+        let mut stmt = conn
+            .prepare(
+                "SELECT
+                    m.id,
+                    m.platform_id,
+                    m.account_name,
+                    m.group_nickname,
+                    m.avatar,
+                    COUNT(*) as message_count
+                 FROM member m
+                 JOIN message msg ON msg.sender_id = m.id
+                 WHERE msg.meta_id = ?1
+                 GROUP BY m.id, m.platform_id, m.account_name, m.group_nickname, m.avatar
+                 ORDER BY message_count DESC, m.id ASC
+                 LIMIT ?2",
+            )
+            .map_err(|e| McpError::Tool(format!("prepare list_contacts failed: {e}")))?;
+        let rows = stmt
+            .query_map(params![meta_id, limit], |row| {
+                Ok(serde_json::json!({
+                    "id": row.get::<_, i64>(0)?,
+                    "platformId": row.get::<_, String>(1)?,
+                    "accountName": row.get::<_, Option<String>>(2)?,
+                    "groupNickname": row.get::<_, Option<String>>(3)?,
+                    "avatar": row.get::<_, Option<String>>(4)?,
+                    "messageCount": row.get::<_, i64>(5)?,
+                }))
+            })
+            .map_err(|e| McpError::Tool(format!("query list_contacts failed: {e}")))?;
+        for row in rows {
+            items.push(
+                row.map_err(|e| McpError::Tool(format!("read list_contacts row failed: {e}")))?,
+            );
+        }
+    } else {
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, platform_id, account_name, group_nickname, avatar
+                 FROM member
+                 ORDER BY id DESC
+                 LIMIT ?1",
+            )
+            .map_err(|e| McpError::Tool(format!("prepare list_contacts failed: {e}")))?;
+        let rows = stmt
+            .query_map(params![limit], |row| {
+                Ok(serde_json::json!({
+                    "id": row.get::<_, i64>(0)?,
+                    "platformId": row.get::<_, String>(1)?,
+                    "accountName": row.get::<_, Option<String>>(2)?,
+                    "groupNickname": row.get::<_, Option<String>>(3)?,
+                    "avatar": row.get::<_, Option<String>>(4)?,
+                }))
+            })
+            .map_err(|e| McpError::Tool(format!("query list_contacts failed: {e}")))?;
+        for row in rows {
+            items.push(
+                row.map_err(|e| McpError::Tool(format!("read list_contacts row failed: {e}")))?,
+            );
+        }
+    }
+
+    Ok(serde_json::json!({
+        "count": items.len(),
+        "contacts": items,
+    }))
+}
+
+fn query_groups_tool(args: Value) -> Result<Value> {
+    let limit = parse_limit(&args, 20, 200)?;
+    let conn = open_xenobot_db()?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, name, platform, chat_type, imported_at
+             FROM meta
+             WHERE chat_type = 'group'
+             ORDER BY imported_at DESC, id DESC
+             LIMIT ?1",
+        )
+        .map_err(|e| McpError::Tool(format!("prepare query_groups failed: {e}")))?;
+    let rows = stmt
+        .query_map(params![limit], |row| {
+            Ok(serde_json::json!({
+                "id": row.get::<_, i64>(0)?,
+                "name": row.get::<_, String>(1)?,
+                "platform": row.get::<_, String>(2)?,
+                "chatType": row.get::<_, String>(3)?,
+                "importedAt": row.get::<_, i64>(4)?,
+            }))
+        })
+        .map_err(|e| McpError::Tool(format!("query query_groups failed: {e}")))?;
+    let mut items = Vec::new();
+    for row in rows {
+        items.push(row.map_err(|e| McpError::Tool(format!("read query_groups row failed: {e}")))?);
+    }
+    Ok(serde_json::json!({
+        "count": items.len(),
+        "groups": items
+    }))
+}
+
+fn recent_messages_tool(args: Value) -> Result<Value> {
+    let meta_id = parse_required_i64(&args, "session_id")?;
+    let limit = parse_limit(&args, 50, 500)?;
+    let conn = open_xenobot_db()?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT
+                msg.id,
+                msg.ts,
+                msg.msg_type,
+                COALESCE(msg.content, ''),
+                COALESCE(msg.sender_group_nickname, msg.sender_account_name, m.group_nickname, m.account_name, m.platform_id, '') as sender_name,
+                COALESCE(m.platform_id, '')
+             FROM message msg
+             LEFT JOIN member m ON m.id = msg.sender_id
+             WHERE msg.meta_id = ?1
+             ORDER BY msg.ts DESC, msg.id DESC
+             LIMIT ?2",
+        )
+        .map_err(|e| McpError::Tool(format!("prepare recent_messages failed: {e}")))?;
+    let rows = stmt
+        .query_map(params![meta_id, limit], |row| {
+            Ok(serde_json::json!({
+                "id": row.get::<_, i64>(0)?,
+                "timestamp": row.get::<_, i64>(1)?,
+                "msgType": row.get::<_, i64>(2)?,
+                "content": row.get::<_, String>(3)?,
+                "senderName": row.get::<_, String>(4)?,
+                "senderPlatformId": row.get::<_, String>(5)?,
+            }))
+        })
+        .map_err(|e| McpError::Tool(format!("query recent_messages failed: {e}")))?;
+
+    let mut items = Vec::new();
+    for row in rows {
+        items.push(
+            row.map_err(|e| McpError::Tool(format!("read recent_messages row failed: {e}")))?,
+        );
+    }
+    Ok(serde_json::json!({
+        "count": items.len(),
+        "messages": items,
+    }))
+}
+
+fn search_messages_tool(args: Value) -> Result<Value> {
+    let meta_id = parse_required_i64(&args, "session_id")?;
+    let keyword = parse_keyword(&args)?;
+    let limit = parse_limit(&args, 50, 500)?;
+    let conn = open_xenobot_db()?;
+    let pattern = format!("%{}%", keyword);
+    let mut stmt = conn
+        .prepare(
+            "SELECT
+                msg.id,
+                msg.ts,
+                msg.msg_type,
+                COALESCE(msg.content, ''),
+                COALESCE(msg.sender_group_nickname, msg.sender_account_name, m.group_nickname, m.account_name, m.platform_id, '') as sender_name,
+                COALESCE(m.platform_id, '')
+             FROM message msg
+             LEFT JOIN member m ON m.id = msg.sender_id
+             WHERE msg.meta_id = ?1
+               AND COALESCE(msg.content, '') LIKE ?2
+             ORDER BY msg.ts DESC, msg.id DESC
+             LIMIT ?3",
+        )
+        .map_err(|e| McpError::Tool(format!("prepare search_messages failed: {e}")))?;
+    let rows = stmt
+        .query_map(params![meta_id, pattern, limit], |row| {
+            Ok(serde_json::json!({
+                "id": row.get::<_, i64>(0)?,
+                "timestamp": row.get::<_, i64>(1)?,
+                "msgType": row.get::<_, i64>(2)?,
+                "content": row.get::<_, String>(3)?,
+                "senderName": row.get::<_, String>(4)?,
+                "senderPlatformId": row.get::<_, String>(5)?,
+            }))
+        })
+        .map_err(|e| McpError::Tool(format!("query search_messages failed: {e}")))?;
+
+    let mut items = Vec::new();
+    for row in rows {
+        items.push(
+            row.map_err(|e| McpError::Tool(format!("read search_messages row failed: {e}")))?,
+        );
+    }
+    Ok(serde_json::json!({
+        "keyword": keyword,
+        "count": items.len(),
+        "messages": items,
+    }))
+}
+
+fn chat_records_tool(args: Value) -> Result<Value> {
+    let meta_id = parse_required_i64(&args, "session_id")?;
+    let limit = parse_limit(&args, 50, 500)?;
+    let offset = parse_offset(&args)?;
+    let start_ts = parse_optional_i64(&args, "start_ts");
+    let end_ts = parse_optional_i64(&args, "end_ts");
+    let keyword = parse_optional_keyword(&args);
+    let pattern = keyword.as_ref().map(|kw| format!("%{}%", kw));
+    let conn = open_xenobot_db()?;
+
+    let total_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*)
+             FROM message msg
+             WHERE msg.meta_id = ?1
+               AND (?2 IS NULL OR msg.ts >= ?2)
+               AND (?3 IS NULL OR msg.ts <= ?3)
+               AND (?4 IS NULL OR COALESCE(msg.content, '') LIKE ?4)",
+            params![meta_id, start_ts, end_ts, pattern],
+            |row| row.get(0),
+        )
+        .map_err(|e| McpError::Tool(format!("count chat_records failed: {e}")))?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT
+                msg.id,
+                msg.ts,
+                msg.msg_type,
+                COALESCE(msg.content, ''),
+                COALESCE(msg.sender_group_nickname, msg.sender_account_name, m.group_nickname, m.account_name, m.platform_id, '') as sender_name,
+                COALESCE(m.platform_id, '')
+             FROM message msg
+             LEFT JOIN member m ON m.id = msg.sender_id
+             WHERE msg.meta_id = ?1
+               AND (?2 IS NULL OR msg.ts >= ?2)
+               AND (?3 IS NULL OR msg.ts <= ?3)
+               AND (?4 IS NULL OR COALESCE(msg.content, '') LIKE ?4)
+             ORDER BY msg.ts DESC, msg.id DESC
+             LIMIT ?5 OFFSET ?6",
+        )
+        .map_err(|e| McpError::Tool(format!("prepare chat_records failed: {e}")))?;
+    let rows = stmt
+        .query_map(
+            params![meta_id, start_ts, end_ts, pattern, limit, offset],
+            |row| {
+                Ok(serde_json::json!({
+                    "id": row.get::<_, i64>(0)?,
+                    "timestamp": row.get::<_, i64>(1)?,
+                    "msgType": row.get::<_, i64>(2)?,
+                    "content": row.get::<_, String>(3)?,
+                    "senderName": row.get::<_, String>(4)?,
+                    "senderPlatformId": row.get::<_, String>(5)?,
+                }))
+            },
+        )
+        .map_err(|e| McpError::Tool(format!("query chat_records failed: {e}")))?;
+
+    let mut items = Vec::new();
+    for row in rows {
+        items.push(row.map_err(|e| McpError::Tool(format!("read chat_records row failed: {e}")))?);
+    }
+
+    Ok(serde_json::json!({
+        "sessionId": meta_id,
+        "keyword": keyword,
+        "startTs": start_ts,
+        "endTs": end_ts,
+        "offset": offset,
+        "limit": limit,
+        "count": items.len(),
+        "totalCount": total_count,
+        "hasMore": offset + limit < total_count,
+        "messages": items
+    }))
+}
+
 fn parse_limit(args: &Value, default_limit: i64, max_limit: i64) -> Result<i64> {
-    let limit = args
-        .get("limit")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(default_limit);
+    let limit = parse_optional_i64(args, "limit").unwrap_or(default_limit);
     Ok(limit.max(1).min(max_limit))
 }
 
+fn parse_offset(args: &Value) -> Result<i64> {
+    let offset = parse_optional_i64(args, "offset").unwrap_or(0);
+    Ok(offset.max(0))
+}
+
 fn parse_required_i64(args: &Value, key: &str) -> Result<i64> {
-    args.get(key)
-        .and_then(|v| v.as_i64())
+    parse_optional_i64(args, key)
         .ok_or_else(|| McpError::Argument(format!("missing required integer field: {key}")))
 }
 
-fn parse_keyword(args: &Value) -> Result<String> {
-    if let Some(keyword) = args
-        .get("keyword")
+fn parse_optional_i64(args: &Value, key: &str) -> Option<i64> {
+    arg_value(args, key).and_then(|v| v.as_i64())
+}
+
+fn parse_optional_keyword(args: &Value) -> Option<String> {
+    arg_value(args, "keyword")
         .and_then(|v| v.as_str())
+        .or_else(|| arg_value(args, "query").and_then(|v| v.as_str()))
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
-    {
+}
+
+fn parse_keyword(args: &Value) -> Result<String> {
+    if let Some(keyword) = parse_optional_keyword(args) {
         return Ok(keyword);
     }
 
-    if let Some(keyword) = args
-        .get("keywords")
+    if let Some(keyword) = arg_value(args, "keywords")
         .and_then(|v| v.as_array())
         .and_then(|arr| arr.first())
         .and_then(|v| v.as_str())
@@ -696,6 +843,45 @@ fn parse_keyword(args: &Value) -> Result<String> {
     Err(McpError::Argument(
         "missing search keyword (keyword or keywords[0])".to_string(),
     ))
+}
+
+fn arg_value<'a>(args: &'a Value, key: &str) -> Option<&'a Value> {
+    args.get(key)
+        .or_else(|| args.get(&snake_to_camel(key)))
+        .or_else(|| args.get(&camel_to_snake(key)))
+}
+
+fn snake_to_camel(key: &str) -> String {
+    let mut out = String::with_capacity(key.len());
+    let mut uppercase_next = false;
+    for ch in key.chars() {
+        if ch == '_' {
+            uppercase_next = true;
+            continue;
+        }
+        if uppercase_next {
+            out.extend(ch.to_uppercase());
+            uppercase_next = false;
+        } else {
+            out.push(ch);
+        }
+    }
+    out
+}
+
+fn camel_to_snake(key: &str) -> String {
+    let mut out = String::with_capacity(key.len() + 4);
+    for (idx, ch) in key.chars().enumerate() {
+        if ch.is_ascii_uppercase() {
+            if idx > 0 {
+                out.push('_');
+            }
+            out.push(ch.to_ascii_lowercase());
+        } else {
+            out.push(ch);
+        }
+    }
+    out
 }
 
 fn public_host(bind_address: &str) -> &str {
@@ -753,8 +939,8 @@ fn build_integration_preset(config: &McpServerConfig, target: &str) -> Option<In
             configuration: serde_json::json!({
                 "mcpServers": {
                     "xenobot": {
-                        "command": "npx",
-                        "args": ["-y", "mcp-remote", sse_url]
+                        "command": "pnpm",
+                        "args": ["dlx", "mcp-remote", sse_url]
                     }
                 }
             }),
@@ -920,6 +1106,210 @@ async fn handle_sse(headers: HeaderMap, State(server): State<Arc<McpServer>>) ->
     )
 }
 
+fn json_rpc_ok(id: serde_json::Value, result: serde_json::Value) -> serde_json::Value {
+    serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "result": result,
+    })
+}
+
+fn json_rpc_err(
+    id: serde_json::Value,
+    code: i64,
+    message: &str,
+    data: Option<serde_json::Value>,
+) -> serde_json::Value {
+    serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "error": {
+            "code": code,
+            "message": message,
+            "data": data,
+        },
+    })
+}
+
+fn parse_streamable_tool_name(params: &serde_json::Value) -> Option<String> {
+    params
+        .get("name")
+        .and_then(|v| v.as_str())
+        .or_else(|| params.get("tool").and_then(|v| v.as_str()))
+        .or_else(|| params.get("tool_name").and_then(|v| v.as_str()))
+        .or_else(|| params.get("toolName").and_then(|v| v.as_str()))
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(ToString::to_string)
+}
+
+fn parse_streamable_tool_args(params: &serde_json::Value) -> serde_json::Value {
+    params
+        .get("arguments")
+        .cloned()
+        .or_else(|| params.get("args").cloned())
+        .unwrap_or_else(|| serde_json::json!({}))
+}
+
+async fn handle_streamable_http_rpc(
+    State(server): State<Arc<McpServer>>,
+    Json(payload): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    let id = payload
+        .get("id")
+        .cloned()
+        .unwrap_or(serde_json::Value::Null);
+    let method = payload
+        .get("method")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .unwrap_or_default();
+
+    if method.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json_rpc_err(
+                id,
+                -32600,
+                "invalid_request",
+                Some(serde_json::json!({
+                    "reason": "missing non-empty method",
+                })),
+            )),
+        )
+            .into_response();
+    }
+
+    match method {
+        "initialize" => {
+            let server_name = server.config.name.clone();
+            let server_version = server.config.version.clone();
+            let result = serde_json::json!({
+                "protocolVersion": crate::protocol::MCP_PROTOCOL_VERSION,
+                "serverInfo": {
+                    "name": server_name,
+                    "version": server_version,
+                },
+                "capabilities": {
+                    "tools": {
+                        "supported": true,
+                        "listChanged": true
+                    },
+                    "resources": {
+                        "supported": true,
+                        "listChanged": true,
+                        "subscribe": true
+                    },
+                    "roots": {
+                        "supported": false
+                    }
+                },
+                "instructions": "Welcome to Xenobot MCP Server"
+            });
+            (StatusCode::OK, Json(json_rpc_ok(id, result))).into_response()
+        }
+        "tools/list" | "tool/list" => {
+            let tools = server.tools.read().await;
+            let mut names: Vec<String> = tools.keys().cloned().collect();
+            names.sort();
+            let tool_specs: Vec<serde_json::Value> = names
+                .iter()
+                .map(|name| {
+                    serde_json::json!({
+                        "name": name,
+                        "description": format!("Xenobot MCP tool: {name}"),
+                    })
+                })
+                .collect();
+            let result = serde_json::json!({
+                "count": names.len(),
+                "tools": tool_specs
+            });
+            (StatusCode::OK, Json(json_rpc_ok(id, result))).into_response()
+        }
+        "tools/call" | "tool/call" => {
+            let params = payload
+                .get("params")
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!({}));
+            let Some(tool_name) = parse_streamable_tool_name(&params) else {
+                return (
+                    StatusCode::OK,
+                    Json(json_rpc_err(
+                        id,
+                        -32602,
+                        "invalid_params",
+                        Some(serde_json::json!({
+                            "reason": "missing tool name in params.name or params.tool",
+                        })),
+                    )),
+                )
+                    .into_response();
+            };
+            let args = parse_streamable_tool_args(&params);
+            let tools = server.tools.read().await;
+            let Some(handler) = tools.get(&tool_name) else {
+                return (
+                    StatusCode::OK,
+                    Json(json_rpc_err(
+                        id,
+                        -32001,
+                        "tool_not_found",
+                        Some(serde_json::json!({
+                            "tool": tool_name,
+                        })),
+                    )),
+                )
+                    .into_response();
+            };
+
+            match handler(args) {
+                Ok(tool_result) => (
+                    StatusCode::OK,
+                    Json(json_rpc_ok(
+                        id,
+                        serde_json::json!({
+                            "tool": tool_name,
+                            "isError": false,
+                            "content": [{
+                                "type": "text",
+                                "text": serde_json::to_string(&tool_result).unwrap_or_else(|_| "{}".to_string())
+                            }],
+                            "structuredContent": tool_result
+                        }),
+                    )),
+                )
+                    .into_response(),
+                Err(e) => (
+                    StatusCode::OK,
+                    Json(json_rpc_err(
+                        id,
+                        -32002,
+                        "tool_error",
+                        Some(serde_json::json!({
+                            "tool": tool_name,
+                            "error": e.to_string(),
+                        })),
+                    )),
+                )
+                    .into_response(),
+            }
+        }
+        _ => (
+            StatusCode::OK,
+            Json(json_rpc_err(
+                id,
+                -32601,
+                "method_not_found",
+                Some(serde_json::json!({
+                    "method": method,
+                })),
+            )),
+        )
+            .into_response(),
+    }
+}
+
 /// HTTP tool call handler.
 async fn handle_http_tool_call(
     Path(tool_name): Path<String>,
@@ -931,16 +1321,32 @@ async fn handle_http_tool_call(
 
     match handler {
         Some(handler) => match handler(args) {
-            Ok(result) => (StatusCode::OK, Json(result)).into_response(),
+            Ok(result) => (
+                StatusCode::OK,
+                Json(serde_json::json!({
+                    "success": true,
+                    "tool": tool_name,
+                    "result": result
+                })),
+            )
+                .into_response(),
             Err(e) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({ "error": e.to_string() })),
+                Json(serde_json::json!({
+                    "success": false,
+                    "code": "tool_error",
+                    "error": e.to_string()
+                })),
             )
                 .into_response(),
         },
         None => (
             StatusCode::NOT_FOUND,
-            Json(serde_json::json!({ "error": format!("Tool '{}' not found", tool_name) })),
+            Json(serde_json::json!({
+                "success": false,
+                "code": "tool_not_found",
+                "error": format!("Tool '{}' not found", tool_name)
+            })),
         )
             .into_response(),
     }
@@ -995,6 +1401,124 @@ fn extract_client_info(headers: &HeaderMap) -> Option<ClientInfo> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::body::{to_bytes, Body};
+    use axum::http::{Method, Request, StatusCode};
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::{SystemTime, UNIX_EPOCH};
+    use tower::util::ServiceExt;
+
+    static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
+    static TEST_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn unique_db_path(name: &str) -> std::path::PathBuf {
+        let epoch_nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let seq = TEST_COUNTER.fetch_add(1, Ordering::Relaxed);
+        std::env::temp_dir().join(format!("xenobot_mcp_{name}_{epoch_nanos}_{seq}.db"))
+    }
+
+    fn seed_chat_records_fixture(db_path: &std::path::Path) {
+        let conn = Connection::open(db_path).expect("open db");
+        conn.execute_batch(
+            r#"
+            CREATE TABLE IF NOT EXISTS meta (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                platform TEXT NOT NULL,
+                chat_type TEXT NOT NULL,
+                imported_at INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS member (
+                id INTEGER PRIMARY KEY,
+                platform_id TEXT NOT NULL,
+                account_name TEXT,
+                group_nickname TEXT,
+                avatar TEXT
+            );
+            CREATE TABLE IF NOT EXISTS message (
+                id INTEGER PRIMARY KEY,
+                sender_id INTEGER,
+                meta_id INTEGER NOT NULL,
+                ts INTEGER NOT NULL,
+                msg_type INTEGER NOT NULL,
+                content TEXT,
+                sender_group_nickname TEXT,
+                sender_account_name TEXT
+            );
+            "#,
+        )
+        .expect("create schema");
+        conn.execute(
+            "INSERT INTO meta (id, name, platform, chat_type, imported_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![1_i64, "MCP Session", "wechat", "group", 1_900_000_000_i64],
+        )
+        .expect("insert meta");
+        conn.execute(
+            "INSERT INTO member (id, platform_id, account_name, group_nickname, avatar) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![11_i64, "u1", "Alice", "Alice", Option::<String>::None],
+        )
+        .expect("insert member");
+        conn.execute(
+            "INSERT INTO message (id, sender_id, meta_id, ts, msg_type, content, sender_group_nickname, sender_account_name)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                101_i64,
+                11_i64,
+                1_i64,
+                1_900_000_001_i64,
+                0_i64,
+                "hello world",
+                "Alice",
+                "Alice"
+            ],
+        )
+        .expect("insert message 1");
+        conn.execute(
+            "INSERT INTO message (id, sender_id, meta_id, ts, msg_type, content, sender_group_nickname, sender_account_name)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                102_i64,
+                11_i64,
+                1_i64,
+                1_900_000_010_i64,
+                0_i64,
+                "another line",
+                "Alice",
+                "Alice"
+            ],
+        )
+        .expect("insert message 2");
+    }
+
+    async fn request_json(
+        app: &Router,
+        method: Method,
+        path: &str,
+        payload: Option<serde_json::Value>,
+    ) -> (StatusCode, serde_json::Value) {
+        let has_payload = payload.is_some();
+        let body = payload
+            .map(|p| Body::from(p.to_string()))
+            .unwrap_or_else(Body::empty);
+        let mut builder = Request::builder().method(method).uri(path);
+        if path != "/tools" || has_payload {
+            builder = builder.header("content-type", "application/json");
+        }
+        let request = builder.body(body).expect("build request");
+        let response = app
+            .clone()
+            .oneshot(request)
+            .await
+            .expect("oneshot response");
+        let status = response.status();
+        let bytes = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("read body");
+        let json = serde_json::from_slice::<serde_json::Value>(&bytes).expect("json body");
+        (status, json)
+    }
 
     #[tokio::test]
     async fn test_server_creation() {
@@ -1002,6 +1526,464 @@ mod tests {
         let server = McpServer::new(config);
         assert!(server.tools.read().await.is_empty());
         assert!(server.resources.read().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_builtin_tools_include_mcp_first_batch_aliases() {
+        let _guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        let config = McpServerConfig::default();
+        let server = McpServer::new(config);
+        server
+            .register_builtin_tools()
+            .await
+            .expect("builtin tool registration should succeed");
+        let tools = server.tools.read().await;
+        for name in [
+            "current_time",
+            "get_current_time",
+            "query_contacts",
+            "query_groups",
+            "recent_sessions",
+            "query_chats",
+            "chat_records",
+            "chat_history",
+        ] {
+            assert!(tools.contains_key(name), "missing tool alias: {name}");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_chat_records_tool_supports_filters_and_paging() {
+        let _guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        let db_path = unique_db_path("chat_records");
+        let previous_db = std::env::var("XENOBOT_DB_PATH").ok();
+        std::env::set_var("XENOBOT_DB_PATH", &db_path);
+        seed_chat_records_fixture(&db_path);
+
+        let config = McpServerConfig::default();
+        let server = McpServer::new(config);
+        server
+            .register_builtin_tools()
+            .await
+            .expect("register builtin tools");
+        let tools = server.tools.read().await;
+        let handler = tools
+            .get("chat_records")
+            .expect("chat_records tool must exist");
+
+        let result = handler(serde_json::json!({
+            "sessionId": 1,
+            "keyword": "hello",
+            "startTs": 1_900_000_000_i64,
+            "endTs": 1_900_000_005_i64,
+            "limit": 10,
+            "offset": 0
+        }))
+        .expect("chat_records tool should succeed");
+        assert_eq!(result["totalCount"], 1);
+        assert_eq!(result["count"], 1);
+        assert_eq!(result["messages"][0]["content"], "hello world");
+        assert_eq!(result["hasMore"], false);
+
+        drop(tools);
+        if let Some(previous) = previous_db {
+            std::env::set_var("XENOBOT_DB_PATH", previous);
+        } else {
+            std::env::remove_var("XENOBOT_DB_PATH");
+        }
+        let _ = std::fs::remove_file(&db_path);
+    }
+
+    #[tokio::test]
+    async fn test_http_tools_contract_and_error_semantics() {
+        let _guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        let db_path = unique_db_path("http_contract");
+        let previous_db = std::env::var("XENOBOT_DB_PATH").ok();
+        std::env::set_var("XENOBOT_DB_PATH", &db_path);
+        seed_chat_records_fixture(&db_path);
+
+        let config = McpServerConfig::default();
+        let server = McpServer::new(config);
+        server
+            .register_builtin_tools()
+            .await
+            .expect("register builtin tools");
+        let app = server.create_router();
+
+        let (status, tools_json) = request_json(&app, Method::GET, "/tools", None).await;
+        assert_eq!(status, StatusCode::OK);
+        let names = tools_json["tools"]
+            .as_array()
+            .expect("tools should be array")
+            .iter()
+            .filter_map(|v| v.as_str())
+            .collect::<std::collections::HashSet<_>>();
+        for required in [
+            "current_time",
+            "get_current_time",
+            "query_contacts",
+            "query_groups",
+            "recent_sessions",
+            "query_chats",
+            "chat_records",
+            "chat_history",
+        ] {
+            assert!(
+                names.contains(required),
+                "missing tool in HTTP list: {required}"
+            );
+        }
+
+        let (status, success_json) = request_json(
+            &app,
+            Method::POST,
+            "/tools/chat_records",
+            Some(serde_json::json!({
+                "sessionId": 1,
+                "keyword": "hello",
+                "startTs": 1_900_000_000_i64,
+                "endTs": 1_900_000_005_i64,
+                "limit": 20,
+                "offset": 0
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(success_json["success"], true);
+        assert_eq!(success_json["tool"], "chat_records");
+        assert_eq!(success_json["result"]["totalCount"], 1);
+        assert_eq!(
+            success_json["result"]["messages"][0]["content"],
+            "hello world"
+        );
+
+        let (status, query_chats_json) = request_json(
+            &app,
+            Method::POST,
+            "/tools/query_chats",
+            Some(serde_json::json!({
+                "limit": 10
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(query_chats_json["success"], true);
+        assert_eq!(query_chats_json["tool"], "query_chats");
+        assert!(query_chats_json["result"]["count"].as_u64().unwrap_or(0) >= 1);
+
+        let (status, query_contacts_json) = request_json(
+            &app,
+            Method::POST,
+            "/tools/query_contacts",
+            Some(serde_json::json!({
+                "sessionId": 1,
+                "limit": 10
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(query_contacts_json["success"], true);
+        assert_eq!(query_contacts_json["tool"], "query_contacts");
+        assert!(query_contacts_json["result"]["count"].as_u64().unwrap_or(0) >= 1);
+
+        let (status, history_alias_json) = request_json(
+            &app,
+            Method::POST,
+            "/tools/chat_history",
+            Some(serde_json::json!({
+                "session_id": 1,
+                "keyword": "another",
+                "start_ts": 1_900_000_006_i64,
+                "end_ts": 1_900_000_020_i64,
+                "limit": 20,
+                "offset": 0
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(history_alias_json["success"], true);
+        assert_eq!(history_alias_json["tool"], "chat_history");
+        assert_eq!(history_alias_json["result"]["totalCount"], 1);
+        assert_eq!(
+            history_alias_json["result"]["messages"][0]["content"],
+            "another line"
+        );
+
+        let (status, alias_time_json) = request_json(
+            &app,
+            Method::POST,
+            "/tools/get_current_time",
+            Some(serde_json::json!({})),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(alias_time_json["success"], true);
+        assert_eq!(alias_time_json["tool"], "get_current_time");
+        assert!(alias_time_json["result"]["unix"].is_number());
+
+        let (status, missing_tool_json) = request_json(
+            &app,
+            Method::POST,
+            "/tools/not_exists",
+            Some(serde_json::json!({})),
+        )
+        .await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert_eq!(missing_tool_json["success"], false);
+        assert_eq!(missing_tool_json["code"], "tool_not_found");
+
+        let (status, bad_args_json) = request_json(
+            &app,
+            Method::POST,
+            "/tools/chat_records",
+            Some(serde_json::json!({
+                "keyword": "hello"
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(bad_args_json["success"], false);
+        assert_eq!(bad_args_json["code"], "tool_error");
+        assert!(bad_args_json["error"]
+            .as_str()
+            .is_some_and(|text| text.contains("missing required integer field")));
+
+        if let Some(previous) = previous_db {
+            std::env::set_var("XENOBOT_DB_PATH", previous);
+        } else {
+            std::env::remove_var("XENOBOT_DB_PATH");
+        }
+        let _ = std::fs::remove_file(&db_path);
+    }
+
+    #[tokio::test]
+    async fn test_streamable_http_rpc_contract_and_error_semantics() {
+        let _guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        let db_path = unique_db_path("streamable_rpc");
+        let previous_db = std::env::var("XENOBOT_DB_PATH").ok();
+        std::env::set_var("XENOBOT_DB_PATH", &db_path);
+        seed_chat_records_fixture(&db_path);
+
+        let config = McpServerConfig::default();
+        let server = McpServer::new(config);
+        server
+            .register_builtin_tools()
+            .await
+            .expect("register builtin tools");
+        let app = server.create_router();
+
+        let (status, init_json) = request_json(
+            &app,
+            Method::POST,
+            "/mcp",
+            Some(serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": "init-1",
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2024-11-05"
+                }
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(init_json["jsonrpc"], "2.0");
+        assert_eq!(init_json["id"], "init-1");
+        assert_eq!(
+            init_json["result"]["protocolVersion"],
+            crate::protocol::MCP_PROTOCOL_VERSION
+        );
+        assert!(init_json["result"]["serverInfo"]["name"]
+            .as_str()
+            .is_some_and(|value| !value.trim().is_empty()));
+
+        let (status, list_json) = request_json(
+            &app,
+            Method::POST,
+            "/mcp",
+            Some(serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": "list-1",
+                "method": "tools/list"
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        let tool_names = list_json["result"]["tools"]
+            .as_array()
+            .expect("tools/list result should contain tools array")
+            .iter()
+            .filter_map(|tool| tool["name"].as_str())
+            .collect::<std::collections::HashSet<_>>();
+        for required in [
+            "chat_records",
+            "query_contacts",
+            "query_groups",
+            "get_current_time",
+        ] {
+            assert!(
+                tool_names.contains(required),
+                "missing tool in streamable list: {required}"
+            );
+        }
+
+        let (status, call_json) = request_json(
+            &app,
+            Method::POST,
+            "/mcp",
+            Some(serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": "call-1",
+                "method": "tools/call",
+                "params": {
+                    "name": "chat_records",
+                    "arguments": {
+                        "sessionId": 1,
+                        "keyword": "hello",
+                        "startTs": 1_900_000_000_i64,
+                        "endTs": 1_900_000_005_i64,
+                        "limit": 20,
+                        "offset": 0
+                    }
+                }
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(call_json["jsonrpc"], "2.0");
+        assert_eq!(call_json["id"], "call-1");
+        assert_eq!(call_json["result"]["tool"], "chat_records");
+        assert_eq!(call_json["result"]["isError"], false);
+        assert_eq!(call_json["result"]["structuredContent"]["totalCount"], 1);
+        assert_eq!(
+            call_json["result"]["structuredContent"]["messages"][0]["content"],
+            "hello world"
+        );
+
+        let (status, missing_tool_json) = request_json(
+            &app,
+            Method::POST,
+            "/mcp",
+            Some(serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": "call-2",
+                "method": "tools/call",
+                "params": {
+                    "name": "not_exists",
+                    "arguments": {}
+                }
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(missing_tool_json["error"]["code"], -32001);
+        assert_eq!(missing_tool_json["error"]["message"], "tool_not_found");
+
+        let (status, bad_params_json) = request_json(
+            &app,
+            Method::POST,
+            "/mcp",
+            Some(serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": "call-3",
+                "method": "tools/call",
+                "params": {
+                    "arguments": {}
+                }
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(bad_params_json["error"]["code"], -32602);
+        assert_eq!(bad_params_json["error"]["message"], "invalid_params");
+
+        let (status, unknown_method_json) = request_json(
+            &app,
+            Method::POST,
+            "/mcp",
+            Some(serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": "unknown-1",
+                "method": "ping"
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(unknown_method_json["error"]["code"], -32601);
+        assert_eq!(unknown_method_json["error"]["message"], "method_not_found");
+
+        if let Some(previous) = previous_db {
+            std::env::set_var("XENOBOT_DB_PATH", previous);
+        } else {
+            std::env::remove_var("XENOBOT_DB_PATH");
+        }
+        let _ = std::fs::remove_file(&db_path);
+    }
+
+    #[tokio::test]
+    async fn test_sse_endpoint_returns_event_stream_content_type() {
+        let _guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        let config = McpServerConfig::default();
+        let server = McpServer::new(config);
+        let app = server.create_router();
+
+        let request = Request::builder()
+            .method(Method::GET)
+            .uri("/sse")
+            .body(Body::empty())
+            .expect("build sse request");
+        let response = app
+            .oneshot(request)
+            .await
+            .expect("sse oneshot should succeed");
+        assert_eq!(response.status(), StatusCode::OK);
+        let content_type = response
+            .headers()
+            .get(axum::http::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or_default();
+        assert!(
+            content_type.starts_with("text/event-stream"),
+            "unexpected content-type: {content_type}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_http_integrations_catalog_and_preset_endpoints() {
+        let _guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        let config = McpServerConfig::default();
+        let server = McpServer::new(config);
+        let app = server.create_router();
+
+        let (status, catalog_json) = request_json(&app, Method::GET, "/integrations", None).await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(catalog_json["integrations"]
+            .as_array()
+            .is_some_and(|arr| !arr.is_empty()));
+        assert!(catalog_json["integrations"]
+            .as_array()
+            .is_some_and(|arr| arr.iter().any(|item| item["id"] == "claude-desktop")));
+
+        let (status, preset_json) =
+            request_json(&app, Method::GET, "/integrations/claude-desktop", None).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(preset_json["id"], "claude-desktop");
+        assert!(preset_json["transport"]["sse"]
+            .as_str()
+            .is_some_and(|url| url.ends_with("/sse")));
+        assert!(preset_json["configuration"]["mcpServers"]["xenobot"].is_object());
+
+        let (status, unknown_json) = request_json(
+            &app,
+            Method::GET,
+            "/integrations/not-supported-target",
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert!(unknown_json["supported"]
+            .as_array()
+            .is_some_and(|arr| arr.iter().any(|item| item == "claude-desktop")));
     }
 
     #[test]

@@ -23,7 +23,7 @@ const emit = defineEmits<{
   'data-changed': []
 }>()
 
-// 子 Tab 配置
+// English engineering note.
 const subTabs = computed(() => [
   { id: 'list', label: t('analysis.subTabs.member.memberList'), icon: 'i-heroicons-users' },
   { id: 'relationships', label: t('analysis.subTabs.member.relationships'), icon: 'i-heroicons-heart' },
@@ -40,34 +40,34 @@ function handleDataChanged() {
 
 <template>
   <div class="flex h-full flex-col">
-    <!-- 子 Tab 导航 -->
+    <!-- English UI note -->
     <SubTabs v-model="activeSubTab" :items="subTabs" persist-key="memberTab" />
 
-    <!-- 子 Tab 内容 -->
+    <!-- English UI note -->
     <div class="flex-1 min-h-0 overflow-auto">
       <Transition name="fade" mode="out-in">
-        <!-- 成员列表 -->
+        <!-- English UI note -->
         <MemberList
           v-if="activeSubTab === 'list'"
           :session-id="props.sessionId"
           @data-changed="handleDataChanged"
         />
 
-        <!-- 群关系 -->
+        <!-- English UI note -->
         <Relationships
           v-else-if="activeSubTab === 'relationships'"
           :session-id="props.sessionId"
           :time-filter="props.timeFilter"
         />
 
-        <!-- 小团体 -->
+        <!-- English UI note -->
         <XenoClusterView
           v-else-if="activeSubTab === 'cluster'"
           :session-id="props.sessionId"
           :time-filter="props.timeFilter"
         />
 
-        <!-- 昵称变更记录 -->
+        <!-- English UI note -->
         <NicknameHistory v-else-if="activeSubTab === 'history'" :session-id="props.sessionId" />
       </Transition>
     </div>

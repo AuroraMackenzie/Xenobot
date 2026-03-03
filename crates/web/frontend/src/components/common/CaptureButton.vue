@@ -6,23 +6,23 @@ import { useLayoutStore } from '@/stores/layout'
 import { useI18n } from 'vue-i18n'
 
 /**
- * 通用截屏按钮组件
- * 支持页面截屏和元素截屏两种模式
+ * English note.
+ * English note.
  */
 
 const { t } = useI18n()
 
 const props = withDefaults(
   defineProps<{
-    /** 按钮显示文字（不传则只显示图标） */
+    /** English note.
     label?: string
-    /** 按钮尺寸 */
+    /** English note.
     size?: 'xs' | 'sm' | 'md'
-    /** 截屏类型：page=整页, element=指定元素 */
+    /** English note.
     type?: 'page' | 'element'
-    /** 当 type='element' 时，要截屏的元素 */
+    /** English note.
     targetElement?: HTMLElement | null
-    /** 当 type='element' 时，从按钮向上查找目标元素的选择器 */
+    /** English note.
     targetSelector?: string
   }>(),
   {
@@ -35,7 +35,7 @@ const { isCapturing, capturePage, captureElement } = useScreenCapture()
 const layoutStore = useLayoutStore()
 const { screenshotMobileAdapt } = storeToRefs(layoutStore)
 
-// 生成唯一 ID 用于隐藏按钮自身
+// English engineering note.
 const buttonId = ref('')
 onMounted(() => {
   buttonId.value = `capture-btn-${Math.random().toString(36).slice(2, 8)}`
@@ -44,7 +44,7 @@ onMounted(() => {
 async function handleCapture(event: Event) {
   const btn = event.currentTarget as HTMLElement
 
-  // 根据用户设置决定是否启用移动端适配
+  // English engineering note.
   const defaultOptions = {
     hideSelectors: [`#${buttonId.value}`],
     mobileWidth: screenshotMobileAdapt.value ? true : undefined,

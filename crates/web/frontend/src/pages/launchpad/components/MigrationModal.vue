@@ -8,40 +8,40 @@ const { t } = useI18n()
 const sessionStore = useSessionStore()
 const { migrationCount, pendingMigrations, isMigrating } = storeToRefs(sessionStore)
 
-// 弹窗状态
+// English engineering note.
 const showModal = ref(false)
 const migrationError = ref<string | null>(null)
-const migrationPartialSuccess = ref(false) // 部分成功（有些数据库迁移失败）
+const migrationPartialSuccess = ref(false) // English engineering note.
 
-// 是否允许关闭弹窗（有错误时允许）
+// English engineering note.
 const canClose = computed(() => migrationError.value !== null)
 
-// 执行迁移
+// English engineering note.
 async function handleMigration() {
   migrationError.value = null
   migrationPartialSuccess.value = false
   const result = await sessionStore.runMigration()
   if (result.success) {
     showModal.value = false
-    // 迁移完成后重新加载会话列表
+    // English engineering note.
     await sessionStore.loadSessions()
   } else {
     migrationError.value = result.error || t('home.migration.failed')
-    // 如果有部分成功迁移的数据库，标记为部分成功
+    // English engineering note.
     migrationPartialSuccess.value = true
-    // 重新加载会话列表（成功迁移的会话可以正常使用）
+    // English engineering note.
     await sessionStore.loadSessions()
   }
 }
 
-// 关闭弹窗（仅在有错误时可用）
+// English engineering note.
 function handleClose() {
   if (canClose.value) {
     showModal.value = false
   }
 }
 
-// 组件挂载时检查是否需要迁移
+// English engineering note.
 onMounted(async () => {
   const result = await sessionStore.checkMigration()
   if (result.needsMigration) {
@@ -72,7 +72,7 @@ onMounted(async () => {
           {{ t('home.migration.note') }}
         </p>
 
-        <!-- 升级内容列表 -->
+        <!-- English UI note -->
         <div
           v-if="pendingMigrations.length > 0 && !migrationError"
           class="mb-4 rounded-lg bg-gray-50 p-3 text-left dark:bg-gray-800"
@@ -91,7 +91,7 @@ onMounted(async () => {
           </ul>
         </div>
 
-        <!-- 错误提示 -->
+        <!-- English UI note -->
         <div
           v-if="migrationError"
           class="mb-4 rounded-lg bg-red-50 p-3 text-left text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400"
@@ -107,14 +107,14 @@ onMounted(async () => {
           </div>
         </div>
 
-        <!-- 按钮区域 -->
+        <!-- English UI note -->
         <div class="flex gap-3">
-          <!-- 有错误时显示关闭按钮 -->
+          <!-- English UI note -->
           <UButton v-if="canClose" color="neutral" variant="outline" size="lg" class="flex-1" @click="handleClose">
             {{ t('home.migration.close') }}
           </UButton>
 
-          <!-- 升级/重试按钮 -->
+          <!-- English UI note -->
           <UButton
             color="primary"
             size="lg"

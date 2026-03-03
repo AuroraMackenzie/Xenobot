@@ -6,6 +6,7 @@
 .env
 .env.*
 !.env.example
+.Xenobot/
 
 # Local database and runtime artifacts
 *.db

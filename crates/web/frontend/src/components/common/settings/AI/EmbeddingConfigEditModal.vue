@@ -18,7 +18,7 @@ const emit = defineEmits<{
   saved: []
 }>()
 
-// ============ 状态 ============
+// English engineering note.
 
 const isValidating = ref(false)
 const isSaving = ref(false)
@@ -34,7 +34,7 @@ const formData = ref({
 const validationResult = ref<'idle' | 'valid' | 'invalid'>('idle')
 const validationMessage = ref('')
 
-// ============ 计算属性 ============
+// English engineering note.
 
 const isOpen = computed({
   get: () => props.open,
@@ -52,13 +52,13 @@ const canSave = computed(() => {
   return true
 })
 
-// API 来源选项
+// English engineering note.
 const apiSourceOptions = computed(() => [
   { label: t('settings.embedding.reuseLLM'), value: 'reuse_llm' },
   { label: t('settings.embedding.customAPI'), value: 'custom' },
 ])
 
-// ============ 监听 ============
+// English engineering note.
 
 watch(
   () => props.open,
@@ -68,7 +68,7 @@ watch(
       validationMessage.value = ''
 
       if (props.mode === 'edit' && props.config) {
-        // 编辑模式：加载完整配置
+        // English engineering note.
         const fullConfig = await window.embeddingApi.getConfig(props.config.id)
         if (fullConfig) {
           formData.value = {
@@ -80,7 +80,7 @@ watch(
           }
         }
       } else {
-        // 新增模式：重置表单
+        // English engineering note.
         formData.value = {
           name: '',
           apiSource: 'reuse_llm',
@@ -93,7 +93,7 @@ watch(
   }
 )
 
-// ============ 方法 ============
+// English engineering note.
 
 async function validateConfig() {
   isValidating.value = true
@@ -181,7 +181,7 @@ async function saveConfig() {
         </template>
 
         <div class="space-y-4">
-          <!-- 配置名称 -->
+          <!-- English UI note -->
           <div>
             <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
               {{ t('settings.embedding.configName') }}
@@ -194,7 +194,7 @@ async function saveConfig() {
             />
           </div>
 
-          <!-- API 来源 -->
+          <!-- English UI note -->
           <div>
             <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
               {{ t('settings.embedding.apiSource') }}
@@ -205,7 +205,7 @@ async function saveConfig() {
             </p>
           </div>
 
-          <!-- 模型名称 -->
+          <!-- English UI note -->
           <div>
             <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
               {{ t('settings.embedding.model') }}
@@ -217,9 +217,9 @@ async function saveConfig() {
             </p>
           </div>
 
-          <!-- 自定义 API 配置 -->
+          <!-- English UI note -->
           <template v-if="formData.apiSource === 'custom'">
-            <!-- API 端点 -->
+            <!-- English UI note -->
             <div>
               <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                 {{ t('settings.embedding.baseUrl') }}
@@ -247,7 +247,7 @@ async function saveConfig() {
             </div>
           </template>
 
-          <!-- 验证结果 -->
+          <!-- English UI note -->
           <div
             v-if="validationResult !== 'idle'"
             :class="[

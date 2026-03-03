@@ -1,17 +1,17 @@
 <script setup lang="ts">
 /**
- * FileDropZone - 纯行为的文件拖拽/选择组件
- * 不提供默认样式，通过插槽完全自定义 UI
+ * English note.
+ * English note.
  */
 
 import { ref, computed } from 'vue'
 
 interface Props {
-  /** 是否支持多文件选择 */
+  /** English note.
   multiple?: boolean
-  /** 是否禁用 */
+  /** English note.
   disabled?: boolean
-  /** 接受的文件扩展名，如 ['.json', '.txt'] */
+  /** English note.
   accept?: string[]
 }
 
@@ -22,40 +22,40 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const emit = defineEmits<{
-  /** 选择文件后触发，返回文件列表和路径列表 */
+  /** English note.
   files: [payload: { files: File[]; paths: string[] }]
 }>()
 
-// 拖拽状态
+// English engineering note.
 const isDragOver = ref(false)
 
-// 隐藏的文件输入框引用
+// English engineering note.
 const fileInputRef = ref<HTMLInputElement | null>(null)
 
-// 计算 accept 属性值
+// English engineering note.
 const acceptAttr = computed(() => {
   if (props.accept.includes('*')) return '*'
   return props.accept.join(',')
 })
 
-// 打开文件选择对话框
+// English engineering note.
 function openFileDialog() {
   if (props.disabled) return
   fileInputRef.value?.click()
 }
 
-// 处理文件选择
+// English engineering note.
 function handleFileSelect(event: Event) {
   const input = event.target as HTMLInputElement
   if (!input.files || input.files.length === 0) return
 
   processFiles(Array.from(input.files))
 
-  // 清空 input 以便再次选择同一文件
+  // English engineering note.
   input.value = ''
 }
 
-// 处理拖拽进入
+// English engineering note.
 function handleDragEnter(e: DragEvent) {
   e.preventDefault()
   e.stopPropagation()
@@ -63,7 +63,7 @@ function handleDragEnter(e: DragEvent) {
   isDragOver.value = true
 }
 
-// 处理拖拽悬停
+// English engineering note.
 function handleDragOver(e: DragEvent) {
   e.preventDefault()
   e.stopPropagation()
@@ -71,14 +71,14 @@ function handleDragOver(e: DragEvent) {
   isDragOver.value = true
 }
 
-// 处理拖拽离开
+// English engineering note.
 function handleDragLeave(e: DragEvent) {
   e.preventDefault()
   e.stopPropagation()
   isDragOver.value = false
 }
 
-// 处理拖拽放下
+// English engineering note.
 function handleDrop(e: DragEvent) {
   e.preventDefault()
   e.stopPropagation()
@@ -91,12 +91,12 @@ function handleDrop(e: DragEvent) {
 
   let files = Array.from(dataTransfer.files)
 
-  // 如果不支持多选，只取第一个
+  // English engineering note.
   if (!props.multiple) {
     files = [files[0]]
   }
 
-  // 过滤文件类型
+  // English engineering note.
   if (!props.accept.includes('*')) {
     files = files.filter((file) => {
       const ext = '.' + file.name.split('.').pop()?.toLowerCase()
@@ -109,11 +109,11 @@ function handleDrop(e: DragEvent) {
   }
 }
 
-// 处理文件并发送事件
+// English engineering note.
 function processFiles(files: File[]) {
   const paths: string[] = []
 
-  // 尝试获取文件路径（Electron 环境）
+  // English engineering note.
   for (const file of files) {
     try {
       // @ts-ignore - Electron webUtils
@@ -122,14 +122,14 @@ function processFiles(files: File[]) {
         paths.push(path)
       }
     } catch {
-      // 非 Electron 环境或获取失败
+      // English engineering note.
     }
   }
 
   emit('files', { files, paths })
 }
 
-// 暴露给插槽的属性
+// English engineering note.
 defineExpose({
   openFileDialog,
 })
@@ -137,7 +137,7 @@ defineExpose({
 
 <template>
   <div @dragenter="handleDragEnter" @dragover="handleDragOver" @dragleave="handleDragLeave" @drop="handleDrop">
-    <!-- 隐藏的文件输入框 -->
+    <!-- English UI note -->
     <input
       ref="fileInputRef"
       type="file"
@@ -147,7 +147,7 @@ defineExpose({
       @change="handleFileSelect"
     />
 
-    <!-- 插槽内容 -->
+    <!-- English UI note -->
     <slot :is-drag-over="isDragOver" :open-file-dialog="openFileDialog" :disabled="disabled" />
   </div>
 </template>

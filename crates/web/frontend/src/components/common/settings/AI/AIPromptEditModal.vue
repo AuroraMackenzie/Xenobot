@@ -29,7 +29,7 @@ const emit = defineEmits<{
 // Store
 const promptStore = usePromptStore()
 
-// 表单数据
+// English engineering note.
 const formData = ref({
   name: '',
   roleDefinition: '',
@@ -38,7 +38,7 @@ const formData = ref({
   supportPrivate: true,
 })
 
-// 计算属性
+// English engineering note.
 const isBuiltIn = computed(() => props.preset?.isBuiltIn ?? false)
 const isEditMode = computed(() => props.mode === 'edit')
 const isModified = computed(() => {
@@ -56,7 +56,7 @@ const canSave = computed(() => {
 })
 
 /**
- * 将 applicableTo 转换为勾选状态
+ * English note.
  */
 function applicableToCheckboxes(applicableTo?: PresetApplicableType): { group: boolean; private: boolean } {
   if (!applicableTo || applicableTo === 'common') {
@@ -69,22 +69,22 @@ function applicableToCheckboxes(applicableTo?: PresetApplicableType): { group: b
 }
 
 /**
- * 将勾选状态转换为 applicableTo
+ * English note.
  */
 function checkboxesToApplicableTo(group: boolean, private_: boolean): PresetApplicableType {
   if (group && private_) return 'common'
   if (group) return 'group'
   if (private_) return 'private'
-  return 'common' // 默认全选
+  return 'common' // English engineering note.
 }
 
-// 监听打开状态，初始化表单
+// English engineering note.
 watch(
   () => props.open,
   (newVal) => {
     if (newVal) {
       if (props.preset) {
-        // 编辑模式：加载现有预设
+        // English engineering note.
         const checkboxes = applicableToCheckboxes(props.preset.applicableTo)
         formData.value = {
           name: props.preset.name,
@@ -94,7 +94,7 @@ watch(
           supportPrivate: checkboxes.private,
         }
       } else {
-        // 添加模式：重置为默认
+        // English engineering note.
         formData.value = {
           name: '',
           roleDefinition: getDefaultRoleDefinition(locale.value as LocaleType),
@@ -107,19 +107,19 @@ watch(
   }
 )
 
-/** 关闭弹窗 */
+/** English note.
 function closeModal() {
   emit('update:open', false)
 }
 
-/** 保存提示词预设 */
+/** English note.
 function handleSave() {
   if (!canSave.value) return
 
   const applicableTo = checkboxesToApplicableTo(formData.value.supportGroup, formData.value.supportPrivate)
 
   if (isEditMode.value && props.preset) {
-    // 更新现有预设（支持内置和自定义）
+    // English engineering note.
     const updates: {
       name: string
       roleDefinition: string
@@ -130,13 +130,13 @@ function handleSave() {
       roleDefinition: formData.value.roleDefinition.trim(),
       responseRules: formData.value.responseRules.trim(),
     }
-    // 内置预设不更新 applicableTo
+    // English engineering note.
     if (!isBuiltIn.value) {
       updates.applicableTo = applicableTo
     }
     promptStore.updatePromptPreset(props.preset.id, updates)
   } else {
-    // 添加新预设
+    // English engineering note.
     promptStore.addPromptPreset({
       name: formData.value.name.trim(),
       roleDefinition: formData.value.roleDefinition.trim(),
@@ -149,13 +149,13 @@ function handleSave() {
   closeModal()
 }
 
-/** 重置内置预设为原始值 */
+/** English note.
 function handleReset() {
   if (!props.preset || !isBuiltIn.value) return
 
   const original = getOriginalBuiltinPreset(props.preset.id, locale.value as LocaleType)
   if (original) {
-    // 重置表单为原始值
+    // English engineering note.
     formData.value = {
       name: original.name,
       roleDefinition: original.roleDefinition,
@@ -163,17 +163,17 @@ function handleReset() {
       supportGroup: true,
       supportPrivate: true,
     }
-    // 清除覆盖
+    // English engineering note.
     promptStore.resetBuiltinPreset(props.preset.id)
   }
 }
 
-// 完整提示词预览（使用群聊模式作为示例）
+// English engineering note.
 const previewContent = computed(() => {
-  // 获取锁定的系统部分（用于预览，默认使用群聊模式）
+  // English engineering note.
   const lockedSection = getLockedPromptSectionPreview('group', undefined, locale.value as LocaleType)
 
-  // 组合完整提示词
+  // English engineering note.
   const responseRulesLabel = locale.value === 'zh-CN' ? '回答要求：' : 'Response requirements:'
   return `${formData.value.roleDefinition}
 
@@ -194,9 +194,9 @@ ${formData.value.responseRules}`
           <UButton icon="i-heroicons-x-mark" variant="ghost" size="sm" @click="closeModal" />
         </div>
 
-        <!-- 表单 -->
+        <!-- English UI note -->
         <div class="max-h-[500px] space-y-4 overflow-y-auto pr-1">
-          <!-- 预设名称 -->
+          <!-- English UI note -->
           <div>
             <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
               {{ t('settings.aiPrompt.modal.presetName') }}
@@ -208,7 +208,7 @@ ${formData.value.responseRules}`
             />
           </div>
 
-          <!-- 适用场景（仅自定义预设显示） -->
+          <!-- English UI note -->
           <div v-if="!isBuiltIn">
             <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
               {{ t('settings.aiPrompt.modal.applicableTo') }}
@@ -238,7 +238,7 @@ ${formData.value.responseRules}`
             </div>
           </div>
 
-          <!-- 角色定义 -->
+          <!-- English UI note -->
           <div>
             <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
               {{ t('settings.aiPrompt.modal.roleDefinition') }}
@@ -251,7 +251,7 @@ ${formData.value.responseRules}`
             />
           </div>
 
-          <!-- 回答要求 -->
+          <!-- English UI note -->
           <div>
             <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
               {{ t('settings.aiPrompt.modal.responseRules') }}
@@ -265,7 +265,7 @@ ${formData.value.responseRules}`
             />
           </div>
 
-          <!-- 完整提示词预览 -->
+          <!-- English UI note -->
           <div>
             <label class="mb-1.5 flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
               <UIcon name="i-heroicons-eye" class="h-4 w-4 text-violet-500" />
@@ -280,7 +280,7 @@ ${formData.value.responseRules}`
 
         <!-- Footer -->
         <div class="mt-6 flex justify-end gap-2">
-          <!-- 内置预设：显示重置按钮 -->
+          <!-- English UI note -->
           <UButton v-if="isBuiltIn && isModified" variant="outline" color="warning" @click="handleReset">
             <UIcon name="i-heroicons-arrow-path" class="mr-1 h-4 w-4" />
             {{ t('settings.aiPrompt.modal.resetToDefault') }}

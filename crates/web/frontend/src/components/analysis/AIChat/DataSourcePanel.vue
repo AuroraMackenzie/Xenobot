@@ -23,12 +23,12 @@ const emit = defineEmits<{
   loadMore: []
 }>()
 
-// 格式化时间
+// English engineering note.
 function formatTime(timestamp: number): string {
   return dayjs(timestamp).format('MM-DD HH:mm')
 }
 
-// 高亮关键词
+// English engineering note.
 function highlightKeywords(text: string): string {
   if (!props.keywords.length) return text
   const pattern = props.keywords.join('|')
@@ -42,7 +42,7 @@ function highlightKeywords(text: string): string {
     class="relative flex flex-col rounded-xl bg-white shadow-sm transition-all duration-300 dark:bg-gray-900"
     :class="[isCollapsed ? 'w-12' : 'w-full']"
   >
-    <!-- 折叠状态 -->
+    <!-- English UI note -->
     <template v-if="isCollapsed">
       <button
         class="flex h-full flex-col items-center justify-center gap-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
@@ -53,9 +53,9 @@ function highlightKeywords(text: string): string {
       </button>
     </template>
 
-    <!-- 展开状态 -->
+    <!-- English UI note -->
     <template v-else>
-      <!-- 头部 -->
+      <!-- English UI note -->
       <div class="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-800">
         <div class="flex items-center gap-2">
           <UIcon name="i-heroicons-document-magnifying-glass" class="h-5 w-5 text-gray-500" />
@@ -64,7 +64,7 @@ function highlightKeywords(text: string): string {
         <UButton icon="i-heroicons-chevron-right" color="gray" variant="ghost" size="xs" @click="emit('toggle')" />
       </div>
 
-      <!-- 当前关键词 -->
+      <!-- English UI note -->
       <div v-if="keywords.length > 0" class="border-b border-gray-200 px-4 py-2 dark:border-gray-800">
         <div class="flex flex-wrap items-center gap-2">
           <span class="text-xs text-gray-500">{{ t('ai.chat.dataSource.keywords') }}</span>
@@ -78,21 +78,21 @@ function highlightKeywords(text: string): string {
         </div>
       </div>
 
-      <!-- 消息列表 -->
+      <!-- English UI note -->
       <div class="flex-1 overflow-y-auto">
-        <!-- 加载中 -->
+        <!-- English UI note -->
         <div v-if="isLoading" class="flex items-center justify-center py-8">
           <UIcon name="i-heroicons-arrow-path" class="h-6 w-6 animate-spin text-gray-400" />
         </div>
 
-        <!-- 空状态 -->
+        <!-- English UI note -->
         <div v-else-if="messages.length === 0" class="flex flex-col items-center justify-center py-8 text-center">
           <UIcon name="i-heroicons-inbox" class="h-10 w-10 text-gray-300 dark:text-gray-600" />
           <p class="mt-2 text-sm text-gray-500">{{ t('ai.chat.dataSource.empty') }}</p>
           <p class="text-xs text-gray-400">{{ t('ai.chat.dataSource.emptyHint') }}</p>
         </div>
 
-        <!-- 消息列表 -->
+        <!-- English UI note -->
         <div v-else class="divide-y divide-gray-100 dark:divide-gray-800">
           <div
             v-for="msg in messages"
@@ -110,7 +110,7 @@ function highlightKeywords(text: string): string {
         </div>
       </div>
 
-      <!-- 底部统计 & 加载更多 -->
+      <!-- English UI note -->
       <div v-if="messages.length > 0" class="border-t border-gray-200 px-4 py-2 dark:border-gray-800">
         <div class="flex items-center justify-between">
           <span class="text-xs text-gray-500">
@@ -121,7 +121,7 @@ function highlightKeywords(text: string): string {
       </div>
     </template>
 
-    <!-- 半透明数据流背景效果 -->
+    <!-- English UI note -->
     <div v-if="!isCollapsed" class="pointer-events-none absolute inset-0 overflow-hidden rounded-xl opacity-[0.03]">
       <div class="data-flow-bg absolute inset-0" />
     </div>
@@ -134,7 +134,7 @@ function highlightKeywords(text: string): string {
   text-orientation: mixed;
 }
 
-/* 数据流背景动画 */
+/* English note.
 .data-flow-bg {
   background: repeating-linear-gradient(0deg, transparent, transparent 20px, currentColor 20px, currentColor 21px);
   animation: dataFlow 20s linear infinite;

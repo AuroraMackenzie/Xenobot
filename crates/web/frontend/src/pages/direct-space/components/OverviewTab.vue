@@ -28,10 +28,10 @@ const props = defineProps<{
   timeFilter?: { startTs?: number; endTs?: number }
 }>()
 
-// 星期活跃度数据（用于统计信息计算）
+// English engineering note.
 const weekdayActivity = ref<WeekdayActivity[]>([])
 
-// 使用 Composables
+// English engineering note.
 const {
   durationDays,
   dailyAvgMessages,
@@ -51,7 +51,7 @@ const {
 
 const { dailyChartData } = useDailyTrend(props.dailyActivity)
 
-// 消息类型图表数据
+// English engineering note.
 const typeChartData = computed<EChartPieData>(() => {
   return {
     labels: props.messageTypes.map((item) => getMessageTypeName(item.type, t)),
@@ -59,12 +59,12 @@ const typeChartData = computed<EChartPieData>(() => {
   }
 })
 
-// 双方消息对比数据（取消息数最多的两个成员）
+// English engineering note.
 const memberComparisonData = computed(() => {
-  // 私聊页面需要至少 2 个成员才能对比
+  // English engineering note.
   if (props.memberActivity.length < 2) return null
 
-  // 按消息数排序，取前两名
+  // English engineering note.
   const sorted = [...props.memberActivity].sort((a, b) => b.messageCount - a.messageCount)
   const top2 = sorted.slice(0, 2)
   const total = top2[0].messageCount + top2[1].messageCount
@@ -86,7 +86,7 @@ const memberComparisonData = computed(() => {
   }
 })
 
-// 双方对比图表数据
+// English engineering note.
 const comparisonChartData = computed<EChartPieData>(() => {
   if (!memberComparisonData.value) {
     return { labels: [], values: [] }
@@ -97,7 +97,7 @@ const comparisonChartData = computed<EChartPieData>(() => {
   }
 })
 
-// 加载星期活跃度数据（用于统计信息计算）
+// English engineering note.
 async function loadWeekdayActivity() {
   if (!props.session.id) return
   try {
@@ -107,7 +107,7 @@ async function loadWeekdayActivity() {
   }
 }
 
-// 监听 session.id 和 timeFilter 变化
+// English engineering note.
 watch(
   () => [props.session.id, props.timeFilter],
   () => {
@@ -119,7 +119,7 @@ watch(
 
 <template>
   <div class="main-content space-y-6 p-6">
-    <!-- 私聊身份卡 -->
+    <!-- English UI note -->
     <OverviewIdentityCard
       :session="session"
       :total-duration-days="totalDurationDays"
@@ -127,13 +127,13 @@ watch(
       :time-range="timeRange"
     />
 
-    <!-- 双方消息对比 -->
+    <!-- English UI note -->
     <SectionCard v-if="memberComparisonData" :title="t('analysis.overview.messageRatio')" :show-divider="false">
       <div class="p-5">
         <div class="flex items-center gap-8">
-          <!-- 左侧成员 -->
+          <!-- English UI note -->
           <div class="flex-1 text-center">
-            <!-- 头像：优先显示真实头像 -->
+            <!-- English UI note -->
             <img
               v-if="memberComparisonData.member1.avatar"
               :src="memberComparisonData.member1.avatar"
@@ -159,7 +159,7 @@ watch(
             </p>
           </div>
 
-          <!-- 中间对比条 -->
+          <!-- English UI note -->
           <div class="flex-1">
             <div class="relative h-8 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
               <div
@@ -177,9 +177,9 @@ watch(
             </div>
           </div>
 
-          <!-- 右侧成员 -->
+          <!-- English UI note -->
           <div class="flex-1 text-center">
-            <!-- 头像：优先显示真实头像 -->
+            <!-- English UI note -->
             <img
               v-if="memberComparisonData.member2.avatar"
               :src="memberComparisonData.member2.avatar"
@@ -208,7 +208,7 @@ watch(
       </div>
     </SectionCard>
 
-    <!-- 关键指标卡片 -->
+    <!-- English UI note -->
     <OverviewStatCards
       :daily-avg-messages="dailyAvgMessages"
       :duration-days="durationDays"
@@ -224,16 +224,16 @@ watch(
       :max-consecutive-days="maxConsecutiveDays"
     />
 
-    <!-- 图表区域：消息类型 & 双方占比 -->
+    <!-- English UI note -->
     <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
-      <!-- 消息类型分布 -->
+      <!-- English UI note -->
       <SectionCard :title="t('analysis.overview.messageTypeDistribution')" :show-divider="false">
         <div class="p-5">
           <EChartPie :data="typeChartData" :height="256" />
         </div>
       </SectionCard>
 
-      <!-- 双方消息占比饼图 -->
+      <!-- English UI note -->
       <SectionCard v-if="memberComparisonData" :title="t('analysis.overview.memberComparison')" :show-divider="false">
         <div class="p-5">
           <EChartPie :data="comparisonChartData" :height="256" />
@@ -241,7 +241,7 @@ watch(
       </SectionCard>
     </div>
 
-    <!-- 每日消息趋势 -->
+    <!-- English UI note -->
     <DailyTrendCard :daily-activity="dailyActivity" :daily-chart-data="dailyChartData" />
   </div>
 </template>

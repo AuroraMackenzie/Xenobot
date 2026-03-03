@@ -1,14 +1,14 @@
 <script setup lang="ts">
 /**
- * 空数据状态组件
- * 用于展示无数据时的提示
+ * English note.
+ * English note.
  */
 defineProps<{
-  /** 提示文字 */
+  /** English note.
   text?: string
-  /** 可选的图标 */
+  /** English note.
   icon?: string
-  /** 内边距大小 */
+  /** English note.
   padding?: 'sm' | 'md' | 'lg'
 }>()
 

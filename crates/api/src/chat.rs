@@ -118,6 +118,26 @@ pub fn router() -> Router {
             "/sessions/:session_id/laugh-analysis",
             get(get_laugh_analysis),
         )
+        .route(
+            "/sessions/:session_id/night-owl-analysis",
+            get(get_night_owl_analysis),
+        )
+        .route(
+            "/sessions/:session_id/dragon-king-analysis",
+            get(get_dragon_king_analysis),
+        )
+        .route(
+            "/sessions/:session_id/lurker-analysis",
+            get(get_lurker_analysis),
+        )
+        .route(
+            "/sessions/:session_id/checkin-analysis",
+            get(get_checkin_analysis),
+        )
+        .route(
+            "/sessions/:session_id/repeat-analysis",
+            get(get_repeat_analysis),
+        )
         // Member management
         .route("/sessions/:session_id/members", get(get_members))
         .route(
@@ -1339,6 +1359,29 @@ fn usize_to_i64_saturating(value: usize) -> i64 {
     value.min(i64::MAX as usize) as i64
 }
 
+fn checkpoint_meta_json(source_fingerprint: &SourceCheckpointFingerprint) -> serde_json::Value {
+    serde_json::json!({
+        "fingerprint": source_fingerprint.fingerprint,
+        "fileSize": source_fingerprint.file_size,
+        "modifiedAt": source_fingerprint.modified_at
+    })
+}
+
+fn checkpoint_state_json(
+    checkpoint: Option<ImportSourceCheckpoint>,
+) -> serde_json::Value {
+    match checkpoint {
+        Some(cp) => serde_json::json!({
+            "status": cp.status,
+            "lastInsertedMessages": cp.last_inserted_messages,
+            "lastDuplicateMessages": cp.last_duplicate_messages,
+            "lastProcessedAt": cp.last_processed_at,
+            "errorMessage": cp.error_message
+        }),
+        None => serde_json::Value::Null,
+    }
+}
+
 async fn upsert_source_checkpoint(
     repo: &crate::database::Repository,
     source_kind: &str,
@@ -1747,8 +1790,24 @@ async fn run_separate_import_batch(
     let mut skipped_files = 0usize;
     let mut items = Vec::with_capacity(file_paths.len());
     let source_kind = "api-import-batch-separate";
+    let mut seen_input_paths: HashSet<String> = HashSet::new();
 
     for file_path in file_paths {
+        if !seen_input_paths.insert(file_path.clone()) {
+            skipped_files = skipped_files.saturating_add(1);
+            items.push(serde_json::json!({
+                "filePath": file_path,
+                "checkpointSkipped": false,
+                "duplicateInputSkipped": true,
+                "attemptsUsed": 0,
+                "result": {
+                    "success": true,
+                    "duplicateInputSkipped": true
+                }
+            }));
+            continue;
+        }
+
         let source_fingerprint = match build_source_checkpoint_fingerprint(file_path) {
             Ok(v) => v,
             Err(err) => {
@@ -1928,8 +1987,19 @@ async fn run_merged_import_batch(
     let mut source_results: Vec<serde_json::Value> = Vec::with_capacity(file_paths.len());
     let mut failed_files = 0usize;
     let mut skipped_files = 0usize;
+    let mut seen_input_paths: HashSet<String> = HashSet::new();
 
     for file_path in file_paths {
+        if !seen_input_paths.insert(file_path.clone()) {
+            skipped_files = skipped_files.saturating_add(1);
+            source_results.push(serde_json::json!({
+                "filePath": file_path,
+                "success": true,
+                "duplicateInputSkipped": true
+            }));
+            continue;
+        }
+
         let source_fingerprint = match build_source_checkpoint_fingerprint(file_path) {
             Ok(fp) => fp,
             Err(_) => {
@@ -2026,6 +2096,27 @@ async fn run_merged_import_batch(
             }
         }
     }
+
+    for source in &mut parsed_sources {
+        source.messages.sort_by(|a, b| {
+            a.ts.cmp(&b.ts)
+                .then_with(|| a.sender_platform_id.cmp(&b.sender_platform_id))
+                .then_with(|| a.msg_type.cmp(&b.msg_type))
+                .then_with(|| {
+                    a.content
+                        .as_deref()
+                        .unwrap_or_default()
+                        .cmp(b.content.as_deref().unwrap_or_default())
+                })
+        });
+    }
+    parsed_sources.sort_by(|a, b| {
+        let a_min_ts = a.messages.first().map(|m| m.ts).unwrap_or(i64::MAX);
+        let b_min_ts = b.messages.first().map(|m| m.ts).unwrap_or(i64::MAX);
+        a_min_ts
+            .cmp(&b_min_ts)
+            .then_with(|| a.source_path.cmp(&b.source_path))
+    });
 
     if parsed_sources.is_empty() {
         return Ok(serde_json::json!({
@@ -2263,7 +2354,7 @@ async fn scan_multi_chat_file(
 #[instrument]
 pub async fn get_available_years(
     Path(session_id): Path<String>,
-    Query(_filter): Query<TimeFilter>, // 忽略过滤器，保持兼容性
+    Query(_filter): Query<TimeFilter>, // English engineering note.
 ) -> Result<Json<Vec<i64>>, ApiError> {
     let meta_id = session_id
         .parse::<i64>()
@@ -3010,6 +3101,116 @@ async fn get_cluster_graph(
     }
     let max_degree = degree_by_name.values().copied().max().unwrap_or(0);
 
+    // Weighted label propagation with deterministic tie-breaking.
+    let mut sorted_names: Vec<String> = mention_graph
+        .nodes
+        .iter()
+        .map(|node| node.name.clone())
+        .collect();
+    sorted_names.sort();
+    let mut name_to_idx: HashMap<String, usize> = HashMap::with_capacity(sorted_names.len());
+    for (idx, name) in sorted_names.iter().enumerate() {
+        name_to_idx.insert(name.clone(), idx);
+    }
+
+    let mut weighted_adjacency: Vec<HashMap<usize, i64>> = vec![HashMap::new(); sorted_names.len()];
+    for link in &mention_graph.links {
+        let Some(&source_idx) = name_to_idx.get(&link.source) else {
+            continue;
+        };
+        let Some(&target_idx) = name_to_idx.get(&link.target) else {
+            continue;
+        };
+        if source_idx == target_idx {
+            continue;
+        }
+        let weight = link.value.max(1);
+        *weighted_adjacency[source_idx].entry(target_idx).or_insert(0) += weight;
+        *weighted_adjacency[target_idx].entry(source_idx).or_insert(0) += weight;
+    }
+
+    let mut labels: Vec<usize> = (0..sorted_names.len()).collect();
+    let mut node_order: Vec<usize> = (0..sorted_names.len()).collect();
+    node_order.sort_by(|a, b| {
+        let name_a = &sorted_names[*a];
+        let name_b = &sorted_names[*b];
+        let degree_a = degree_by_name.get(name_a).copied().unwrap_or(0);
+        let degree_b = degree_by_name.get(name_b).copied().unwrap_or(0);
+        degree_b.cmp(&degree_a).then_with(|| name_a.cmp(name_b))
+    });
+
+    let max_iterations = 24;
+    let mut iterations = 0usize;
+    for iter in 0..max_iterations {
+        let mut changed = false;
+        for &node_idx in &node_order {
+            let neighbors = &weighted_adjacency[node_idx];
+            if neighbors.is_empty() {
+                continue;
+            }
+
+            let mut label_score: HashMap<usize, i64> = HashMap::new();
+            for (neighbor_idx, weight) in neighbors {
+                let neighbor_label = labels[*neighbor_idx];
+                *label_score.entry(neighbor_label).or_insert(0) += *weight;
+            }
+
+            let mut best_label = labels[node_idx];
+            let mut best_score = *label_score.get(&best_label).unwrap_or(&0);
+            for (label, score) in label_score {
+                if score > best_score || (score == best_score && label < best_label) {
+                    best_score = score;
+                    best_label = label;
+                }
+            }
+
+            if best_label != labels[node_idx] {
+                labels[node_idx] = best_label;
+                changed = true;
+            }
+        }
+        iterations = iter + 1;
+        if !changed {
+            break;
+        }
+    }
+
+    let mut members_by_label: HashMap<usize, Vec<usize>> = HashMap::new();
+    for (idx, label) in labels.iter().copied().enumerate() {
+        members_by_label.entry(label).or_default().push(idx);
+    }
+
+    let mut community_groups: Vec<(usize, Vec<usize>)> = members_by_label.into_iter().collect();
+    community_groups.sort_by(|a, b| {
+        b.1.len().cmp(&a.1.len()).then_with(|| {
+            let a_first = a
+                .1
+                .iter()
+                .map(|idx| sorted_names[*idx].as_str())
+                .min()
+                .unwrap_or("");
+            let b_first = b
+                .1
+                .iter()
+                .map(|idx| sorted_names[*idx].as_str())
+                .min()
+                .unwrap_or("");
+            a_first.cmp(b_first)
+        })
+    });
+
+    let mut label_to_community_id: HashMap<usize, i64> = HashMap::new();
+    for (offset, (label, _)) in community_groups.iter().enumerate() {
+        label_to_community_id.insert(*label, offset as i64 + 1);
+    }
+
+    let mut member_to_community_id: HashMap<String, i64> = HashMap::new();
+    for (name, idx) in &name_to_idx {
+        let label = labels[*idx];
+        let community_id = *label_to_community_id.get(&label).unwrap_or(&0);
+        member_to_community_id.insert(name.clone(), community_id);
+    }
+
     let nodes: Vec<serde_json::Value> = mention_graph
         .nodes
         .iter()
@@ -3020,13 +3221,15 @@ async fn get_cluster_graph(
             } else {
                 0.0
             };
+            let community_id = member_to_community_id.get(&node.name).copied().unwrap_or(0);
             serde_json::json!({
                 "id": node.id,
                 "name": node.name,
                 "messageCount": node.value,
                 "symbolSize": node.symbol_size,
                 "degree": degree,
-                "normalizedDegree": normalized_degree
+                "normalizedDegree": normalized_degree,
+                "communityId": community_id
             })
         })
         .collect();
@@ -3046,48 +3249,46 @@ async fn get_cluster_graph(
         })
         .collect();
 
-    let mut adjacency: HashMap<String, HashSet<String>> = HashMap::new();
-    for node in &mention_graph.nodes {
-        adjacency.entry(node.name.clone()).or_default();
-    }
-    for link in &mention_graph.links {
-        adjacency
-            .entry(link.source.clone())
-            .or_default()
-            .insert(link.target.clone());
-        adjacency
-            .entry(link.target.clone())
-            .or_default()
-            .insert(link.source.clone());
-    }
-
-    let mut visited: HashSet<String> = HashSet::new();
     let mut communities: Vec<serde_json::Value> = Vec::new();
-    for node in &mention_graph.nodes {
-        if visited.contains(&node.name) {
-            continue;
-        }
-        let mut stack = vec![node.name.clone()];
-        let mut size = 0usize;
-        while let Some(current) = stack.pop() {
-            if !visited.insert(current.clone()) {
-                continue;
-            }
-            size += 1;
-            if let Some(neighbors) = adjacency.get(&current) {
-                for neighbor in neighbors {
-                    if !visited.contains(neighbor) {
-                        stack.push(neighbor.clone());
-                    }
-                }
+    for (label, member_indices) in &community_groups {
+        let community_id = label_to_community_id.get(label).copied().unwrap_or(0);
+        let mut member_names: Vec<String> = member_indices
+            .iter()
+            .map(|idx| sorted_names[*idx].clone())
+            .collect();
+        member_names.sort();
+
+        let member_set: HashSet<&str> = member_names.iter().map(String::as_str).collect();
+        let mut internal_edge_weight = 0i64;
+        let mut internal_edge_count = 0i64;
+        let mut external_edge_weight = 0i64;
+        for link in &mention_graph.links {
+            let source_in = member_set.contains(link.source.as_str());
+            let target_in = member_set.contains(link.target.as_str());
+            if source_in && target_in {
+                internal_edge_count += 1;
+                internal_edge_weight += link.value;
+            } else if source_in || target_in {
+                external_edge_weight += link.value;
             }
         }
 
-        let community_id = communities.len() as i64 + 1;
+        let possible_edges = (member_indices.len() * member_indices.len().saturating_sub(1)) / 2;
+        let density = if possible_edges > 0 {
+            internal_edge_count as f64 / possible_edges as f64
+        } else {
+            0.0
+        };
+
         communities.push(serde_json::json!({
             "id": community_id,
             "name": format!("Community {}", community_id),
-            "size": size as i64
+            "size": member_indices.len() as i64,
+            "members": member_names,
+            "internalEdgeWeight": internal_edge_weight,
+            "internalEdgeCount": internal_edge_count,
+            "externalEdgeWeight": external_edge_weight,
+            "density": density
         }));
     }
 
@@ -3101,7 +3302,9 @@ async fn get_cluster_graph(
             "totalMessages": total_messages,
             "involvedMembers": mention_graph.nodes.len() as i64,
             "edgeCount": mention_graph.links.len() as i64,
-            "communityCount": communities.len() as i64
+            "communityCount": communities.len() as i64,
+            "algorithm": "weighted_label_propagation",
+            "iterations": iterations as i64
         }
     })))
 }
@@ -3335,6 +3538,712 @@ async fn get_laugh_analysis(
 }
 
 #[instrument]
+async fn get_night_owl_analysis(
+    Path(session_id): Path<String>,
+    Query(filter): Query<TimeFilter>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let meta_id = session_id
+        .parse::<i64>()
+        .map_err(|_| ApiError::InvalidRequest("Invalid session ID".to_string()))?;
+    let pool = crate::database::get_pool()
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?;
+
+    #[derive(Debug, sqlx::FromRow)]
+    struct NightRow {
+        member_id: i64,
+        platform_id: String,
+        name: String,
+        message_count: i64,
+        night_count: i64,
+    }
+
+    let mut query_sql = String::from(
+        r#"
+        SELECT
+            m.id as member_id,
+            m.platform_id as platform_id,
+            COALESCE(m.group_nickname, m.account_name, m.platform_id) as name,
+            COUNT(*) as message_count,
+            SUM(
+                CASE
+                    WHEN CAST(strftime('%H', datetime(msg.ts, 'unixepoch', 'localtime')) AS INTEGER) BETWEEN 0 AND 5
+                    THEN 1 ELSE 0
+                END
+            ) as night_count
+        FROM message msg
+        JOIN member m ON msg.sender_id = m.id
+        WHERE msg.meta_id = ?1
+          AND COALESCE(m.account_name, '') != '系统消息'
+        "#,
+    );
+    if filter.start_ts.is_some() {
+        query_sql.push_str(" AND msg.ts >= ?");
+    }
+    if filter.end_ts.is_some() {
+        query_sql.push_str(" AND msg.ts <= ?");
+    }
+    query_sql.push_str(
+        " GROUP BY m.id, m.platform_id, COALESCE(m.group_nickname, m.account_name, m.platform_id)",
+    );
+
+    let mut query = sqlx::query_as::<_, NightRow>(&query_sql).bind(meta_id);
+    if let Some(start_ts) = filter.start_ts {
+        query = query.bind(start_ts);
+    }
+    if let Some(end_ts) = filter.end_ts {
+        query = query.bind(end_ts);
+    }
+    let mut rows = query
+        .fetch_all(&*pool)
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?;
+
+    rows.sort_by(|a, b| {
+        b.night_count
+            .cmp(&a.night_count)
+            .then_with(|| b.message_count.cmp(&a.message_count))
+            .then_with(|| a.member_id.cmp(&b.member_id))
+    });
+
+    let total_messages = rows.iter().map(|r| r.message_count).sum::<i64>();
+    let total_night_messages = rows.iter().map(|r| r.night_count).sum::<i64>();
+    let members = rows
+        .iter()
+        .enumerate()
+        .map(|(idx, row)| {
+            let night_ratio = if row.message_count > 0 {
+                row.night_count as f64 / row.message_count as f64 * 100.0
+            } else {
+                0.0
+            };
+            let contribution = if total_night_messages > 0 {
+                row.night_count as f64 / total_night_messages as f64 * 100.0
+            } else {
+                0.0
+            };
+            serde_json::json!({
+                "rank": idx as i64 + 1,
+                "memberId": row.member_id,
+                "platformId": row.platform_id,
+                "name": row.name,
+                "messageCount": row.message_count,
+                "nightMessageCount": row.night_count,
+                "nightRatio": night_ratio,
+                "nightContribution": contribution
+            })
+        })
+        .collect::<Vec<_>>();
+
+    let group_night_ratio = if total_messages > 0 {
+        total_night_messages as f64 / total_messages as f64 * 100.0
+    } else {
+        0.0
+    };
+
+    Ok(Json(serde_json::json!({
+        "members": members,
+        "stats": {
+            "totalMessages": total_messages,
+            "totalNightMessages": total_night_messages,
+            "groupNightRatio": group_night_ratio,
+            "nightWindowHours": [0, 1, 2, 3, 4, 5]
+        }
+    })))
+}
+
+#[instrument]
+async fn get_dragon_king_analysis(
+    Path(session_id): Path<String>,
+    Query(filter): Query<TimeFilter>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let meta_id = session_id
+        .parse::<i64>()
+        .map_err(|_| ApiError::InvalidRequest("Invalid session ID".to_string()))?;
+    let pool = crate::database::get_pool()
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?;
+
+    #[derive(Debug, sqlx::FromRow)]
+    struct DragonRow {
+        member_id: i64,
+        platform_id: String,
+        name: String,
+        message_count: i64,
+        active_days: i64,
+    }
+
+    let mut query_sql = String::from(
+        r#"
+        SELECT
+            m.id as member_id,
+            m.platform_id as platform_id,
+            COALESCE(m.group_nickname, m.account_name, m.platform_id) as name,
+            COUNT(*) as message_count,
+            COUNT(DISTINCT date(datetime(msg.ts, 'unixepoch', 'localtime'))) as active_days
+        FROM message msg
+        JOIN member m ON msg.sender_id = m.id
+        WHERE msg.meta_id = ?1
+          AND COALESCE(m.account_name, '') != '系统消息'
+        "#,
+    );
+    if filter.start_ts.is_some() {
+        query_sql.push_str(" AND msg.ts >= ?");
+    }
+    if filter.end_ts.is_some() {
+        query_sql.push_str(" AND msg.ts <= ?");
+    }
+    query_sql.push_str(
+        " GROUP BY m.id, m.platform_id, COALESCE(m.group_nickname, m.account_name, m.platform_id)",
+    );
+
+    let mut query = sqlx::query_as::<_, DragonRow>(&query_sql).bind(meta_id);
+    if let Some(start_ts) = filter.start_ts {
+        query = query.bind(start_ts);
+    }
+    if let Some(end_ts) = filter.end_ts {
+        query = query.bind(end_ts);
+    }
+
+    let mut rows = query
+        .fetch_all(&*pool)
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?;
+    rows.sort_by(|a, b| {
+        b.message_count
+            .cmp(&a.message_count)
+            .then_with(|| b.active_days.cmp(&a.active_days))
+            .then_with(|| a.member_id.cmp(&b.member_id))
+    });
+
+    let total_messages = rows.iter().map(|r| r.message_count).sum::<i64>();
+    let leaderboard = rows
+        .iter()
+        .enumerate()
+        .map(|(idx, row)| {
+            let contribution = if total_messages > 0 {
+                row.message_count as f64 / total_messages as f64 * 100.0
+            } else {
+                0.0
+            };
+            serde_json::json!({
+                "rank": idx as i64 + 1,
+                "memberId": row.member_id,
+                "platformId": row.platform_id,
+                "name": row.name,
+                "messageCount": row.message_count,
+                "activeDays": row.active_days,
+                "contribution": contribution
+            })
+        })
+        .collect::<Vec<_>>();
+
+    let dragon_king = leaderboard.first().cloned().unwrap_or(serde_json::Value::Null);
+    Ok(Json(serde_json::json!({
+        "dragonKing": dragon_king,
+        "leaderboard": leaderboard,
+        "stats": {
+            "totalMessages": total_messages,
+            "memberCount": rows.len() as i64
+        }
+    })))
+}
+
+#[instrument]
+async fn get_lurker_analysis(
+    Path(session_id): Path<String>,
+    Query(filter): Query<TimeFilter>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let meta_id = session_id
+        .parse::<i64>()
+        .map_err(|_| ApiError::InvalidRequest("Invalid session ID".to_string()))?;
+    let pool = crate::database::get_pool()
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?;
+
+    #[derive(Debug, sqlx::FromRow)]
+    struct LurkerRow {
+        member_id: i64,
+        platform_id: String,
+        name: String,
+        message_count: i64,
+        last_ts: i64,
+    }
+
+    let mut query_sql = String::from(
+        r#"
+        SELECT
+            m.id as member_id,
+            m.platform_id as platform_id,
+            COALESCE(m.group_nickname, m.account_name, m.platform_id) as name,
+            COUNT(*) as message_count,
+            MAX(msg.ts) as last_ts
+        FROM message msg
+        JOIN member m ON msg.sender_id = m.id
+        WHERE msg.meta_id = ?1
+          AND COALESCE(m.account_name, '') != '系统消息'
+        "#,
+    );
+    if filter.start_ts.is_some() {
+        query_sql.push_str(" AND msg.ts >= ?");
+    }
+    if filter.end_ts.is_some() {
+        query_sql.push_str(" AND msg.ts <= ?");
+    }
+    query_sql.push_str(
+        " GROUP BY m.id, m.platform_id, COALESCE(m.group_nickname, m.account_name, m.platform_id)",
+    );
+
+    let mut query = sqlx::query_as::<_, LurkerRow>(&query_sql).bind(meta_id);
+    if let Some(start_ts) = filter.start_ts {
+        query = query.bind(start_ts);
+    }
+    if let Some(end_ts) = filter.end_ts {
+        query = query.bind(end_ts);
+    }
+    let rows = query
+        .fetch_all(&*pool)
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?;
+
+    if rows.is_empty() {
+        return Ok(Json(serde_json::json!({
+            "lurkers": [],
+            "stats": {
+                "memberCount": 0,
+                "averageMessageCount": 0.0,
+                "lurkerThreshold": 0
+            }
+        })));
+    }
+
+    let total_messages = rows.iter().map(|r| r.message_count).sum::<i64>();
+    let average_message_count = total_messages as f64 / rows.len() as f64;
+    let lurker_threshold = (average_message_count * 0.25).ceil() as i64;
+    let lurker_threshold = lurker_threshold.max(1);
+    let latest_ts = rows.iter().map(|r| r.last_ts).max().unwrap_or(0);
+
+    let mut lurkers = rows
+        .iter()
+        .filter_map(|row| {
+            let idle_days = if latest_ts > row.last_ts {
+                (latest_ts - row.last_ts) / 86_400
+            } else {
+                0
+            };
+            let is_lurker = row.message_count <= lurker_threshold || idle_days >= 14;
+            if !is_lurker {
+                return None;
+            }
+            Some(serde_json::json!({
+                "memberId": row.member_id,
+                "platformId": row.platform_id,
+                "name": row.name,
+                "messageCount": row.message_count,
+                "idleDays": idle_days,
+                "lastActiveTs": row.last_ts,
+                "relativeActivity": if average_message_count > 0.0 {
+                    row.message_count as f64 / average_message_count
+                } else {
+                    0.0
+                }
+            }))
+        })
+        .collect::<Vec<_>>();
+
+    lurkers.sort_by(|a, b| {
+        let ac = a.get("messageCount").and_then(|v| v.as_i64()).unwrap_or(0);
+        let bc = b.get("messageCount").and_then(|v| v.as_i64()).unwrap_or(0);
+        let ai = a.get("idleDays").and_then(|v| v.as_i64()).unwrap_or(0);
+        let bi = b.get("idleDays").and_then(|v| v.as_i64()).unwrap_or(0);
+        ac.cmp(&bc)
+            .then_with(|| bi.cmp(&ai))
+            .then_with(|| {
+                let an = a.get("memberId").and_then(|v| v.as_i64()).unwrap_or(0);
+                let bn = b.get("memberId").and_then(|v| v.as_i64()).unwrap_or(0);
+                an.cmp(&bn)
+            })
+    });
+
+    Ok(Json(serde_json::json!({
+        "lurkers": lurkers,
+        "stats": {
+            "memberCount": rows.len() as i64,
+            "totalMessages": total_messages,
+            "averageMessageCount": average_message_count,
+            "lurkerThreshold": lurker_threshold
+        }
+    })))
+}
+
+#[instrument]
+async fn get_checkin_analysis(
+    Path(session_id): Path<String>,
+    Query(filter): Query<TimeFilter>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let meta_id = session_id
+        .parse::<i64>()
+        .map_err(|_| ApiError::InvalidRequest("Invalid session ID".to_string()))?;
+    let pool = crate::database::get_pool()
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?;
+
+    #[derive(Debug, sqlx::FromRow)]
+    struct CheckinRow {
+        member_id: i64,
+        platform_id: String,
+        name: String,
+        message_count: i64,
+        active_days: i64,
+        first_ts: i64,
+        last_ts: i64,
+    }
+
+    let mut query_sql = String::from(
+        r#"
+        SELECT
+            m.id as member_id,
+            m.platform_id as platform_id,
+            COALESCE(m.group_nickname, m.account_name, m.platform_id) as name,
+            COUNT(*) as message_count,
+            COUNT(DISTINCT date(datetime(msg.ts, 'unixepoch', 'localtime'))) as active_days,
+            MIN(msg.ts) as first_ts,
+            MAX(msg.ts) as last_ts
+        FROM message msg
+        JOIN member m ON msg.sender_id = m.id
+        WHERE msg.meta_id = ?1
+          AND COALESCE(m.account_name, '') != '系统消息'
+        "#,
+    );
+    if filter.start_ts.is_some() {
+        query_sql.push_str(" AND msg.ts >= ?");
+    }
+    if filter.end_ts.is_some() {
+        query_sql.push_str(" AND msg.ts <= ?");
+    }
+    query_sql.push_str(
+        " GROUP BY m.id, m.platform_id, COALESCE(m.group_nickname, m.account_name, m.platform_id)",
+    );
+
+    let mut query = sqlx::query_as::<_, CheckinRow>(&query_sql).bind(meta_id);
+    if let Some(start_ts) = filter.start_ts {
+        query = query.bind(start_ts);
+    }
+    if let Some(end_ts) = filter.end_ts {
+        query = query.bind(end_ts);
+    }
+    let rows = query
+        .fetch_all(&*pool)
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?;
+
+    let mut leaderboard = rows
+        .iter()
+        .filter(|row| row.message_count >= 3)
+        .map(|row| {
+            let span_days = ((row.last_ts - row.first_ts) / 86_400).max(0) + 1;
+            let checkin_rate = if span_days > 0 {
+                row.active_days as f64 / span_days as f64 * 100.0
+            } else {
+                0.0
+            };
+            serde_json::json!({
+                "memberId": row.member_id,
+                "platformId": row.platform_id,
+                "name": row.name,
+                "messageCount": row.message_count,
+                "activeDays": row.active_days,
+                "spanDays": span_days,
+                "checkinRate": checkin_rate,
+                "firstTs": row.first_ts,
+                "lastTs": row.last_ts
+            })
+        })
+        .collect::<Vec<_>>();
+    leaderboard.sort_by(|a, b| {
+        let ar = a.get("checkinRate").and_then(|v| v.as_f64()).unwrap_or(0.0);
+        let br = b.get("checkinRate").and_then(|v| v.as_f64()).unwrap_or(0.0);
+        let ad = a.get("activeDays").and_then(|v| v.as_i64()).unwrap_or(0);
+        let bd = b.get("activeDays").and_then(|v| v.as_i64()).unwrap_or(0);
+        br.total_cmp(&ar).then_with(|| bd.cmp(&ad))
+    });
+
+    #[derive(Debug, sqlx::FromRow)]
+    struct WeekdayRow {
+        weekday: String,
+        message_count: i64,
+    }
+    let mut weekday_sql = String::from(
+        r#"
+        SELECT
+            strftime('%w', datetime(msg.ts, 'unixepoch', 'localtime')) as weekday,
+            COUNT(*) as message_count
+        FROM message msg
+        JOIN member m ON msg.sender_id = m.id
+        WHERE msg.meta_id = ?1
+          AND COALESCE(m.account_name, '') != '系统消息'
+        "#,
+    );
+    if filter.start_ts.is_some() {
+        weekday_sql.push_str(" AND msg.ts >= ?");
+    }
+    if filter.end_ts.is_some() {
+        weekday_sql.push_str(" AND msg.ts <= ?");
+    }
+    weekday_sql.push_str(" GROUP BY strftime('%w', datetime(msg.ts, 'unixepoch', 'localtime'))");
+    let mut weekday_query = sqlx::query_as::<_, WeekdayRow>(&weekday_sql).bind(meta_id);
+    if let Some(start_ts) = filter.start_ts {
+        weekday_query = weekday_query.bind(start_ts);
+    }
+    if let Some(end_ts) = filter.end_ts {
+        weekday_query = weekday_query.bind(end_ts);
+    }
+    let weekday_rows = weekday_query
+        .fetch_all(&*pool)
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?;
+    let weekday_distribution = weekday_rows
+        .into_iter()
+        .map(|row| {
+            let weekday = row.weekday.parse::<i64>().unwrap_or(0);
+            serde_json::json!({
+                "weekday": weekday,
+                "messageCount": row.message_count
+            })
+        })
+        .collect::<Vec<_>>();
+
+    Ok(Json(serde_json::json!({
+        "leaderboard": leaderboard,
+        "weekdayDistribution": weekday_distribution,
+        "stats": {
+            "memberCount": rows.len() as i64,
+            "qualifiedMemberCount": leaderboard.len() as i64
+        }
+    })))
+}
+
+fn normalize_repeat_content(content: &str) -> String {
+    let mut normalized = String::with_capacity(content.len());
+    let mut last_space = false;
+    for ch in content.trim().chars() {
+        let c = if ch.is_whitespace() { ' ' } else { ch };
+        if c == ' ' {
+            if !last_space {
+                normalized.push(c);
+                last_space = true;
+            }
+        } else {
+            normalized.extend(c.to_lowercase());
+            last_space = false;
+        }
+    }
+    normalized.trim().to_string()
+}
+
+#[instrument]
+async fn get_repeat_analysis(
+    Path(session_id): Path<String>,
+    Query(filter): Query<TimeFilter>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let meta_id = session_id
+        .parse::<i64>()
+        .map_err(|_| ApiError::InvalidRequest("Invalid session ID".to_string()))?;
+    let pool = crate::database::get_pool()
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?;
+
+    #[derive(Debug, sqlx::FromRow)]
+    struct RepeatRow {
+        id: i64,
+        ts: i64,
+        sender_platform_id: String,
+        sender_name: String,
+        content: Option<String>,
+    }
+
+    let mut query_sql = String::from(
+        r#"
+        SELECT
+            msg.id as id,
+            msg.ts as ts,
+            m.platform_id as sender_platform_id,
+            COALESCE(m.group_nickname, m.account_name, m.platform_id) as sender_name,
+            msg.content as content
+        FROM message msg
+        JOIN member m ON msg.sender_id = m.id
+        WHERE msg.meta_id = ?1
+          AND msg.msg_type = 0
+          AND COALESCE(m.account_name, '') != '系统消息'
+        "#,
+    );
+    if filter.start_ts.is_some() {
+        query_sql.push_str(" AND msg.ts >= ?");
+    }
+    if filter.end_ts.is_some() {
+        query_sql.push_str(" AND msg.ts <= ?");
+    }
+    query_sql.push_str(" ORDER BY msg.ts ASC, msg.id ASC");
+
+    let mut query = sqlx::query_as::<_, RepeatRow>(&query_sql).bind(meta_id);
+    if let Some(start_ts) = filter.start_ts {
+        query = query.bind(start_ts);
+    }
+    if let Some(end_ts) = filter.end_ts {
+        query = query.bind(end_ts);
+    }
+    let rows = query
+        .fetch_all(&*pool)
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?;
+
+    #[derive(Debug, Default)]
+    struct PhraseAgg {
+        occurrences: i64,
+        total_messages_in_runs: i64,
+        max_chain_len: i64,
+        participants: HashSet<String>,
+    }
+
+    let mut phrase_agg: HashMap<String, PhraseAgg> = HashMap::new();
+    let mut runs: Vec<serde_json::Value> = Vec::new();
+
+    let mut current_phrase = String::new();
+    let mut current_start_ts = 0i64;
+    let mut current_end_ts = 0i64;
+    let mut current_len = 0i64;
+    let mut current_last_ts = 0i64;
+    let mut current_participants: HashSet<String> = HashSet::new();
+    let mut current_names: HashSet<String> = HashSet::new();
+
+    let mut finalize_current = |phrase: &str,
+                                start_ts: i64,
+                                end_ts: i64,
+                                chain_len: i64,
+                                participants: &HashSet<String>,
+                                participant_names: &HashSet<String>| {
+        if phrase.is_empty() || chain_len < 2 || participants.len() < 2 {
+            return;
+        }
+        let entry = phrase_agg.entry(phrase.to_string()).or_default();
+        entry.occurrences += 1;
+        entry.total_messages_in_runs += chain_len;
+        entry.max_chain_len = entry.max_chain_len.max(chain_len);
+        for participant in participants {
+            entry.participants.insert(participant.clone());
+        }
+        runs.push(serde_json::json!({
+            "phrase": phrase,
+            "startTs": start_ts,
+            "endTs": end_ts,
+            "chainLength": chain_len,
+            "participantCount": participants.len() as i64,
+            "participants": participant_names.iter().cloned().collect::<Vec<_>>()
+        }));
+    };
+
+    for row in rows.iter() {
+        let raw_content = row.content.as_deref().unwrap_or_default();
+        let normalized = normalize_repeat_content(raw_content);
+        if normalized.len() < 2 || normalized.len() > 120 {
+            finalize_current(
+                &current_phrase,
+                current_start_ts,
+                current_end_ts,
+                current_len,
+                &current_participants,
+                &current_names,
+            );
+            current_phrase.clear();
+            current_participants.clear();
+            current_names.clear();
+            current_len = 0;
+            continue;
+        }
+
+        let joins_current = !current_phrase.is_empty()
+            && normalized == current_phrase
+            && (row.ts - current_last_ts).abs() <= 300;
+        if joins_current {
+            current_len += 1;
+            current_end_ts = row.ts;
+            current_last_ts = row.ts;
+            current_participants.insert(row.sender_platform_id.clone());
+            current_names.insert(row.sender_name.clone());
+            continue;
+        }
+
+        finalize_current(
+            &current_phrase,
+            current_start_ts,
+            current_end_ts,
+            current_len,
+            &current_participants,
+            &current_names,
+        );
+        current_phrase = normalized;
+        current_start_ts = row.ts;
+        current_end_ts = row.ts;
+        current_last_ts = row.ts;
+        current_len = 1;
+        current_participants.clear();
+        current_names.clear();
+        current_participants.insert(row.sender_platform_id.clone());
+        current_names.insert(row.sender_name.clone());
+    }
+    finalize_current(
+        &current_phrase,
+        current_start_ts,
+        current_end_ts,
+        current_len,
+        &current_participants,
+        &current_names,
+    );
+
+    let mut phrases = phrase_agg
+        .into_iter()
+        .map(|(phrase, agg)| {
+            serde_json::json!({
+                "phrase": phrase,
+                "occurrences": agg.occurrences,
+                "totalMessagesInRuns": agg.total_messages_in_runs,
+                "maxChainLength": agg.max_chain_len,
+                "participantCount": agg.participants.len() as i64
+            })
+        })
+        .collect::<Vec<_>>();
+    phrases.sort_by(|a, b| {
+        let at = a
+            .get("totalMessagesInRuns")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0);
+        let bt = b
+            .get("totalMessagesInRuns")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0);
+        let ao = a.get("occurrences").and_then(|v| v.as_i64()).unwrap_or(0);
+        let bo = b.get("occurrences").and_then(|v| v.as_i64()).unwrap_or(0);
+        bt.cmp(&at).then_with(|| bo.cmp(&ao))
+    });
+
+    runs.sort_by(|a, b| {
+        let al = a.get("chainLength").and_then(|v| v.as_i64()).unwrap_or(0);
+        let bl = b.get("chainLength").and_then(|v| v.as_i64()).unwrap_or(0);
+        bl.cmp(&al)
+    });
+
+    Ok(Json(serde_json::json!({
+        "phrases": phrases,
+        "runs": runs,
+        "stats": {
+            "scannedMessages": rows.len() as i64,
+            "repeatingPhraseCount": phrases.len() as i64,
+            "repeatingRunCount": runs.len() as i64
+        }
+    })))
+}
+
+#[instrument]
 async fn get_members(
     Path(session_id): Path<String>,
 ) -> Result<Json<Vec<MemberResponse>>, ApiError> {
@@ -3346,7 +4255,7 @@ async fn get_members(
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
 
-    // 直接查询会话中的成员
+    // English engineering note.
     let query = r#"
         SELECT DISTINCT
             m.id,
@@ -3379,7 +4288,7 @@ async fn get_members(
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
 
-    // 转换aliases字段从JSON字符串到Vec<String>
+    // English engineering note.
     let members: Vec<MemberResponse> = rows
         .into_iter()
         .map(|row| {
@@ -3833,6 +4742,167 @@ struct ExecuteSqlRequest {
     sql: String,
 }
 
+fn strip_sql_literals_and_comments_for_validation(sql: &str) -> String {
+    #[derive(Copy, Clone, Eq, PartialEq)]
+    enum State {
+        Normal,
+        SingleQuote,
+        DoubleQuote,
+        BacktickQuote,
+        LineComment,
+        BlockComment,
+    }
+
+    let chars: Vec<char> = sql.chars().collect();
+    let mut out = String::with_capacity(chars.len());
+    let mut i = 0usize;
+    let mut state = State::Normal;
+    while i < chars.len() {
+        let ch = chars[i];
+        let next = chars.get(i + 1).copied();
+        match state {
+            State::Normal => {
+                if ch == '\'' {
+                    state = State::SingleQuote;
+                    i += 1;
+                    continue;
+                }
+                if ch == '"' {
+                    state = State::DoubleQuote;
+                    i += 1;
+                    continue;
+                }
+                if ch == '`' {
+                    state = State::BacktickQuote;
+                    i += 1;
+                    continue;
+                }
+                if ch == '-' && next == Some('-') {
+                    state = State::LineComment;
+                    i += 2;
+                    continue;
+                }
+                if ch == '/' && next == Some('*') {
+                    state = State::BlockComment;
+                    i += 2;
+                    continue;
+                }
+                out.push(ch);
+                i += 1;
+            }
+            State::SingleQuote => {
+                if ch == '\'' {
+                    if next == Some('\'') {
+                        i += 2;
+                        continue;
+                    }
+                    state = State::Normal;
+                }
+                i += 1;
+            }
+            State::DoubleQuote => {
+                if ch == '"' {
+                    if next == Some('"') {
+                        i += 2;
+                        continue;
+                    }
+                    state = State::Normal;
+                }
+                i += 1;
+            }
+            State::BacktickQuote => {
+                if ch == '`' {
+                    state = State::Normal;
+                }
+                i += 1;
+            }
+            State::LineComment => {
+                if ch == '\n' {
+                    out.push(' ');
+                    state = State::Normal;
+                }
+                i += 1;
+            }
+            State::BlockComment => {
+                if ch == '*' && next == Some('/') {
+                    out.push(' ');
+                    state = State::Normal;
+                    i += 2;
+                } else {
+                    i += 1;
+                }
+            }
+        }
+    }
+    out
+}
+
+fn validate_read_only_sql(sql: &str) -> Result<(), ApiError> {
+    let trimmed = sql.trim();
+    if trimmed.is_empty() {
+        return Err(ApiError::InvalidRequest(
+            "SQL query cannot be empty".to_string(),
+        ));
+    }
+
+    let no_trailing_semicolon = trimmed.trim_end_matches(';').trim_end();
+    if no_trailing_semicolon.contains(';') {
+        return Err(ApiError::InvalidRequest(
+            "Multiple SQL statements are not allowed".to_string(),
+        ));
+    }
+
+    let cleaned = strip_sql_literals_and_comments_for_validation(no_trailing_semicolon);
+    let tokens = cleaned
+        .split(|c: char| !c.is_ascii_alphanumeric() && c != '_')
+        .filter(|part| !part.is_empty())
+        .map(|part| part.to_ascii_uppercase())
+        .collect::<Vec<_>>();
+    if tokens.is_empty() {
+        return Err(ApiError::InvalidRequest(
+            "Only SELECT statements are allowed".to_string(),
+        ));
+    }
+
+    let first = tokens[0].as_str();
+    if first != "SELECT" && first != "WITH" {
+        return Err(ApiError::InvalidRequest(
+            "Only SELECT statements are allowed".to_string(),
+        ));
+    }
+    if first == "WITH" && !tokens.iter().any(|t| t == "SELECT") {
+        return Err(ApiError::InvalidRequest(
+            "CTE query must contain SELECT".to_string(),
+        ));
+    }
+
+    const FORBIDDEN: &[&str] = &[
+        "INSERT",
+        "UPDATE",
+        "DELETE",
+        "DROP",
+        "ALTER",
+        "CREATE",
+        "REPLACE",
+        "ATTACH",
+        "DETACH",
+        "VACUUM",
+        "PRAGMA",
+        "BEGIN",
+        "COMMIT",
+        "ROLLBACK",
+        "SAVEPOINT",
+        "RELEASE",
+        "TRUNCATE",
+    ];
+    if tokens.iter().any(|token| FORBIDDEN.contains(&token.as_str())) {
+        return Err(ApiError::InvalidRequest(
+            "Only read-only SELECT queries are allowed".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 #[instrument]
 async fn execute_sql(
     Path(session_id): Path<String>,
@@ -3840,12 +4910,7 @@ async fn execute_sql(
 ) -> Result<Json<serde_json::Value>, ApiError> {
     // 1) Parse and validate input SQL
     let sql = req.sql.trim().to_string();
-    let sql_upper = sql.to_ascii_uppercase();
-    if !sql_upper.starts_with("SELECT") {
-        return Err(ApiError::InvalidRequest(
-            "Only SELECT statements are allowed".to_string(),
-        ));
-    }
+    validate_read_only_sql(&sql)?;
 
     // 2) Parse meta_id from session_id
     let _meta_id: i64 = match session_id.parse::<i64>() {
@@ -3978,8 +5043,12 @@ async fn get_schema(Path(_session_id): Path<String>) -> Result<Json<serde_json::
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct AnalyzeIncrementalImportRequest {
+    #[serde(alias = "file_path")]
     file_path: String,
+    #[serde(default, alias = "expected_fingerprint")]
+    expected_fingerprint: Option<String>,
 }
 
 #[instrument]
@@ -3990,13 +5059,28 @@ async fn analyze_incremental_import(
     let meta_id = session_id
         .parse::<i64>()
         .map_err(|_| ApiError::InvalidRequest("Invalid session ID".to_string()))?;
-    let source_fingerprint = build_source_checkpoint_fingerprint(&req.file_path)?;
-    let source_kind = format!("api-incremental-{}", meta_id);
 
     let pool = crate::database::get_pool()
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
     let repo = crate::database::Repository::new(pool.clone());
+    let session_exists = repo
+        .get_chat(meta_id)
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?
+        .is_some();
+    if !session_exists {
+        return Ok(Json(serde_json::json!({
+            "success": false,
+            "error": "error.session_not_found",
+            "newMessageCount": 0,
+            "duplicateCount": 0,
+            "totalInFile": 0,
+        })));
+    }
+
+    let source_fingerprint = build_source_checkpoint_fingerprint(&req.file_path)?;
+    let source_kind = format!("api-incremental-{}", meta_id);
     let unchanged = repo
         .source_checkpoint_is_unchanged(
             source_kind.as_str(),
@@ -4006,11 +5090,20 @@ async fn analyze_incremental_import(
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
     if unchanged {
+        let checkpoint = repo
+            .get_import_source_checkpoint(source_kind.as_str(), req.file_path.as_str())
+            .await
+            .map_err(|e| ApiError::Database(e.to_string()))?;
         return Ok(Json(serde_json::json!({
+            "success": true,
+            "sessionId": meta_id.to_string(),
             "newMessageCount": 0,
             "duplicateCount": 0,
             "totalInFile": 0,
-            "checkpointSkipped": true
+            "checkpointSkipped": true,
+            "sourceFingerprint": source_fingerprint.fingerprint,
+            "checkpointMeta": checkpoint_meta_json(&source_fingerprint),
+            "lastCheckpoint": checkpoint_state_json(checkpoint),
         })));
     }
 
@@ -4032,10 +5125,14 @@ async fn analyze_incremental_import(
             )
             .await;
             return Ok(Json(serde_json::json!({
+                "success": false,
+                "sessionId": meta_id.to_string(),
                 "error": "error.unrecognized_format",
                 "newMessageCount": 0,
                 "duplicateCount": 0,
-                "totalInFile": 0
+                "totalInFile": 0,
+                "sourceFingerprint": source_fingerprint.fingerprint,
+                "checkpointMeta": checkpoint_meta_json(&source_fingerprint),
             })));
         }
     };
@@ -4092,9 +5189,13 @@ async fn analyze_incremental_import(
     }
 
     Ok(Json(serde_json::json!({
+        "success": true,
+        "sessionId": meta_id.to_string(),
         "newMessageCount": new_count,
         "duplicateCount": duplicate_count,
-        "totalInFile": stats.messages_received
+        "totalInFile": stats.messages_received,
+        "sourceFingerprint": source_fingerprint.fingerprint,
+        "checkpointMeta": checkpoint_meta_json(&source_fingerprint),
     })))
 }
 
@@ -4125,6 +5226,18 @@ async fn incremental_import(
     }
     let source_kind = format!("api-incremental-{}", meta_id);
     let source_fingerprint = build_source_checkpoint_fingerprint(&req.file_path)?;
+    if let Some(expected_fingerprint) = req.expected_fingerprint.as_ref() {
+        if expected_fingerprint != &source_fingerprint.fingerprint {
+            return Ok(Json(serde_json::json!({
+                "success": false,
+                "sessionId": meta_id.to_string(),
+                "error": "error.source_changed_since_analyze",
+                "expectedFingerprint": expected_fingerprint,
+                "sourceFingerprint": source_fingerprint.fingerprint,
+                "checkpointMeta": checkpoint_meta_json(&source_fingerprint),
+            })));
+        }
+    }
     let checkpoint_unchanged = repo
         .source_checkpoint_is_unchanged(
             source_kind.as_str(),
@@ -4134,12 +5247,20 @@ async fn incremental_import(
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
     if checkpoint_unchanged {
+        let checkpoint = repo
+            .get_import_source_checkpoint(source_kind.as_str(), req.file_path.as_str())
+            .await
+            .map_err(|e| ApiError::Database(e.to_string()))?;
         return Ok(Json(serde_json::json!({
             "success": true,
+            "sessionId": meta_id.to_string(),
             "newMessageCount": 0,
             "duplicateCount": 0,
             "totalInFile": 0,
-            "checkpointSkipped": true
+            "checkpointSkipped": true,
+            "sourceFingerprint": source_fingerprint.fingerprint,
+            "checkpointMeta": checkpoint_meta_json(&source_fingerprint),
+            "lastCheckpoint": checkpoint_state_json(checkpoint),
         })));
     }
 
@@ -4178,7 +5299,10 @@ async fn incremental_import(
             .await;
             return Ok(Json(serde_json::json!({
                 "success": false,
-                "error": "error.unrecognized_format"
+                "sessionId": meta_id.to_string(),
+                "error": "error.unrecognized_format",
+                "sourceFingerprint": source_fingerprint.fingerprint,
+                "checkpointMeta": checkpoint_meta_json(&source_fingerprint),
             })));
         }
     };
@@ -4201,7 +5325,10 @@ async fn incremental_import(
         .await;
         return Ok(Json(serde_json::json!({
             "success": false,
-            "error": "error.no_messages"
+            "sessionId": meta_id.to_string(),
+            "error": "error.no_messages",
+            "sourceFingerprint": source_fingerprint.fingerprint,
+            "checkpointMeta": checkpoint_meta_json(&source_fingerprint),
         })));
     }
 
@@ -4371,9 +5498,12 @@ async fn incremental_import(
 
     Ok(Json(serde_json::json!({
         "success": true,
+        "sessionId": meta_id.to_string(),
         "newMessageCount": new_count,
         "duplicateCount": duplicate_count,
         "totalInFile": stats.messages_received,
+        "sourceFingerprint": source_fingerprint.fingerprint,
+        "checkpointMeta": checkpoint_meta_json(&source_fingerprint),
         "webhookSummary": webhook_stats
     })))
 }
@@ -4637,4 +5767,38 @@ async fn import_progress_sse() -> Sse<impl stream::Stream<Item = Result<Event, I
             .interval(Duration::from_secs(15))
             .text("keep-alive"),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_read_only_sql;
+
+    #[test]
+    fn validate_read_only_sql_accepts_select_and_with_queries() {
+        assert!(validate_read_only_sql("SELECT id, content FROM message LIMIT 10").is_ok());
+        assert!(
+            validate_read_only_sql(
+                "WITH recent AS (SELECT id FROM message ORDER BY id DESC LIMIT 5) SELECT * FROM recent"
+            )
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn validate_read_only_sql_rejects_mutation_and_multiple_statements() {
+        assert!(validate_read_only_sql("DELETE FROM message").is_err());
+        assert!(validate_read_only_sql("SELECT 1; DROP TABLE message").is_err());
+        assert!(validate_read_only_sql("SELECT 1; SELECT 2").is_err());
+    }
+
+    #[test]
+    fn validate_read_only_sql_ignores_keywords_inside_literals_and_comments() {
+        assert!(validate_read_only_sql("SELECT 'drop table users' AS txt").is_ok());
+        assert!(
+            validate_read_only_sql(
+                "SELECT 1 -- DELETE FROM message\nFROM (SELECT 1 AS v) t"
+            )
+            .is_ok()
+        );
+    }
 }

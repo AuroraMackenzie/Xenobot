@@ -11,25 +11,25 @@ const props = defineProps<{
   sessionId: string
 }>()
 
-// 组件引用
+// English engineering note.
 const schemaPanelRef = ref<InstanceType<typeof SchemaPanel> | null>(null)
 const resultTableRef = ref<InstanceType<typeof ResultTable> | null>(null)
 
-// 状态
+// English engineering note.
 const sql = ref('SELECT * FROM message LIMIT 10')
 const isExecuting = ref(false)
 const error = ref<string | null>(null)
 const result = ref<SQLResult | null>(null)
-const lastPrompt = ref('') // 记录最后使用的 AI 提示词
+const lastPrompt = ref('') // English engineering note.
 
-// 弹窗状态
+// English engineering note.
 const showAIModal = ref(false)
 const showHistoryModal = ref(false)
 
-// AI 历史记录
+// English engineering note.
 const aiHistory = ref<AIHistory[]>([])
 
-// 加载历史记录
+// English engineering note.
 function loadHistory() {
   try {
     const key = `sql-lab-history-${props.sessionId}`
@@ -42,7 +42,7 @@ function loadHistory() {
   }
 }
 
-// 保存历史记录
+// English engineering note.
 function saveHistory() {
   try {
     const key = `sql-lab-history-${props.sessionId}`
@@ -52,7 +52,7 @@ function saveHistory() {
   }
 }
 
-// 添加到历史记录
+// English engineering note.
 function addToHistory(prompt: string, sqlStr: string, explanation: string) {
   const record: AIHistory = {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -68,13 +68,13 @@ function addToHistory(prompt: string, sqlStr: string, explanation: string) {
   saveHistory()
 }
 
-// 删除历史记录
+// English engineering note.
 function deleteHistory(id: string) {
   aiHistory.value = aiHistory.value.filter((r) => r.id !== id)
   saveHistory()
 }
 
-// 执行 SQL
+// English engineering note.
 async function executeSQL() {
   if (!sql.value.trim()) {
     error.value = t('ai.sqlLab.editor.errorEmptySQL')
@@ -95,7 +95,7 @@ async function executeSQL() {
   }
 }
 
-// 处理快捷键
+// English engineering note.
 function handleKeyDown(event: KeyboardEvent) {
   if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
     event.preventDefault()
@@ -103,40 +103,40 @@ function handleKeyDown(event: KeyboardEvent) {
   }
 }
 
-// 处理列名插入
+// English engineering note.
 function handleInsertColumn(tableName: string, columnName: string) {
   sql.value += `${tableName}.${columnName}`
 }
 
-// 处理 AI 生成成功
+// English engineering note.
 function handleAIGenerated(generatedSql: string, explanation: string, prompt: string) {
   addToHistory(prompt, generatedSql, explanation)
-  lastPrompt.value = prompt // 记录提示词
+  lastPrompt.value = prompt // English engineering note.
 }
 
-// 处理使用 SQL
+// English engineering note.
 function handleUseSQL(generatedSql: string) {
   sql.value = generatedSql
 }
 
-// 处理运行 SQL
+// English engineering note.
 async function handleRunSQL(generatedSql: string) {
   sql.value = generatedSql
   await executeSQL()
 }
 
-// 从历史记录执行
+// English engineering note.
 async function executeFromHistory(record: AIHistory) {
   sql.value = record.sql
-  lastPrompt.value = record.prompt // 记录历史的提示词
+  lastPrompt.value = record.prompt // English engineering note.
   showHistoryModal.value = false
   await executeSQL()
 }
 
-// 获取 schema
+// English engineering note.
 const schema = ref<TableSchema[]>([])
 
-// 监听 schema 加载完成
+// English engineering note.
 function onSchemaLoaded() {
   if (schemaPanelRef.value) {
     schema.value = schemaPanelRef.value.schema
@@ -145,22 +145,22 @@ function onSchemaLoaded() {
 
 onMounted(() => {
   loadHistory()
-  // 延迟获取 schema
+  // English engineering note.
   setTimeout(onSchemaLoaded, 500)
 })
 </script>
 
 <template>
   <div class="main-content flex h-full">
-    <!-- Schema 面板 -->
+    <!-- English UI note -->
     <SchemaPanel ref="schemaPanelRef" :session-id="sessionId" @insert-column="handleInsertColumn" />
 
-    <!-- 主内容区 -->
+    <!-- English UI note -->
     <div class="flex flex-1 flex-col overflow-hidden">
-      <!-- SQL 编辑器区域 -->
+      <!-- English UI note -->
       <div class="flex flex-col border-b border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-950">
         <div class="mx-auto w-full max-w-3xl">
-          <!-- 编辑器 -->
+          <!-- English UI note -->
           <textarea
             v-model="sql"
             class="h-32 w-full resize-none rounded-lg border border-gray-300 bg-white p-3 font-mono text-sm text-gray-800 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
@@ -169,7 +169,7 @@ onMounted(() => {
             @keydown="handleKeyDown"
           />
 
-          <!-- 工具栏 -->
+          <!-- English UI note -->
           <div class="mt-3 flex items-center justify-between">
             <div class="flex items-center gap-2">
               <span class="text-xs text-gray-400">{{ t('ai.sqlLab.editor.tip') }}</span>
@@ -194,11 +194,11 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- 结果区域 -->
+      <!-- English UI note -->
       <ResultTable ref="resultTableRef" :result="result" :error="error" :sql="sql" :prompt="lastPrompt" />
     </div>
 
-    <!-- AI 生成弹窗 -->
+    <!-- English UI note -->
     <AIGenerateModal
       v-model:open="showAIModal"
       :schema="schemaPanelRef?.schema || []"
@@ -207,7 +207,7 @@ onMounted(() => {
       @run-s-q-l="handleRunSQL"
     />
 
-    <!-- 历史记录弹窗 -->
+    <!-- English UI note -->
     <AIHistoryModal
       v-model:open="showHistoryModal"
       :history="aiHistory"

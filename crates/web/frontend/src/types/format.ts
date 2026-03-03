@@ -1,70 +1,70 @@
 /**
- * Xenobot 格式类型定义
- * 包含：Xenobot 专属格式、合并相关、聊天记录查看器
+ * Xenobot format contracts.
+ * Covers native export format, merge workflow types, and chat viewer models.
  */
 
 import type { ChatPlatform, ChatType, MessageType, MemberRole } from './base'
 
-// ==================== Xenobot 专属格式类型 ====================
+// ==================== Xenobot native format ====================
 
 /**
- * Xenobot 格式版本信息
+ * Header metadata for a Xenobot export.
  */
 export interface XenobotHeader {
-  version: string // 格式版本，如 "0.0.1"
-  exportedAt: number // 导出时间戳（秒）
-  generator?: string // 生成工具名称（可选）
-  description?: string // 描述信息（可选，自定义内容）
+  version: string // Format version, for example "0.0.1"
+  exportedAt: number // Export timestamp (unix seconds)
+  generator?: string // Generator tool name
+  description?: string // Optional user-facing description
 }
 
 /**
- * 合并来源信息
+ * Source metadata when multiple files are merged.
  */
 export interface MergeSource {
-  filename: string // 原文件名
-  platform?: string // 原平台
-  messageCount: number // 消息数量
+  filename: string // Original file name
+  platform?: string // Source platform label
+  messageCount: number // Number of messages from this source
 }
 
 /**
- * Xenobot 格式的元信息
+ * Core chat metadata for Xenobot format.
  */
 export interface XenobotMeta {
-  name: string // 群名/对话名
-  platform: ChatPlatform // 平台（合并时为 mixed）
-  type: ChatType // 聊天类型
-  sources?: MergeSource[] // 合并来源（可选）
-  groupId?: string // 群ID（可选，仅群聊）
-  groupAvatar?: string // 群头像（base64 Data URL，可选）
-  ownerId?: string // 所有者/导出者的 platformId（可选）
+  name: string // Group or conversation title
+  platform: ChatPlatform // Platform id (`mixed` when merged)
+  type: ChatType // Chat topology
+  sources?: MergeSource[] // Optional merged-source details
+  groupId?: string // Group identifier (group chats)
+  groupAvatar?: string // Group avatar (base64 Data URL)
+  ownerId?: string // Export owner platform id
 }
 
 /**
- * Xenobot 格式的成员
+ * Member entry for Xenobot export.
  */
 export interface XenobotMember {
-  platformId: string // 平台标识
-  accountName: string // 账号名称
-  groupNickname?: string // 群昵称（可选）
-  aliases?: string[] // 用户自定义别名（可选）
-  avatar?: string // 头像（base64 Data URL，可选）
-  roles?: MemberRole[] // 成员角色（可选，可多个）
+  platformId: string // Stable platform identity
+  accountName: string // Account display name
+  groupNickname?: string // Group nickname snapshot
+  aliases?: string[] // User-defined aliases
+  avatar?: string // Avatar as base64 Data URL
+  roles?: MemberRole[] // Role labels (can contain multiple roles)
 }
 
 /**
- * Xenobot 格式的消息
+ * Message entry for Xenobot export.
  */
 export interface XenobotMessage {
-  sender: string // 发送者 platformId
-  accountName: string // 发送时的账号名称
-  groupNickname?: string // 发送时的群昵称（可选）
-  timestamp: number // 时间戳（秒）
-  type: MessageType // 消息类型
-  content: string | null // 内容
+  sender: string // Sender platform id
+  accountName: string // Account name at send time
+  groupNickname?: string // Group nickname at send time
+  timestamp: number // Unix timestamp in seconds
+  type: MessageType // Message kind
+  content: string | null // Message payload text
 }
 
 /**
- * Xenobot 专属格式文件结构
+ * Full Xenobot export payload.
  */
 export interface XenobotFormat {
   xenobot: XenobotHeader
@@ -73,43 +73,43 @@ export interface XenobotFormat {
   messages: XenobotMessage[]
 }
 
-// ==================== 合并相关类型 ====================
+// ==================== Merge workflow models ====================
 
 /**
- * 文件解析信息（用于合并前预览）
+ * Parsed file summary used by merge preview UI.
  */
 export interface FileParseInfo {
-  name: string // 群名
-  format: string // 格式名称
-  platform: string // 平台
-  messageCount: number // 消息数量
-  memberCount: number // 成员数量
-  fileSize?: number // 文件大小（字节）
+  name: string // Conversation title
+  format: string // Parser format id
+  platform: string // Platform id
+  messageCount: number // Message count
+  memberCount: number // Member count
+  fileSize?: number // File size in bytes
 }
 
 /**
- * 合并冲突项
+ * Collision candidate detected during merge.
  */
 export interface MergeConflict {
-  id: string // 冲突ID
-  timestamp: number // 时间戳
-  sender: string // 发送者
-  contentLength1: number // 内容1长度
-  contentLength2: number // 内容2长度
-  content1: string // 内容1
-  content2: string // 内容2
+  id: string // Conflict id
+  timestamp: number // Candidate timestamp
+  sender: string // Candidate sender
+  contentLength1: number // Content length from source A
+  contentLength2: number // Content length from source B
+  content1: string // Content from source A
+  content2: string // Content from source B
 }
 
 /**
- * 冲突检测结果
+ * Merge conflict scan result.
  */
 export interface ConflictCheckResult {
   conflicts: MergeConflict[]
-  totalMessages: number // 合并后预计消息数
+  totalMessages: number // Estimated total after merge
 }
 
 /**
- * 冲突解决方案
+ * Conflict resolution instruction.
  */
 export interface ConflictResolution {
   id: string
@@ -117,72 +117,78 @@ export interface ConflictResolution {
 }
 
 /**
- * 输出格式类型
+ * Merge output format.
  */
 export type OutputFormat = 'json' | 'jsonl'
 
 /**
- * 合并参数
+ * Merge command payload.
  */
 export interface MergeParams {
   filePaths: string[]
   outputName: string
   outputDir?: string
-  outputFormat?: OutputFormat // 输出格式，默认 'json'
+  outputFormat?: OutputFormat // Output format (default: json)
   conflictResolutions: ConflictResolution[]
   andAnalyze: boolean
 }
 
 /**
- * 合并结果
+ * Merge execution result.
  */
 export interface MergeResult {
   success: boolean
   outputPath?: string
-  sessionId?: string // 如果选择了分析，返回会话ID
+  sessionId?: string // Analysis session id when `andAnalyze` is enabled
   error?: string
 }
 
-// ==================== 聊天记录查看器类型 ====================
+// ==================== Chat viewer models ====================
 
 /**
- * 聊天记录查看器查询参数
- * 支持组合查询：多个条件可同时生效
+ * Query shape used by the chat record viewer.
+ * Multiple conditions can be combined in one request.
  */
 export interface ChatRecordQuery {
-  /** 定位到指定消息（初始加载时以此消息为中心） */
+  /** Focus the initial viewport around this message id. */
   scrollToMessageId?: number
 
-  /** 成员筛选：只显示该成员的消息 */
+  /** Member filter: only include messages from the selected member. */
   memberId?: number
-  /** 成员名称（用于显示） */
+  /** Readable member label used by the UI. */
   memberName?: string
 
-  /** 时间范围筛选：开始时间戳（秒） */
+  /** Inclusive time-window start (unix seconds). */
   startTs?: number
-  /** 时间范围筛选：结束时间戳（秒） */
+  /** Inclusive time-window end (unix seconds). */
   endTs?: number
 
-  /** 关键词搜索（OR 逻辑） */
+  /** Keyword clauses, matched with OR semantics. */
   keywords?: string[]
 
-  /** 高亮关键词（用于 UI 高亮显示） */
+  /** UI-only highlight tokens for matched content. */
   highlightKeywords?: string[]
+
+  /** Search strategy for keyword-driven requests. */
+  searchMode?: 'keyword' | 'semantic'
+
+  /** Semantic similarity threshold passed to the API when enabled. */
+  semanticThreshold?: number
 }
 
 /**
- * 聊天记录查看器中的消息项
+ * Message record rendered in the chat viewer.
  */
 export interface ChatRecordMessage {
   id: number
   senderName: string
   senderPlatformId: string
   senderAliases: string[]
-  senderAvatar: string | null // 发送者头像
+  senderAvatar: string | null // Sender avatar
   content: string
   timestamp: number
   type: number
-  replyToMessageId: string | null // 回复的目标消息 ID（平台原始 ID）
-  replyToContent: string | null // 被回复消息的内容预览
-  replyToSenderName: string | null // 被回复消息的发送者名称
+  replyToMessageId: string | null // Original platform id of replied message
+  replyToContent: string | null // Preview of replied message content
+  replyToSenderName: string | null // Sender name of replied message
 }

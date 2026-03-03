@@ -15,7 +15,7 @@ interface TimeFilter {
   endTs?: number
 }
 
-// 扩展基础模板类型，添加组件内使用的字段
+// English engineering note.
 interface KeywordTemplate extends BaseKeywordTemplate {
   description?: string
   isCustom?: boolean
@@ -26,13 +26,13 @@ const props = defineProps<{
   timeFilter?: TimeFilter
 }>()
 
-// 使用提示词配置 store 管理关键词模板
+// English engineering note.
 const promptStore = usePromptStore()
 
-// 颜色模式：false = 单色，true = 多色
+// English engineering note.
 const isMultiColor = ref(false)
 
-// 单色模式颜色
+// English engineering note.
 const SINGLE_COLOR = {
   bg: 'bg-pink-400',
   text: 'text-pink-700',
@@ -40,7 +40,7 @@ const SINGLE_COLOR = {
   wrapBg: 'bg-pink-50 dark:bg-pink-900/20',
 }
 
-// 多色模式颜色池（使用完整类名以支持 Tailwind 扫描）
+// English engineering note.
 const KEYWORD_COLORS = [
   { bg: 'bg-amber-400', text: 'text-amber-700', badge: 'amber' as const, wrapBg: 'bg-amber-50 dark:bg-amber-900/20' },
   { bg: 'bg-pink-400', text: 'text-pink-700', badge: 'pink' as const, wrapBg: 'bg-pink-50 dark:bg-pink-900/20' },
@@ -62,7 +62,7 @@ const KEYWORD_COLORS = [
   },
 ]
 
-// 获取关键词对应的颜色
+// English engineering note.
 function getKeywordColor(keyword: string) {
   if (!isMultiColor.value) {
     return SINGLE_COLOR
@@ -71,7 +71,7 @@ function getKeywordColor(keyword: string) {
   return KEYWORD_COLORS[index % KEYWORD_COLORS.length]
 }
 
-// 预设模板（使用计算属性以支持国际化）
+// English engineering note.
 const PRESET_TEMPLATE_IDS = ['laugh', 'sad', 'praise', 'slacker', 'gossip', 'polite', 'curious'] as const
 
 const PRESET_TEMPLATES = computed<KeywordTemplate[]>(() => [
@@ -119,24 +119,24 @@ const PRESET_TEMPLATES = computed<KeywordTemplate[]>(() => [
   },
 ])
 
-// 合并预设和自定义模板
+// English engineering note.
 const allTemplates = computed<KeywordTemplate[]>(() => {
   const custom = promptStore.customKeywordTemplates.map((tpl) => ({
     ...tpl,
     isCustom: true,
   }))
-  // 过滤掉已删除的预设模板
+  // English engineering note.
   const activePresets = PRESET_TEMPLATES.value.filter((tpl) => !promptStore.deletedPresetTemplateIds.includes(tpl.id))
   return [...activePresets, ...custom]
 })
 
-// 当前选中的模板
+// English engineering note.
 const selectedTemplateId = ref<string>('laugh')
 
-// 当前关键词（可编辑）- 初始化为空，将在 watch 中设置
+// English engineering note.
 const currentKeywords = ref<string[]>([])
 
-// 初始化当前关键词（基于第一个预设模板）
+// English engineering note.
 watch(
   PRESET_TEMPLATES,
   (templates) => {
@@ -147,30 +147,30 @@ watch(
   { immediate: true }
 )
 
-// 获取当前模板名称
+// English engineering note.
 const currentTemplateName = computed(() => {
   const template = allTemplates.value.find((t) => t.id === selectedTemplateId.value)
   return template ? template.name : ''
 })
 
-// 分析结果
+// English engineering note.
 const analysis = ref<LaughAnalysis | null>(null)
 const isLoading = ref(false)
 
-// 模板弹窗（创建/编辑）
+// English engineering note.
 const showTemplateModal = ref(false)
 const editingTemplateId = ref<string | null>(null)
 const templateName = ref('')
 const templateKeywords = ref<string[]>([])
 const newTemplateKeyword = ref('')
 
-// 是否编辑模式
+// English engineering note.
 const isEditMode = computed(() => editingTemplateId.value !== null)
 const modalTitle = computed(() =>
   isEditMode.value ? t('quotes.keywords.modal.editTitle') : t('quotes.keywords.modal.createTitle')
 )
 
-// 打开创建模板弹窗
+// English engineering note.
 function openCreateModal() {
   editingTemplateId.value = null
   templateName.value = ''
@@ -179,7 +179,7 @@ function openCreateModal() {
   showTemplateModal.value = true
 }
 
-// 打开编辑模板弹窗
+// English engineering note.
 function openEditModal(template: KeywordTemplate) {
   editingTemplateId.value = template.id
   templateName.value = template.name
@@ -187,7 +187,7 @@ function openEditModal(template: KeywordTemplate) {
   showTemplateModal.value = true
 }
 
-// 模板添加关键词
+// English engineering note.
 function addTemplateKeyword() {
   const trimmed = newTemplateKeyword.value.trim()
   if (trimmed && !templateKeywords.value.includes(trimmed)) {
@@ -196,31 +196,31 @@ function addTemplateKeyword() {
   newTemplateKeyword.value = ''
 }
 
-// 模板删除关键词
+// English engineering note.
 function removeTemplateKeyword(keyword: string) {
   templateKeywords.value = templateKeywords.value.filter((k) => k !== keyword)
 }
 
-// 选择模板
+// English engineering note.
 function selectTemplate(template: KeywordTemplate) {
   selectedTemplateId.value = template.id
   currentKeywords.value = [...template.keywords]
-  // 切换模板时先清空数据，触发 loading 状态
+  // English engineering note.
   analysis.value = null
   loadAnalysis()
 }
 
-// 清空所有关键词
+// English engineering note.
 function clearAllKeywords() {
   currentKeywords.value = []
   analysis.value = null
   selectedTemplateId.value = ''
 }
 
-// 当前关键词输入
+// English engineering note.
 const newKeyword = ref('')
 
-// 添加关键词
+// English engineering note.
 function addKeyword() {
   const trimmed = newKeyword.value.trim()
   if (trimmed && !currentKeywords.value.includes(trimmed)) {
@@ -230,18 +230,18 @@ function addKeyword() {
   newKeyword.value = ''
 }
 
-// 删除关键词
+// English engineering note.
 function removeKeyword(keyword: string) {
   currentKeywords.value = currentKeywords.value.filter((k) => k !== keyword)
   loadAnalysis()
 }
 
-// 判断是否为预设模板
+// English engineering note.
 function isPresetTemplate(templateId: string): boolean {
   return PRESET_TEMPLATE_IDS.includes(templateId as (typeof PRESET_TEMPLATE_IDS)[number])
 }
 
-// 保存模板（创建或更新）
+// English engineering note.
 function saveTemplate() {
   if (!templateName.value.trim()) return
 
@@ -281,7 +281,7 @@ function saveTemplate() {
   showTemplateModal.value = false
 }
 
-// 删除模板（支持预设和自定义）
+// English engineering note.
 function deleteTemplate(templateId: string) {
   if (isPresetTemplate(templateId)) {
     promptStore.addDeletedPresetTemplateId(templateId)
@@ -290,7 +290,7 @@ function deleteTemplate(templateId: string) {
   }
 
   if (selectedTemplateId.value === templateId) {
-    // 如果删除的是当前选中的模板，尝试选中第一个可用模板，否则清空
+    // English engineering note.
     if (allTemplates.value.length > 0) {
       selectTemplate(allTemplates.value[0])
     } else {
@@ -299,7 +299,7 @@ function deleteTemplate(templateId: string) {
   }
 }
 
-// 加载分析数据
+// English engineering note.
 async function loadAnalysis() {
   if (!props.sessionId || currentKeywords.value.length === 0) {
     analysis.value = null
@@ -319,12 +319,12 @@ async function loadAnalysis() {
   }
 }
 
-// 扩展的排行数据类型
+// English engineering note.
 interface ExtendedRankItem extends RankItem {
   keywordDistribution: Array<{ keyword: string; count: number; percentage: number }>
 }
 
-// 排行榜数据（按次数排序）
+// English engineering note.
 const rankData = computed<ExtendedRankItem[]>(() => {
   if (!analysis.value) return []
   return analysis.value.rankByCount.map((m) => ({
@@ -336,7 +336,7 @@ const rankData = computed<ExtendedRankItem[]>(() => {
   }))
 })
 
-// 相对百分比计算（第一名100%）
+// English engineering note.
 function getRelativePercentage(index: number): number {
   if (rankData.value.length === 0) return 0
   const maxValue = rankData.value[0].value
@@ -344,7 +344,7 @@ function getRelativePercentage(index: number): number {
   return Math.round((rankData.value[index].value / maxValue) * 100)
 }
 
-// 获取关键词分布的堆叠宽度数据
+// English engineering note.
 function getStackedWidths(
   member: ExtendedRankItem,
   index: number
@@ -360,7 +360,7 @@ function getStackedWidths(
   }))
 }
 
-// 监听 sessionId 和 timeFilter 变化
+// English engineering note.
 watch(
   () => [props.sessionId, props.timeFilter],
   () => {
@@ -378,11 +378,11 @@ watch(
     :top-n="10"
     :count-template="t('quotes.keywords.countTemplate')"
   >
-    <!-- 配置区 -->
+    <!-- English UI note -->
     <template #config>
-      <!-- 模板选择 + 关键词配置 -->
+      <!-- English UI note -->
       <div class="border-b border-gray-100 p-4 dark:border-gray-800">
-        <!-- 模板选择行 -->
+        <!-- English UI note -->
         <div class="mb-3 flex flex-wrap items-center gap-2">
           <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('quotes.keywords.templateLabel') }}</span>
           <UContextMenu
@@ -418,7 +418,7 @@ watch(
             </button>
           </UContextMenu>
 
-          <!-- 新建/编辑模板弹窗 -->
+          <!-- English UI note -->
           <UModal v-model:open="showTemplateModal">
             <button
               class="rounded-md border border-dashed border-gray-300 px-2.5 py-1 text-sm text-gray-500 transition-all hover:border-pink-400 hover:text-pink-500 dark:border-gray-600"
@@ -473,7 +473,7 @@ watch(
           </UModal>
         </div>
 
-        <!-- 关键词编辑行 -->
+        <!-- English UI note -->
         <div class="flex flex-wrap items-center gap-2">
           <UBadge
             v-for="keyword in currentKeywords"
@@ -501,7 +501,7 @@ watch(
         <div class="mt-1.5 text-xs text-gray-400">{{ t('quotes.keywords.templateHint') }}</div>
       </div>
 
-      <!-- 关键词类型分布（图例） -->
+      <!-- English UI note -->
       <div
         v-if="analysis && analysis.typeDistribution.length > 0"
         class="border-b border-gray-100 px-5 py-4 dark:border-gray-800"
@@ -536,14 +536,14 @@ watch(
         </div>
       </div>
 
-      <!-- Loading 状态（无数据时） -->
+      <!-- English UI note -->
       <LoadingState v-if="isLoading && rankData.length === 0" :text="t('quotes.keywords.loading')" />
     </template>
 
-    <!-- 成员排行项 -->
+    <!-- English UI note -->
     <template #item="{ item: member, index }">
       <div class="flex items-center gap-3">
-        <!-- 排名 -->
+        <!-- English UI note -->
         <div
           class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold"
           :class="getRankBadgeClass(index)"
@@ -551,14 +551,14 @@ watch(
           {{ index + 1 }}
         </div>
 
-        <!-- 名字 -->
+        <!-- English UI note -->
         <div class="w-32 shrink-0">
           <p class="truncate font-medium text-gray-900 dark:text-white">
             {{ member.name }}
           </p>
         </div>
 
-        <!-- 堆叠进度条 -->
+        <!-- English UI note -->
         <div class="flex flex-1 items-center">
           <div class="flex h-2.5 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
             <div
@@ -572,7 +572,7 @@ watch(
           </div>
         </div>
 
-        <!-- 数值和百分比 -->
+        <!-- English UI note -->
         <div class="flex shrink-0 items-baseline gap-2">
           <span class="text-lg font-bold text-gray-900 dark:text-white">{{ member.value }}</span>
           <span class="text-sm text-gray-500">
@@ -582,7 +582,7 @@ watch(
       </div>
     </template>
 
-    <!-- 自定义空状态 -->
+    <!-- English UI note -->
     <template #empty>
       <div v-if="!isLoading" class="flex h-64 flex-col items-center justify-center text-gray-400">
         <UIcon name="i-heroicons-magnifying-glass" class="mb-2 h-8 w-8 opacity-50" />

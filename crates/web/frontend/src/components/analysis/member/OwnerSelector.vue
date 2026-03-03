@@ -15,30 +15,30 @@ const props = defineProps<{
   chatType?: 'group' | 'private'
 }>()
 
-// Owner 配置相关
+// English engineering note.
 const isSavingOwner = ref(false)
 
-// 获取成员显示名称
+// English engineering note.
 function getDisplayName(member: MemberWithStats): string {
   return member.groupNickname || member.accountName || member.platformId
 }
 
-// 当前 owner 的成员信息
+// English engineering note.
 const currentOwner = computed(() => {
   const ownerId = sessionStore.currentSession?.ownerId
   if (!ownerId) return null
   return props.members.find((m) => m.platformId === ownerId) || null
 })
 
-// 特殊值，用于表示"未设置"
+// English engineering note.
 const UNSET_VALUE = '__UNSET__'
 
-// 成员选项（用于下拉选择）
+// English engineering note.
 const memberOptions = computed(() => {
   return [
     { label: t('members.ownerSelector.unset'), value: UNSET_VALUE },
     ...props.members
-      // 过滤掉 platformId 为空的成员（USelect 不允许空字符串作为 value）
+      // English engineering note.
       .filter((m) => m.platformId && m.platformId.trim() !== '')
       .map((m) => ({
         label: `${getDisplayName(m)} (${m.platformId})`,
@@ -47,12 +47,12 @@ const memberOptions = computed(() => {
   ]
 })
 
-// 当前选中的 owner 值（用于 USelect）
+// English engineering note.
 const selectedOwnerValue = computed(() => {
   return sessionStore.currentSession?.ownerId || UNSET_VALUE
 })
 
-// 提示文字
+// English engineering note.
 const hintText = computed(() => {
   if (currentOwner.value) {
     return t('members.ownerSelector.currentOwner', { name: getDisplayName(currentOwner.value) })
@@ -60,7 +60,7 @@ const hintText = computed(() => {
   return t('members.ownerSelector.hint')
 })
 
-// 更新 owner
+// English engineering note.
 async function updateOwner(value: string) {
   const platformId = value === UNSET_VALUE ? null : value
   isSavingOwner.value = true

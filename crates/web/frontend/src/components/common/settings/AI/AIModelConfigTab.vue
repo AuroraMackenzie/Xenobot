@@ -25,12 +25,12 @@ const aiTips = computed(() => {
 const llmStore = useLLMStore()
 const { configs, providers, activeConfigId, isLoading, isMaxConfigs } = storeToRefs(llmStore)
 
-// 弹窗状态
+// English engineering note.
 const showEditModal = ref(false)
 const editMode = ref<'add' | 'edit'>('add')
 const editingConfig = ref<AIServiceConfigDisplay | null>(null)
 
-// ============ 方法 ============
+// English engineering note.
 
 function openAddModal() {
   editMode.value = 'add'
@@ -81,7 +81,7 @@ function getProviderName(providerId: string): string {
   return llmStore.getProviderName(providerId)
 }
 
-// ============ 暴露方法 ============
+// English engineering note.
 
 function refresh() {
   llmStore.refreshConfigs()
@@ -90,7 +90,7 @@ function refresh() {
 defineExpose({ refresh })
 
 onMounted(() => {
-  // 如果 Store 未初始化，则初始化；否则刷新
+  // English engineering note.
   if (!llmStore.isInitialized) {
     llmStore.init()
   } else {
@@ -100,20 +100,20 @@ onMounted(() => {
 </script>
 
 <template>
-  <!-- 加载中 -->
+  <!-- English UI note -->
   <div v-if="isLoading" class="flex items-center justify-center py-12">
     <UIcon name="i-heroicons-arrow-path" class="h-6 w-6 animate-spin text-gray-400" />
   </div>
 
-  <!-- 配置列表视图 -->
+  <!-- English UI note -->
   <div v-else class="space-y-4">
-    <!-- 标题 -->
+    <!-- English UI note -->
     <h4 class="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
       <UIcon name="i-heroicons-sparkles" class="h-4 w-4 text-violet-500" />
       {{ t('settings.aiConfig.title') }}
     </h4>
     <AlertTips v-if="configs.length === 0 && aiTips.configTab?.show" :content="aiTips.configTab?.content" />
-    <!-- 配置列表 -->
+    <!-- English UI note -->
     <div v-if="configs.length > 0" class="space-y-2">
       <div
         v-for="config in configs"
@@ -126,7 +126,7 @@ onMounted(() => {
         ]"
         @click="setActive(config.id)"
       >
-        <!-- 配置信息 -->
+        <!-- English UI note -->
         <div class="flex items-center gap-3">
           <div
             class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
@@ -160,7 +160,7 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- 操作按钮 -->
+        <!-- English UI note -->
         <div class="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100" @click.stop>
           <UButton
             size="xs"
@@ -174,7 +174,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- 空状态 -->
+    <!-- English UI note -->
     <div
       v-else
       class="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-200 py-12 dark:border-gray-700"
@@ -184,7 +184,7 @@ onMounted(() => {
       <p class="text-xs text-gray-400 dark:text-gray-500">{{ t('settings.aiConfig.empty.description') }}</p>
     </div>
 
-    <!-- 添加按钮 -->
+    <!-- English UI note -->
     <div class="flex justify-center">
       <UButton variant="soft" :disabled="isMaxConfigs" class="mt-4" @click="openAddModal">
         <UIcon name="i-heroicons-plus" class="mr-2 h-4 w-4" />
@@ -193,7 +193,7 @@ onMounted(() => {
     </div>
   </div>
 
-  <!-- 编辑/添加弹窗 -->
+  <!-- English UI note -->
   <AIModelEditModal
     v-model:open="showEditModal"
     :mode="editMode"

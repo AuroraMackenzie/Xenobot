@@ -2,16 +2,16 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { AnalysisSession, ImportProgress } from '@/types/base'
 
-/** 迁移信息 */
+/** English note.
 export interface MigrationInfo {
   version: number
-  /** 技术描述（面向开发者） */
+  /** English note.
   description: string
-  /** 用户可读的升级原因（显示在弹窗中） */
+  /** English note.
   userMessage: string
 }
 
-/** 迁移检查结果 */
+/** English note.
 export interface MigrationCheckResult {
   needsMigration: boolean
   count: number
@@ -19,10 +19,10 @@ export interface MigrationCheckResult {
   pendingMigrations: MigrationInfo[]
 }
 
-/** 批量导入文件状态 */
+/** English note.
 export type BatchFileStatus = 'pending' | 'importing' | 'success' | 'failed' | 'cancelled'
 
-/** 批量导入单个文件信息 */
+/** English note.
 export interface BatchFileInfo {
   path: string
   name: string
@@ -33,7 +33,7 @@ export interface BatchFileInfo {
   sessionId?: string
 }
 
-/** 批量导入结果 */
+/** English note.
 export interface BatchImportResult {
   total: number
   success: number
@@ -42,10 +42,10 @@ export interface BatchImportResult {
   files: BatchFileInfo[]
 }
 
-/** 合并导入文件状态 */
+/** English note.
 export type MergeFileStatus = 'pending' | 'parsing' | 'done'
 
-/** 合并导入单个文件信息 */
+/** English note.
 export interface MergeFileInfo {
   path: string
   name: string
@@ -60,10 +60,10 @@ export interface MergeFileInfo {
   }
 }
 
-/** 合并导入阶段 */
+/** English note.
 export type MergeImportStage = 'parsing' | 'merging' | 'done' | 'error'
 
-/** 合并导入结果 */
+/** English note.
 export interface MergeImportResult {
   success: boolean
   sessionId?: string
@@ -71,48 +71,48 @@ export interface MergeImportResult {
 }
 
 /**
- * 会话与导入相关的全局状态
+ * English note.
  */
 export const useSessionStore = defineStore(
   'session',
   () => {
-    // 会话列表
+    // English engineering note.
     const sessions = ref<AnalysisSession[]>([])
-    // 当前会话 ID
+    // English engineering note.
     const currentSessionId = ref<string | null>(null)
-    // 导入状态
+    // English engineering note.
     const isImporting = ref(false)
     const importProgress = ref<ImportProgress | null>(null)
-    // 是否初始化完成
+    // English engineering note.
     const isInitialized = ref(false)
 
-    // 批量导入状态
+    // English engineering note.
     const isBatchImporting = ref(false)
     const batchFiles = ref<BatchFileInfo[]>([])
     const batchImportCancelled = ref(false)
     const batchImportResult = ref<BatchImportResult | null>(null)
 
-    // 合并导入状态
+    // English engineering note.
     const isMergeImporting = ref(false)
     const mergeFiles = ref<MergeFileInfo[]>([])
     const mergeStage = ref<MergeImportStage>('parsing')
     const mergeError = ref<string | null>(null)
     const mergeResult = ref<MergeImportResult | null>(null)
 
-    // 当前选中的会话
+    // English engineering note.
     const currentSession = computed(() => {
       if (!currentSessionId.value) return null
       return sessions.value.find((s) => s.id === currentSessionId.value) || null
     })
 
-    // 迁移相关状态
+    // English engineering note.
     const migrationNeeded = ref(false)
     const migrationCount = ref(0)
     const pendingMigrations = ref<MigrationInfo[]>([])
     const isMigrating = ref(false)
 
     /**
-     * 检查是否需要数据库迁移
+     * English note.
      */
     async function checkMigration(): Promise<MigrationCheckResult> {
       try {
@@ -128,7 +128,7 @@ export const useSessionStore = defineStore(
     }
 
     /**
-     * 执行数据库迁移
+     * English note.
      */
     async function runMigration(): Promise<{ success: boolean; error?: string }> {
       isMigrating.value = true
@@ -148,13 +148,13 @@ export const useSessionStore = defineStore(
     }
 
     /**
-     * 从数据库加载会话列表
+     * English note.
      */
     async function loadSessions() {
       try {
         const list = await window.chatApi.getSessions()
         sessions.value = list
-        // 如果当前选中的会话不存在了，清除选中状态
+        // English engineering note.
         if (currentSessionId.value && !list.find((s) => s.id === currentSessionId.value)) {
           currentSessionId.value = null
         }
@@ -166,7 +166,7 @@ export const useSessionStore = defineStore(
     }
 
     /**
-     * 选择文件并导入
+     * English note.
      */
     async function importFile(): Promise<{
       success: boolean
@@ -175,16 +175,16 @@ export const useSessionStore = defineStore(
     }> {
       try {
         const result = await window.chatApi.selectFile()
-        // 用户取消选择
+        // English engineering note.
         if (!result) {
           return { success: false, error: 'error.no_file_selected' }
         }
-        // 有错误（如格式不识别）- 优先检查错误，因为此时可能没有 filePath
+        // English engineering note.
         if (result.error) {
           const diagnosisSuggestion = result.diagnosis?.suggestion
           return { success: false, error: result.error, diagnosisSuggestion }
         }
-        // 没有文件路径（用户取消）
+        // English engineering note.
         if (!result.filePath) {
           return { success: false, error: 'error.no_file_selected' }
         }
@@ -194,7 +194,7 @@ export const useSessionStore = defineStore(
       }
     }
 
-    /** 导入诊断信息类型 */
+    /** English note.
     interface ImportDiagnosticsInfo {
       logFile: string | null
       detectedFormat: string | null
@@ -210,7 +210,7 @@ export const useSessionStore = defineStore(
     }
 
     /**
-     * 从指定路径执行导入（支持拖拽）
+     * English note.
      */
     async function importFileFromPath(filePath: string): Promise<{
       success: boolean
@@ -226,7 +226,7 @@ export const useSessionStore = defineStore(
           message: '', // Progress text is handled by frontend i18n
         }
 
-        // 进度队列控制
+        // English engineering note.
         const queue: ImportProgress[] = []
         let isProcessing = false
         let currentStage = 'reading'
@@ -234,7 +234,7 @@ export const useSessionStore = defineStore(
         const MIN_STAGE_TIME = 1000
 
         /**
-         * 处理导入进度队列，确保阶段展示足够时间
+         * English note.
          */
         const processQueue = async () => {
           if (isProcessing) return
@@ -284,19 +284,19 @@ export const useSessionStore = defineStore(
           await loadSessions()
           currentSessionId.value = importResult.sessionId
 
-          // 自动生成会话索引
+          // English engineering note.
           try {
             const savedThreshold = localStorage.getItem('sessionGapThreshold')
-            const gapThreshold = savedThreshold ? parseInt(savedThreshold, 10) : 1800 // 默认30分钟
+            const gapThreshold = savedThreshold ? parseInt(savedThreshold, 10) : 1800 // English engineering note.
             await window.sessionApi.generate(importResult.sessionId, gapThreshold)
           } catch (error) {
             console.error('自动生成会话索引失败:', error)
-            // 不阻断导入流程，用户可以手动生成
+            // English engineering note.
           }
 
           return { success: true, diagnostics: importResult.diagnostics }
         } else {
-          // 传递诊断信息（如果有）
+          // English engineering note.
           const diagnosisSuggestion = importResult.diagnosis?.suggestion
           return {
             success: false,
@@ -316,19 +316,19 @@ export const useSessionStore = defineStore(
     }
 
     /**
-     * 批量导入多个文件（串行执行）
+     * English note.
      */
     async function importFilesFromPaths(filePaths: string[]): Promise<BatchImportResult> {
       if (filePaths.length === 0) {
         return { total: 0, success: 0, failed: 0, cancelled: 0, files: [] }
       }
 
-      // 初始化批量导入状态
+      // English engineering note.
       isBatchImporting.value = true
       batchImportCancelled.value = false
       batchImportResult.value = null
 
-      // 初始化文件列表
+      // English engineering note.
       batchFiles.value = filePaths.map((path) => ({
         path,
         name: path.split('/').pop() || path.split('\\').pop() || path,
@@ -339,7 +339,7 @@ export const useSessionStore = defineStore(
       let failedCount = 0
       let cancelledCount = 0
 
-      // 辅助函数：标记剩余文件为已取消
+      // English engineering note.
       const markRemainingAsCancelled = (startIndex: number) => {
         for (let j = startIndex; j < batchFiles.value.length; j++) {
           if (batchFiles.value[j].status === 'pending') {
@@ -349,9 +349,9 @@ export const useSessionStore = defineStore(
         }
       }
 
-      // 串行导入每个文件
+      // English engineering note.
       for (let i = 0; i < batchFiles.value.length; i++) {
-        // 检查是否已取消
+        // English engineering note.
         if (batchImportCancelled.value) {
           markRemainingAsCancelled(i)
           break
@@ -366,19 +366,19 @@ export const useSessionStore = defineStore(
         }
 
         try {
-          // 进度队列控制（复用单文件导入的逻辑）
+          // English engineering note.
           const queue: ImportProgress[] = []
           let isProcessing = false
           let currentStage = 'reading'
           let lastStageTime = Date.now()
-          const MIN_STAGE_TIME = 300 // 批量导入时缩短阶段显示时间
+          const MIN_STAGE_TIME = 300 // English engineering note.
 
           const processQueue = async () => {
             if (isProcessing) return
             isProcessing = true
 
             while (queue.length > 0) {
-              // 在进度处理中也检查取消状态，加快响应
+              // English engineering note.
               if (batchImportCancelled.value) {
                 queue.length = 0
                 break
@@ -409,22 +409,22 @@ export const useSessionStore = defineStore(
           const importResult = await window.chatApi.import(file.path)
           unsubscribe()
 
-          // 等待进度队列处理完成（但如果已取消则快速跳过）
+          // English engineering note.
           let waitCount = 0
           while ((queue.length > 0 || isProcessing) && !batchImportCancelled.value && waitCount < 100) {
             await new Promise((resolve) => setTimeout(resolve, 30))
             waitCount++
           }
 
-          // 当前文件导入完成后立即检查取消状态
+          // English engineering note.
           if (batchImportCancelled.value) {
-            // 当前文件已经导入完成，记录其结果
+            // English engineering note.
             if (importResult.success && importResult.sessionId) {
               file.status = 'success'
               file.sessionId = importResult.sessionId
               successCount++
 
-              // 即使取消了也要为已导入成功的文件生成会话索引
+              // English engineering note.
               try {
                 const savedThreshold = localStorage.getItem('sessionGapThreshold')
                 const gapThreshold = savedThreshold ? parseInt(savedThreshold, 10) : 1800
@@ -437,7 +437,7 @@ export const useSessionStore = defineStore(
               file.error = importResult.error || 'error.import_failed'
               failedCount++
             }
-            // 标记剩余文件为取消
+            // English engineering note.
             markRemainingAsCancelled(i + 1)
             break
           }
@@ -447,7 +447,7 @@ export const useSessionStore = defineStore(
             file.sessionId = importResult.sessionId
             successCount++
 
-            // 自动生成会话索引（跳过如果已取消）
+            // English engineering note.
             if (!batchImportCancelled.value) {
               try {
                 const savedThreshold = localStorage.getItem('sessionGapThreshold')
@@ -470,10 +470,10 @@ export const useSessionStore = defineStore(
         }
       }
 
-      // 刷新会话列表
+      // English engineering note.
       await loadSessions()
 
-      // 生成结果
+      // English engineering note.
       const result: BatchImportResult = {
         total: filePaths.length,
         success: successCount,
@@ -489,14 +489,14 @@ export const useSessionStore = defineStore(
     }
 
     /**
-     * 取消批量导入（跳过剩余文件）
+     * English note.
      */
     function cancelBatchImport() {
       batchImportCancelled.value = true
     }
 
     /**
-     * 清除批量导入结果（用于关闭摘要后重置状态）
+     * English note.
      */
     function clearBatchImportResult() {
       batchImportResult.value = null
@@ -504,14 +504,14 @@ export const useSessionStore = defineStore(
     }
 
     /**
-     * 合并导入多个文件为一个会话
+     * English note.
      */
     async function mergeImportFiles(filePaths: string[]): Promise<MergeImportResult> {
       if (filePaths.length < 2) {
         return { success: false, error: '合并导入至少需要2个文件' }
       }
 
-      // 阶段最小显示时间（和单文件导入保持一致）
+      // English engineering note.
       const MIN_STAGE_TIME = 800
 
       isMergeImporting.value = true
@@ -519,7 +519,7 @@ export const useSessionStore = defineStore(
       mergeResult.value = null
       mergeStage.value = 'parsing'
 
-      // 初始化文件列表
+      // English engineering note.
       mergeFiles.value = filePaths.map((path) => ({
         path,
         name: path.split('/').pop() || path.split('\\').pop() || path,
@@ -529,7 +529,7 @@ export const useSessionStore = defineStore(
       let stageStartTime = Date.now()
 
       try {
-        // 阶段1：串行解析所有文件
+        // English engineering note.
         for (let i = 0; i < mergeFiles.value.length; i++) {
           const file = mergeFiles.value[i]
           const fileStartTime = Date.now()
@@ -539,7 +539,7 @@ export const useSessionStore = defineStore(
             const info = await window.mergeApi.parseFileInfo(file.path)
             file.info = info
 
-            // 确保每个文件的解析状态至少显示一定时间
+            // English engineering note.
             const elapsed = Date.now() - fileStartTime
             const minFileTime = Math.max(300, MIN_STAGE_TIME / filePaths.length)
             if (elapsed < minFileTime) {
@@ -552,17 +552,17 @@ export const useSessionStore = defineStore(
           }
         }
 
-        // 确保解析阶段至少显示 MIN_STAGE_TIME
+        // English engineering note.
         const parsingElapsed = Date.now() - stageStartTime
         if (parsingElapsed < MIN_STAGE_TIME) {
           await new Promise((resolve) => setTimeout(resolve, MIN_STAGE_TIME - parsingElapsed))
         }
 
-        // 阶段2：执行合并
+        // English engineering note.
         stageStartTime = Date.now()
         mergeStage.value = 'merging'
 
-        // 智能命名：如果所有文件群名相同则用该名，否则用第一个文件的群名
+        // English engineering note.
         const names = mergeFiles.value.map((f) => f.info?.name).filter(Boolean)
         const uniqueNames = [...new Set(names)]
         const outputName = uniqueNames.length === 1 ? uniqueNames[0]! : names[0] || '合并记录'
@@ -570,18 +570,18 @@ export const useSessionStore = defineStore(
         const result = await window.mergeApi.mergeFiles({
           filePaths,
           outputName,
-          conflictResolutions: [], // 默认 keepBoth（保留所有消息）
-          andAnalyze: true, // 合并后创建会话
+          conflictResolutions: [], // English engineering note.
+          andAnalyze: true, // English engineering note.
         })
 
         if (!result.success) {
           throw new Error(result.error || '合并失败')
         }
 
-        // 清理缓存
+        // English engineering note.
         await window.mergeApi.clearCache()
 
-        // 确保合并阶段至少显示 MIN_STAGE_TIME
+        // English engineering note.
         const mergingElapsed = Date.now() - stageStartTime
         if (mergingElapsed < MIN_STAGE_TIME) {
           await new Promise((resolve) => setTimeout(resolve, MIN_STAGE_TIME - mergingElapsed))
@@ -590,10 +590,10 @@ export const useSessionStore = defineStore(
         mergeStage.value = 'done'
         mergeResult.value = { success: true, sessionId: result.sessionId }
 
-        // 刷新会话列表
+        // English engineering note.
         await loadSessions()
 
-        // 自动生成会话索引
+        // English engineering note.
         if (result.sessionId) {
           try {
             const savedThreshold = localStorage.getItem('sessionGapThreshold')
@@ -610,14 +610,14 @@ export const useSessionStore = defineStore(
         const errorMessage = err instanceof Error ? err.message : String(err)
         mergeError.value = errorMessage
         mergeResult.value = { success: false, error: errorMessage }
-        // 清理缓存
+        // English engineering note.
         await window.mergeApi.clearCache()
         return { success: false, error: errorMessage }
       }
     }
 
     /**
-     * 清除合并导入结果
+     * English note.
      */
     function clearMergeImportResult() {
       isMergeImporting.value = false
@@ -627,14 +627,14 @@ export const useSessionStore = defineStore(
     }
 
     /**
-     * 选择指定会话
+     * English note.
      */
     function selectSession(id: string) {
       currentSessionId.value = id
     }
 
     /**
-     * 删除会话
+     * English note.
      */
     async function deleteSession(id: string): Promise<boolean> {
       try {
@@ -657,7 +657,7 @@ export const useSessionStore = defineStore(
     }
 
     /**
-     * 重命名会话
+     * English note.
      */
     async function renameSession(id: string, newName: string): Promise<boolean> {
       try {
@@ -676,14 +676,14 @@ export const useSessionStore = defineStore(
     }
 
     /**
-     * 清空当前选中会话
+     * English note.
      */
     function clearSelection() {
       currentSessionId.value = null
     }
 
     /**
-     * 更新会话的所有者
+     * English note.
      */
     async function updateSessionOwnerId(id: string, ownerId: string | null): Promise<boolean> {
       try {
@@ -701,12 +701,12 @@ export const useSessionStore = defineStore(
       }
     }
 
-    // 置顶会话 ID 列表
+    // English engineering note.
     const pinnedSessionIds = ref<string[]>([])
 
-    // 排序后的会话列表
+    // English engineering note.
     const sortedSessions = computed(() => {
-      // 建立索引映射，index 越大表示越晚置顶
+      // English engineering note.
       const pinIndexMap = new Map(pinnedSessionIds.value.map((id, index) => [id, index]))
 
       return [...sessions.value].sort((a, b) => {
@@ -715,21 +715,21 @@ export const useSessionStore = defineStore(
         const aPinned = aPinIndex !== undefined
         const bPinned = bPinIndex !== undefined
 
-        // 两个都置顶：后置顶的（index 大的）排前面
+        // English engineering note.
         if (aPinned && bPinned) {
           return bPinIndex! - aPinIndex!
         }
-        // 只有一个置顶：置顶的排前面
+        // English engineering note.
         if (aPinned && !bPinned) return -1
         if (!aPinned && bPinned) return 1
 
-        // 都不置顶：保持原顺序（通常是按时间倒序）
+        // English engineering note.
         return 0
       })
     })
 
     /**
-     * 切换会话置顶状态
+     * English note.
      */
     function togglePinSession(id: string) {
       const index = pinnedSessionIds.value.indexOf(id)
@@ -741,7 +741,7 @@ export const useSessionStore = defineStore(
     }
 
     /**
-     * 检查会话是否已置顶
+     * English note.
      */
     function isPinned(id: string): boolean {
       return pinnedSessionIds.value.includes(id)
@@ -756,14 +756,14 @@ export const useSessionStore = defineStore(
       importProgress,
       isInitialized,
       currentSession,
-      // 迁移相关
+      // English engineering note.
       migrationNeeded,
       migrationCount,
       pendingMigrations,
       isMigrating,
       checkMigration,
       runMigration,
-      // 会话操作
+      // English engineering note.
       loadSessions,
       importFile,
       importFileFromPath,
@@ -774,7 +774,7 @@ export const useSessionStore = defineStore(
       updateSessionOwnerId,
       togglePinSession,
       isPinned,
-      // 批量导入
+      // English engineering note.
       isBatchImporting,
       batchFiles,
       batchImportCancelled,
@@ -782,7 +782,7 @@ export const useSessionStore = defineStore(
       importFilesFromPaths,
       cancelBatchImport,
       clearBatchImportResult,
-      // 合并导入
+      // English engineering note.
       isMergeImporting,
       mergeFiles,
       mergeStage,

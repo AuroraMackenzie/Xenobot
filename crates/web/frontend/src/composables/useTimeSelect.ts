@@ -1,8 +1,8 @@
 /**
- * useTimeSelect — 管理 TimeSelect 组件的状态、派生计算与 URL 同步
+ * English note.
  *
- * 从 direct-space/index.vue 和 circle-space/index.vue 中提取的共通逻辑，
- * 消除两个页面间 ~50 行重复代码。
+ * English note.
+ * English note.
  */
 import { ref, computed, watch } from 'vue'
 import type { Ref } from 'vue'
@@ -10,54 +10,54 @@ import type { RouteLocationNormalizedLoaded, Router } from 'vue-router'
 import type { TimeRangeValue, TimeSelectState, TimeSelectMode } from '@/components/common/TimeSelect.vue'
 
 interface UseTimeSelectOptions {
-  /** 当前激活的 Tab ref（用于 URL 同步） */
+  /** English note.
   activeTab: Ref<string>
-  /** 是否处于初始加载（URL 同步 guard） */
+  /** English note.
   isInitialLoad: Ref<boolean>
-  /** 当前会话 ID ref（用于 timeRangeValue watch guard） */
+  /** English note.
   currentSessionId: Ref<string | null>
-  /** timeRangeValue 变化时的回调（通常用于重新加载分析数据） */
+  /** English note.
   onTimeRangeChange?: () => void
 }
 
 export function useTimeSelect(route: RouteLocationNormalizedLoaded, router: Router, options: UseTimeSelectOptions) {
   const { activeTab, isInitialLoad, currentSessionId, onTimeRangeChange } = options
 
-  // ==================== 核心状态 ====================
+  // English engineering note.
 
-  /** TimeSelect v-model 绑定值 */
+  /** English note.
   const timeRangeValue = ref<TimeRangeValue | null>(null)
 
-  /** 完整时间范围（由 TimeSelect 通过 emit 设置） */
+  /** English note.
   const fullTimeRange = ref<{ start: number; end: number } | null>(null)
 
-  /** 可选年份列表（由 TimeSelect 通过 emit 设置，circle-space 的 ViewTab 需要） */
+  /** English note.
   const availableYears = ref<number[]>([])
 
-  // ==================== 派生计算 ====================
+  // English engineering note.
 
-  /** 时间过滤参数（用于 API 调用） */
+  /** English note.
   const timeFilter = computed(() => {
     const v = timeRangeValue.value
     if (!v) return undefined
     return { startTs: v.startTs, endTs: v.endTs }
   })
 
-  /** Tab 内容 key（确保时间筛选切换时组件能正确刷新） */
+  /** English note.
   const timeFilterKey = computed(() => {
     const v = timeRangeValue.value
     if (!v) return 'init'
     return `${v.startTs}-${v.endTs}`
   })
 
-  /** 用于 OverviewTab / ViewTab 的 selectedYear（null=全部，number=指定年份） */
+  /** English note.
   const selectedYearForOverview = computed(() => {
     const v = timeRangeValue.value
     if (!v || v.isFullRange) return null
     return new Date(v.startTs * 1000).getFullYear()
   })
 
-  /** 从 URL query 构建 TimeSelect 初始状态 */
+  /** English note.
   const initialTimeState = computed<Partial<TimeSelectState>>(() => {
     const q = route.query
     const m = q.timeMode as TimeSelectMode | undefined
@@ -72,7 +72,7 @@ export function useTimeSelect(route: RouteLocationNormalizedLoaded, router: Rout
     }
   })
 
-  // ==================== URL 同步 ====================
+  // English engineering note.
 
   watch([activeTab, timeRangeValue], ([newTab, newTimeRange]) => {
     if (isInitialLoad.value || !newTimeRange) return
@@ -96,7 +96,7 @@ export function useTimeSelect(route: RouteLocationNormalizedLoaded, router: Rout
     router.replace({ query })
   })
 
-  // ==================== timeRangeValue 变化监听 ====================
+  // English engineering note.
 
   watch(
     timeRangeValue,
@@ -107,9 +107,9 @@ export function useTimeSelect(route: RouteLocationNormalizedLoaded, router: Rout
     { immediate: true }
   )
 
-  // ==================== 重置方法 ====================
+  // English engineering note.
 
-  /** 切换会话时调用，清空时间范围状态 */
+  /** English note.
   function resetTimeRange() {
     timeRangeValue.value = null
     fullTimeRange.value = null
@@ -117,16 +117,16 @@ export function useTimeSelect(route: RouteLocationNormalizedLoaded, router: Rout
   }
 
   return {
-    // 状态
+    // English engineering note.
     timeRangeValue,
     fullTimeRange,
     availableYears,
-    // 派生计算
+    // English engineering note.
     timeFilter,
     timeFilterKey,
     selectedYearForOverview,
     initialTimeState,
-    // 方法
+    // English engineering note.
     resetTimeRange,
   }
 }

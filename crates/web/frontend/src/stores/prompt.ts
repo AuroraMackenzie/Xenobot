@@ -5,34 +5,34 @@ import type { KeywordTemplate } from '@/types/analysis'
 import { DEFAULT_PRESET_ID, getBuiltinPresets, getOriginalBuiltinPreset, type LocaleType } from '@/config/prompts'
 import { useSettingsStore } from './settings'
 
-// 远程预设配置 URL 基础地址
+// English engineering note.
 const REMOTE_PRESET_BASE_URL = 'https://xenobot.app'
 
 /**
- * 远程预设的原始数据结构（从 JSON 获取）
+ * English note.
  */
 export interface RemotePresetData {
   id: string
   name: string
-  /** Markdown 文件绝对路径（如 /cn/system-prompt/xxx.md） */
+  /** English note.
   path: string
-  /** 简短描述（索引中提供，用于列表展示） */
+  /** English note.
   description?: string
-  /** 角色定义（从 Markdown 文件解析后填充） */
+  /** English note.
   roleDefinition?: string
-  /** 回复规则（从 Markdown 文件解析后填充） */
+  /** English note.
   responseRules?: string
-  /** 适用场景：common(通用)、group(仅群聊)、private(仅私聊) */
+  /** English note.
   chatType?: 'common' | 'group' | 'private'
 }
 
 /**
- * AI 配置、提示词和关键词模板相关的全局状态
+ * English note.
  */
 export const usePromptStore = defineStore(
   'prompt',
   () => {
-    // 获取当前语言设置
+    // English engineering note.
     const settingsStore = useSettingsStore()
     const { locale } = storeToRefs(settingsStore)
 
@@ -46,19 +46,19 @@ export const usePromptStore = defineStore(
     const aiConfigVersion = ref(0)
     const aiGlobalSettings = ref({
       maxMessagesPerRequest: 1000,
-      maxHistoryRounds: 5, // AI上下文会话轮数限制
-      exportFormat: 'markdown' as 'markdown' | 'txt', // 对话导出格式
-      sqlExportFormat: 'csv' as 'csv' | 'json', // SQL Lab 导出格式
+      maxHistoryRounds: 5, // English engineering note.
+      exportFormat: 'markdown' as 'markdown' | 'txt', // English engineering note.
+      sqlExportFormat: 'csv' as 'csv' | 'json', // English engineering note.
     })
     const customKeywordTemplates = ref<KeywordTemplate[]>([])
     const deletedPresetTemplateIds = ref<string[]>([])
-    /** 已同步的远程预设 ID 列表（避免重复添加） */
+    /** English note.
     const fetchedRemotePresetIds = ref<string[]>([])
 
-    /** 当前语言的内置预设列表（响应式） */
+    /** English note.
     const builtinPresets = computed(() => getBuiltinPresets(locale.value as LocaleType))
 
-    /** 获取所有提示词预设（内置 + 覆盖 + 自定义） */
+    /** English note.
     const allPromptPresets = computed(() => {
       const mergedBuiltins = builtinPresets.value.map((preset) => {
         const override = builtinPresetOverrides.value[preset.id]
@@ -70,36 +70,36 @@ export const usePromptStore = defineStore(
       return [...mergedBuiltins, ...customPromptPresets.value]
     })
 
-    /** 当前激活的预设 */
+    /** English note.
     const activePreset = computed(() => {
       const preset = allPromptPresets.value.find((p) => p.id === aiPromptSettings.value.activePresetId)
       return preset || builtinPresets.value.find((p) => p.id === DEFAULT_PRESET_ID)!
     })
 
     /**
-     * 获取适用于指定聊天类型的预设列表
-     * @param chatType 聊天类型
+     * English note.
+     * English note.
      */
     function getPresetsForChatType(chatType: 'group' | 'private'): PromptPreset[] {
       return allPromptPresets.value.filter((preset) => {
-        // 内置预设始终适用
+        // English engineering note.
         if (preset.isBuiltIn) return true
-        // 未设置 applicableTo 或 common 适用于所有类型
+        // English engineering note.
         if (!preset.applicableTo || preset.applicableTo === 'common') return true
-        // 检查是否匹配当前类型
+        // English engineering note.
         return preset.applicableTo === chatType
       })
     }
 
     /**
-     * 通知外部 AI 配置已经被修改
+     * English note.
      */
     function notifyAIConfigChanged() {
       aiConfigVersion.value++
     }
 
     /**
-     * 更新 AI 全局设置
+     * English note.
      */
     function updateAIGlobalSettings(
       settings: Partial<{
@@ -114,14 +114,14 @@ export const usePromptStore = defineStore(
     }
 
     /**
-     * 新增自定义关键词模板
+     * English note.
      */
     function addCustomKeywordTemplate(template: KeywordTemplate) {
       customKeywordTemplates.value.push(template)
     }
 
     /**
-     * 更新自定义关键词模板
+     * English note.
      */
     function updateCustomKeywordTemplate(templateId: string, updates: Partial<Omit<KeywordTemplate, 'id'>>) {
       const index = customKeywordTemplates.value.findIndex((t) => t.id === templateId)
@@ -134,7 +134,7 @@ export const usePromptStore = defineStore(
     }
 
     /**
-     * 删除自定义关键词模板
+     * English note.
      */
     function removeCustomKeywordTemplate(templateId: string) {
       const index = customKeywordTemplates.value.findIndex((t) => t.id === templateId)
@@ -144,7 +144,7 @@ export const usePromptStore = defineStore(
     }
 
     /**
-     * 标记预设模板为已删除
+     * English note.
      */
     function addDeletedPresetTemplateId(id: string) {
       if (!deletedPresetTemplateIds.value.includes(id)) {
@@ -153,7 +153,7 @@ export const usePromptStore = defineStore(
     }
 
     /**
-     * 添加新的提示词预设
+     * English note.
      */
     function addPromptPreset(preset: {
       name: string
@@ -176,7 +176,7 @@ export const usePromptStore = defineStore(
     }
 
     /**
-     * 更新提示词预设（含内置覆盖）
+     * English note.
      */
     function updatePromptPreset(
       presetId: string,
@@ -210,7 +210,7 @@ export const usePromptStore = defineStore(
     }
 
     /**
-     * 重置内置预设为初始状态
+     * English note.
      */
     function resetBuiltinPreset(presetId: string): boolean {
       const original = getOriginalBuiltinPreset(presetId, locale.value as LocaleType)
@@ -220,24 +220,24 @@ export const usePromptStore = defineStore(
     }
 
     /**
-     * 判断内置预设是否被自定义过
+     * English note.
      */
     function isBuiltinPresetModified(presetId: string): boolean {
       return !!builtinPresetOverrides.value[presetId]
     }
 
     /**
-     * 删除提示词预设（自定义）
+     * English note.
      */
     function removePromptPreset(presetId: string) {
       const index = customPromptPresets.value.findIndex((p) => p.id === presetId)
       if (index !== -1) {
         customPromptPresets.value.splice(index, 1)
-        // 如果删除的是当前激活的预设，切换回默认
+        // English engineering note.
         if (aiPromptSettings.value.activePresetId === presetId) {
           aiPromptSettings.value.activePresetId = DEFAULT_PRESET_ID
         }
-        // 如果是从远程导入的预设，同时从已导入列表中移除，以便用户可以重新导入
+        // English engineering note.
         const remoteIndex = fetchedRemotePresetIds.value.indexOf(presetId)
         if (remoteIndex !== -1) {
           fetchedRemotePresetIds.value.splice(remoteIndex, 1)
@@ -246,7 +246,7 @@ export const usePromptStore = defineStore(
     }
 
     /**
-     * 复制指定提示词预设
+     * English note.
      */
     function duplicatePromptPreset(presetId: string) {
       const source = allPromptPresets.value.find((p) => p.id === presetId)
@@ -262,7 +262,7 @@ export const usePromptStore = defineStore(
     }
 
     /**
-     * 设置当前激活的预设
+     * English note.
      */
     function setActivePreset(presetId: string) {
       const preset = allPromptPresets.value.find((p) => p.id === presetId)
@@ -273,20 +273,20 @@ export const usePromptStore = defineStore(
     }
 
     /**
-     * 获取当前激活的预设
-     * @param _chatType 已弃用，保留参数兼容旧代码
+     * English note.
+     * English note.
      */
     function getActivePresetForChatType(_chatType?: 'group' | 'private'): PromptPreset {
       return activePreset.value
     }
 
     /**
-     * 解析 Markdown 文件内容，使用 `---` 分隔 roleDefinition 和 responseRules
-     * @param content Markdown 文件内容
+     * English note.
+     * English note.
      * @returns { roleDefinition, responseRules }
      */
     function parseMarkdownContent(content: string): { roleDefinition: string; responseRules: string } {
-      // 使用 `---` 独立成行作为分隔符
+      // English engineering note.
       const separator = /\n---\n/
       const parts = content.split(separator)
 
@@ -297,7 +297,7 @@ export const usePromptStore = defineStore(
         }
       }
 
-      // 如果没有分隔符，整个内容作为 roleDefinition
+      // English engineering note.
       return {
         roleDefinition: content.trim(),
         responseRules: '',
@@ -305,9 +305,9 @@ export const usePromptStore = defineStore(
     }
 
     /**
-     * 从远程获取预设索引列表（不下载 Markdown 内容，节省流量）
-     * @param locale 当前语言设置 (如 'zh-CN', 'en-US')
-     * @returns 远程预设索引列表，获取失败返回空数组
+     * English note.
+     * English note.
+     * English note.
      */
     async function fetchRemotePresets(locale: string): Promise<RemotePresetData[]> {
       const langPath = locale === 'zh-CN' ? 'cn' : 'en'
@@ -324,7 +324,7 @@ export const usePromptStore = defineStore(
           return []
         }
 
-        // 过滤有效的索引项（必须有 id、name、path）
+        // English engineering note.
         return presetIndex.filter((p) => p.id && p.name && p.path)
       } catch {
         return []
@@ -332,14 +332,14 @@ export const usePromptStore = defineStore(
     }
 
     /**
-     * 按需下载单个预设的 Markdown 内容
-     * @param preset 预设索引数据
-     * @returns 包含完整内容的预设数据，失败返回 null
+     * English note.
+     * English note.
+     * English note.
      */
     async function fetchPresetContent(
       preset: RemotePresetData
     ): Promise<(RemotePresetData & { roleDefinition: string; responseRules: string }) | null> {
-      // 如果已经有内容，直接返回
+      // English engineering note.
       if (preset.roleDefinition && preset.responseRules) {
         return preset as RemotePresetData & { roleDefinition: string; responseRules: string }
       }
@@ -367,18 +367,18 @@ export const usePromptStore = defineStore(
     }
 
     /**
-     * 添加远程预设到自定义预设列表
-     * @param preset 远程预设数据
-     * @returns 是否添加成功
+     * English note.
+     * English note.
+     * English note.
      */
     function addRemotePreset(preset: RemotePresetData): boolean {
-      // 检查是否已添加
+      // English engineering note.
       if (fetchedRemotePresetIds.value.includes(preset.id)) {
         return false
       }
 
       const now = Date.now()
-      // 将远程 chatType 映射为本地 applicableTo
+      // English engineering note.
       const applicableTo = preset.chatType || 'common'
 
       const newPreset: PromptPreset = {
@@ -398,43 +398,43 @@ export const usePromptStore = defineStore(
     }
 
     /**
-     * 判断远程预设是否已添加
-     * @param presetId 预设 ID
+     * English note.
+     * English note.
      */
     function isRemotePresetAdded(presetId: string): boolean {
       return fetchedRemotePresetIds.value.includes(presetId)
     }
 
-    // ==================== 数据迁移（兼容旧版本） ====================
+    // English engineering note.
 
     /**
-     * 迁移旧版本的预设数据
-     * 将群聊/私聊分离的预设合并为统一预设
+     * English note.
+     * English note.
      */
     function migrateOldPresets() {
-      // 检查是否存在旧版本数据结构
+      // English engineering note.
       const oldSettings = aiPromptSettings.value as unknown as {
         activeGroupPresetId?: string
         activePrivatePresetId?: string
         activePresetId?: string
       }
 
-      // 如果存在旧字段，进行迁移
+      // English engineering note.
       if (oldSettings.activeGroupPresetId && !oldSettings.activePresetId) {
-        // 优先使用群聊预设，因为使用频率更高
+        // English engineering note.
         const oldGroupId = oldSettings.activeGroupPresetId
-        // 如果是旧的内置预设 ID，映射到新的统一 ID
+        // English engineering note.
         if (oldGroupId === 'builtin-group-default' || oldGroupId === 'builtin-private-default') {
           aiPromptSettings.value.activePresetId = DEFAULT_PRESET_ID
         } else {
           aiPromptSettings.value.activePresetId = oldGroupId
         }
-        // 清理旧字段
+        // English engineering note.
         delete (aiPromptSettings.value as Record<string, unknown>).activeGroupPresetId
         delete (aiPromptSettings.value as Record<string, unknown>).activePrivatePresetId
       }
 
-      // 迁移自定义预设中的 chatType 字段
+      // English engineering note.
       for (const preset of customPromptPresets.value) {
         const oldPreset = preset as PromptPreset & { chatType?: string }
         if (oldPreset.chatType) {
@@ -443,7 +443,7 @@ export const usePromptStore = defineStore(
       }
     }
 
-    // 初始化时执行迁移
+    // English engineering note.
     migrateOldPresets()
 
     return {

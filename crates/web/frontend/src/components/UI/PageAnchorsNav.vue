@@ -3,13 +3,13 @@ import type { AnchorItem } from '@/composables'
 
 withDefaults(
   defineProps<{
-    /** 锚点配置列表 */
+    /** English note.
     anchors: AnchorItem[]
-    /** 当前激活的锚点 ID */
+    /** English note.
     activeAnchor: string
-    /** 导航宽度，默认 w-44 */
+    /** English note.
     width?: string
-    /** 是否在小屏幕隐藏，默认 true */
+    /** English note.
     hideOnMobile?: boolean
   }>(),
   {
@@ -19,7 +19,7 @@ withDefaults(
 )
 
 const emit = defineEmits<{
-  /** 点击锚点时触发 */
+  /** English note.
   click: [id: string]
 }>()
 
@@ -48,7 +48,7 @@ function handleClick(id: string) {
           </button>
         </div>
       </nav>
-      <!-- 额外内容插槽 -->
+      <!-- English UI note -->
       <slot />
     </div>
   </div>

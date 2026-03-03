@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * ECharts 柱状图组件
+ * English note.
  */
 import { computed } from 'vue'
 import type { EChartsOption } from 'echarts'
@@ -14,11 +14,11 @@ export interface EChartBarData {
 interface Props {
   data: EChartBarData
   height?: number
-  /** 是否为横向柱状图 */
+  /** English note.
   horizontal?: boolean
-  /** 是否显示渐变色 */
+  /** English note.
   gradient?: boolean
-  /** 柱子圆角 */
+  /** English note.
   borderRadius?: number
 }
 
@@ -29,7 +29,7 @@ const props = withDefaults(defineProps<Props>(), {
   borderRadius: 4,
 })
 
-// 渐变色（使用项目主题粉色）
+// English engineering note.
 const gradientColor = {
   type: 'linear' as const,
   x: 0,
@@ -37,8 +37,8 @@ const gradientColor = {
   x2: 0,
   y2: 1,
   colorStops: [
-    { offset: 0, color: '#0ea5c9' }, // 项目主题 pink-500
-    { offset: 1, color: '#44b9d4' }, // 项目主题 pink-400
+    { offset: 0, color: '#0ea5c9' }, // English engineering note.
+    { offset: 1, color: '#44b9d4' }, // English engineering note.
   ],
 }
 
@@ -123,8 +123,8 @@ const option = computed<EChartsOption>(() => {
               ? {
                   ...gradientColor,
                   colorStops: [
-                    { offset: 0, color: '#0a88ac' }, // 项目主题 pink-600
-                    { offset: 1, color: '#0ea5c9' }, // 项目主题 pink-500
+                    { offset: 0, color: '#0a88ac' }, // English engineering note.
+                    { offset: 1, color: '#0ea5c9' }, // English engineering note.
                   ],
                 }
               : '#0a88ac',

@@ -28,9 +28,9 @@ const tooltip = {
   delayDuration: 100,
 }
 
-// 应用启动时初始化
+// English engineering note.
 onMounted(async () => {
-  // 平台检测 - 设置 CSS 类名以驱动平台差异化样式（如标题栏安全区域高度）
+  // English engineering note.
   const platform = navigator.platform.toLowerCase()
   if (platform.includes('win')) {
     document.documentElement.classList.add('platform-windows')
@@ -38,21 +38,21 @@ onMounted(async () => {
     document.documentElement.classList.add('platform-linux')
   }
 
-  // 初始化语言设置（同步 i18n 和 dayjs）
+  // English engineering note.
   settingsStore.initLocale()
-  // 初始化 LLM 配置（预加载，避免首次使用时延迟）
+  // English engineering note.
   llmStore.init()
-  // 从数据库加载会话列表
+  // English engineering note.
   await sessionStore.loadSessions()
 })
 </script>
 
 <template>
   <UApp :tooltip="tooltip">
-    <!-- 自定义标题栏 - 拖拽区域 + 窗口控制按钮 -->
+    <!-- English UI note -->
     <TitleBar />
     <div class="relative flex h-screen w-full overflow-hidden bg-gray-50 dark:bg-gray-900">
-      <!-- 主内容区域 -->
+      <!-- English UI note -->
       <template v-if="!isInitialized">
         <div class="flex h-full w-full items-center justify-center">
           <div class="flex flex-col items-center justify-center text-center">
@@ -78,7 +78,7 @@ onMounted(async () => {
       :image-data="layoutStore.screenCaptureImage"
       @update:open="(v) => (v ? null : layoutStore.closeScreenCaptureModal())"
     />
-    <!-- 全局聊天记录查看器 -->
+    <!-- English UI note -->
     <ChatRecordDrawer />
   </UApp>
 </template>

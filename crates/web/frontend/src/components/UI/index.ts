@@ -1,5 +1,5 @@
 /**
- * UI 组件统一导出
+ * English note.
  */
 export { default as SectionCard } from './SectionCard.vue'
 export { default as StatCard } from './StatCard.vue'

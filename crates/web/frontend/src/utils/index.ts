@@ -1,5 +1,5 @@
 /**
- * 工具函数统一导出
+ * English note.
  */
 export * from './dateFormat'
 export * from './rankStyle'

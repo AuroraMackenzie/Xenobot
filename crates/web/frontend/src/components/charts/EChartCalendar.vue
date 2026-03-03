@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * ECharts 日历热力图组件（GitHub 贡献图风格）
+ * English note.
  */
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -11,7 +11,7 @@ import { CanvasRenderer } from 'echarts/renderers'
 import { useDark } from '@vueuse/core'
 import type { EChartsOption } from 'echarts'
 
-// 注册必要的组件
+// English engineering note.
 echarts.use([HeatmapChart, CalendarComponent, TooltipComponent, VisualMapComponent, CanvasRenderer])
 
 type ECOption = EChartsOption
@@ -24,7 +24,7 @@ export interface CalendarData {
 interface Props {
   data: CalendarData[]
   height?: number
-  year?: number // 指定年份，不指定则自动计算
+  year?: number // English engineering note.
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -36,7 +36,7 @@ const isDark = useDark()
 const chartRef = ref<HTMLElement | null>(null)
 let chartInstance: echarts.ECharts | null = null
 
-// 计算年份范围
+// English engineering note.
 const yearRange = computed(() => {
   if (props.year) return props.year
 
@@ -44,23 +44,23 @@ const yearRange = computed(() => {
     return new Date().getFullYear()
   }
 
-  // 找到数据中最大的年份
+  // English engineering note.
   const years = props.data.map((d) => parseInt(d.date.split('-')[0]))
   return Math.max(...years)
 })
 
-// 计算最大值（用于颜色映射）
+// English engineering note.
 const maxValue = computed(() => {
   if (props.data.length === 0) return 10
   return Math.max(...props.data.map((d) => d.value), 1)
 })
 
-// 转换数据格式为 ECharts 需要的格式
+// English engineering note.
 const chartData = computed(() => {
   return props.data.map((d) => [d.date, d.value])
 })
 
-// 项目主题粉色
+// English engineering note.
 const themeColors = {
   light: ['#d6f1f7', '#82d2e4', '#44b9d4', '#0ea5c9'],
   dark: ['#0b2630', '#104357', '#136b83', '#0ea5c9'],
@@ -84,7 +84,7 @@ const option = computed<ECOption>(() => ({
     bottom: 0,
     itemWidth: 10,
     itemHeight: 100,
-    text: [`${maxValue.value}`, '0'], // 显示实际的最大值
+    text: [`${maxValue.value}`, '0'], // English engineering note.
     inRange: {
       color: isDark.value ? themeColors.dark : themeColors.light,
     },
@@ -97,7 +97,7 @@ const option = computed<ECOption>(() => ({
   calendar: {
     top: 30,
     left: 40,
-    cellSize: [13, 13], // 显式设置正方形格子
+    cellSize: [13, 13], // English engineering note.
     range: String(yearRange.value),
     itemStyle: {
       borderWidth: 2,
@@ -130,7 +130,7 @@ const option = computed<ECOption>(() => ({
     },
     dayLabel: {
       show: true,
-      firstDay: 1, // 从周一开始
+      firstDay: 1, // English engineering note.
       color: isDark.value ? '#6b7280' : '#9ca3af',
       fontSize: 10,
       nameMap: [
@@ -156,7 +156,7 @@ const option = computed<ECOption>(() => ({
   ],
 }))
 
-// 初始化图表
+// English engineering note.
 function initChart() {
   if (!chartRef.value) return
 
@@ -166,18 +166,18 @@ function initChart() {
   chartInstance.setOption(option.value)
 }
 
-// 更新图表
+// English engineering note.
 function updateChart() {
   if (!chartInstance) return
   chartInstance.setOption(option.value, { notMerge: true })
 }
 
-// 响应窗口大小变化
+// English engineering note.
 function handleResize() {
   chartInstance?.resize()
 }
 
-// 监听数据、主题、语言变化
+// English engineering note.
 watch([() => props.data, isDark, locale], () => {
   updateChart()
 })

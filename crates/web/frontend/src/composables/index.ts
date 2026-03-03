@@ -1,5 +1,5 @@
 /**
- * Composables 统一导出
+ * English note.
  */
 export { useAsyncData, useMultipleAsyncData } from './useAsyncData'
 export { usePageAnchors, type AnchorItem } from './usePageAnchors'

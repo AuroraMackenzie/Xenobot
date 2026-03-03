@@ -18,13 +18,13 @@ const props = defineProps<{
   timeFilter?: TimeFilter
 }>()
 
-// 子 Tab 配置（群聊专属：包含互动分析和榜单）
+// English engineering note.
 const subTabs = computed(() => {
   const tabs = [
     { id: 'message', label: t('analysis.subTabs.view.message'), icon: 'i-heroicons-chat-bubble-left-right' },
     { id: 'interaction', label: t('analysis.subTabs.view.interaction'), icon: 'i-heroicons-arrows-right-left' },
   ]
-  // 榜单仅在中文下显示
+  // English engineering note.
   if (isFeatureSupported('groupRanking', locale.value as LocaleType)) {
     tabs.push({ id: 'ranking', label: t('analysis.subTabs.view.ranking'), icon: 'i-heroicons-trophy' })
   }
@@ -33,10 +33,10 @@ const subTabs = computed(() => {
 
 const activeSubTab = ref('message')
 
-// 成员筛选
+// English engineering note.
 const selectedMemberId = ref<number | null>(null)
 
-// 构建 timeFilter（含 memberId）
+// English engineering note.
 const viewTimeFilter = computed(() => ({
   ...props.timeFilter,
   memberId: selectedMemberId.value,
@@ -45,14 +45,14 @@ const viewTimeFilter = computed(() => ({
 
 <template>
   <div class="flex h-full flex-col">
-    <!-- 子 Tab 导航（右侧插槽放成员筛选） -->
+    <!-- English UI note -->
     <SubTabs v-model="activeSubTab" :items="subTabs" persist-key="groupViewTab">
       <template #right>
         <UserSelect v-model="selectedMemberId" :session-id="props.sessionId" />
       </template>
     </SubTabs>
 
-    <!-- 子 Tab 内容 -->
+    <!-- English UI note -->
     <div class="flex-1 min-h-0 overflow-y-auto">
       <Transition name="fade" mode="out-in">
         <XenoMessageView

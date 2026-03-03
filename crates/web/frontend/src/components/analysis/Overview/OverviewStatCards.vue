@@ -24,7 +24,7 @@ defineProps<{
 
 <template>
   <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-    <!-- 日均消息 -->
+    <!-- English UI note -->
     <StatCard
       :label="t('analysis.overview.statCards.dailyAvgMessages')"
       :value="t('analysis.overview.statCards.messagesCount', { count: dailyAvgMessages })"
@@ -38,7 +38,7 @@ defineProps<{
       </template>
     </StatCard>
 
-    <!-- 图片/表情 -->
+    <!-- English UI note -->
     <StatCard
       :label="t('analysis.overview.statCards.imageMessages')"
       :value="t('analysis.overview.statCards.imagesCount', { count: imageCount })"
@@ -51,7 +51,7 @@ defineProps<{
       </template>
     </StatCard>
 
-    <!-- 最活跃星期 -->
+    <!-- English UI note -->
     <StatCard
       :label="t('analysis.overview.statCards.mostActiveWeekday')"
       :value="peakWeekday ? weekdayNames[peakWeekday.weekday - 1] : '-'"
@@ -65,7 +65,7 @@ defineProps<{
       </template>
     </StatCard>
 
-    <!-- 周末活跃度 -->
+    <!-- English UI note -->
     <StatCard
       :label="t('analysis.overview.statCards.weekendActivity')"
       :value="`${weekdayVsWeekend.weekend}%`"
@@ -77,7 +77,7 @@ defineProps<{
       </template>
     </StatCard>
 
-    <!-- 最活跃日期 -->
+    <!-- English UI note -->
     <StatCard
       :label="t('analysis.overview.statCards.mostActiveDate')"
       :value="peakDay ? dayjs(peakDay.date).format('MM/DD') : '-'"
@@ -91,7 +91,7 @@ defineProps<{
       </template>
     </StatCard>
 
-    <!-- 活跃天数 -->
+    <!-- English UI note -->
     <StatCard :label="t('analysis.overview.statCards.activeDays')" :value="`${activeDays}`" icon="📆" icon-bg="blue">
       <template #subtext>
         <span class="text-sm text-gray-500">
@@ -100,7 +100,7 @@ defineProps<{
       </template>
     </StatCard>
 
-    <!-- 连续打卡 -->
+    <!-- English UI note -->
     <StatCard
       :label="t('analysis.overview.statCards.consecutiveStreak')"
       :value="t('analysis.overview.statCards.daysStreak', { count: maxConsecutiveDays })"
@@ -112,7 +112,7 @@ defineProps<{
       </template>
     </StatCard>
 
-    <!-- 活跃率 -->
+    <!-- English UI note -->
     <StatCard :label="t('analysis.overview.statCards.activityRate')" :value="`${activeRate}%`" icon="📈" icon-bg="gray">
       <template #subtext>
         <span class="text-sm text-gray-500">{{ t('analysis.overview.statCards.activeDaysRatio') }}</span>

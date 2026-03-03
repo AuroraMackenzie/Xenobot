@@ -23,7 +23,7 @@ const props = defineProps<{
   chatType?: 'group' | 'private'
 }>()
 
-// 使用 AI 对话 Composable
+// English engineering note.
 const {
   messages,
   sourceMessages,
@@ -45,25 +45,25 @@ const {
 // Store
 const promptStore = usePromptStore()
 
-// 当前聊天类型
+// English engineering note.
 const currentChatType = computed(() => props.chatType ?? 'group')
 
-// UI 状态
+// English engineering note.
 const isSourcePanelCollapsed = ref(false)
 const hasLLMConfig = ref(false)
 const isCheckingConfig = ref(true)
 const messagesContainer = ref<HTMLElement | null>(null)
 const conversationListRef = ref<InstanceType<typeof ConversationList> | null>(null)
 
-// 智能滚动状态
-const isStickToBottom = ref(true) // 是否粘在底部（自动滚动）
-const showScrollToBottom = ref(false) // 是否显示"返回底部"按钮
-const RESTICK_THRESHOLD = 30 // 距离底部此距离内时重新粘住
+// English engineering note.
+const isStickToBottom = ref(true) // English engineering note.
+const showScrollToBottom = ref(false) // English engineering note.
+const RESTICK_THRESHOLD = 30 // English engineering note.
 
-// 截屏功能
+// English engineering note.
 const conversationContentRef = ref<HTMLElement | null>(null)
 
-// 将消息分组为 QA 对（用户问题 + AI 回复）
+// English engineering note.
 const qaPairs = computed(() => {
   const pairs: Array<{
     user: (typeof messages.value)[0] | null
@@ -74,7 +74,7 @@ const qaPairs = computed(() => {
 
   for (const msg of messages.value) {
     if (msg.role === 'user') {
-      // 如果已有用户消息但没有对应的 AI 回复，先保存
+      // English engineering note.
       if (currentUser) {
         pairs.push({ user: currentUser, assistant: null, id: currentUser.id })
       }
@@ -85,7 +85,7 @@ const qaPairs = computed(() => {
     }
   }
 
-  // 处理最后一个未配对的用户消息
+  // English engineering note.
   if (currentUser) {
     pairs.push({ user: currentUser, assistant: null, id: currentUser.id })
   }
@@ -93,7 +93,7 @@ const qaPairs = computed(() => {
   return pairs
 })
 
-// 检查 LLM 配置
+// English engineering note.
 async function checkLLMConfig() {
   isCheckingConfig.value = true
   try {
@@ -106,45 +106,45 @@ async function checkLLMConfig() {
   }
 }
 
-// 刷新配置状态（供外部调用）
+// English engineering note.
 async function refreshConfig() {
   await checkLLMConfig()
   if (hasLLMConfig.value) {
     await updateMaxMessages()
   }
-  // 更新欢迎消息
+  // English engineering note.
   const welcomeMsg = messages.value.find((m) => m.id.startsWith('welcome'))
   if (welcomeMsg) {
     welcomeMsg.content = generateWelcomeMessage()
   }
 }
 
-// 暴露方法供父组件调用
+// English engineering note.
 defineExpose({
   refreshConfig,
 })
 
-// 生成欢迎消息
+// English engineering note.
 function generateWelcomeMessage() {
   const configHint = hasLLMConfig.value ? t('ai.chat.welcome.configReady') : t('ai.chat.welcome.configNeeded')
 
   return t('ai.chat.welcome.message', { sessionName: props.sessionName, configHint })
 }
 
-// 发送消息
+// English engineering note.
 async function handleSend(content: string) {
   await sendMessage(content)
-  // 强制滚动到底部（用户发送消息后应该看到响应）
+  // English engineering note.
   scrollToBottom(true)
-  // 刷新对话列表
+  // English engineering note.
   conversationListRef.value?.refresh()
 }
 
-// 滚动到底部（强制滚动，用于发送消息等场景）
+// English engineering note.
 function scrollToBottom(force = false) {
   setTimeout(() => {
     if (messagesContainer.value) {
-      // 如果强制滚动，或者处于粘性模式，才执行滚动
+      // English engineering note.
       if (force || isStickToBottom.value) {
         messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
         isStickToBottom.value = true
@@ -154,80 +154,80 @@ function scrollToBottom(force = false) {
   }, 100)
 }
 
-// 处理用户滚轮/触控板事件（可靠地检测用户主动滚动）
+// English engineering note.
 function handleWheel(event: WheelEvent) {
-  // deltaY < 0 表示向上滚动
+  // English engineering note.
   if (event.deltaY < 0 && isAIThinking.value) {
-    // 用户在 AI 生成时主动向上滚动，解除粘性
+    // English engineering note.
     isStickToBottom.value = false
     showScrollToBottom.value = true
   }
 }
 
-// 检测滚动位置（仅用于检测是否滚动到底部以重新粘住）
+// English engineering note.
 function checkScrollPosition() {
   if (!messagesContainer.value) return
 
   const { scrollTop, scrollHeight, clientHeight } = messagesContainer.value
   const distanceFromBottom = scrollHeight - scrollTop - clientHeight
 
-  // 如果用户手动滚动到接近底部，重新启用粘性
+  // English engineering note.
   if (distanceFromBottom < RESTICK_THRESHOLD) {
     isStickToBottom.value = true
     showScrollToBottom.value = false
   }
 }
 
-// 点击"返回底部"按钮
+// English engineering note.
 function handleScrollToBottom() {
   scrollToBottom(true)
 }
 
-// 切换数据源面板
+// English engineering note.
 function toggleSourcePanel() {
   isSourcePanelCollapsed.value = !isSourcePanelCollapsed.value
 }
 
-// 加载更多数据源
+// English engineering note.
 async function handleLoadMore() {
   await loadMoreSourceMessages()
 }
 
-// 选择对话
+// English engineering note.
 async function handleSelectConversation(convId: string) {
   await loadConversation(convId)
-  scrollToBottom(true) // 切换对话时强制滚动到底部
+  scrollToBottom(true) // English engineering note.
 }
 
-// 创建新对话
+// English engineering note.
 function handleCreateConversation() {
   startNewConversation(generateWelcomeMessage())
 }
 
-// 删除对话
+// English engineering note.
 function handleDeleteConversation(convId: string) {
-  // 如果删除的是当前对话，创建新对话
+  // English engineering note.
   if (currentConversationId.value === convId) {
     startNewConversation(generateWelcomeMessage())
   }
 }
 
-// 初始化
+// English engineering note.
 onMounted(async () => {
   await checkLLMConfig()
   await updateMaxMessages()
 
-  // 初始化欢迎消息
+  // English engineering note.
   startNewConversation(generateWelcomeMessage())
 
-  // 添加事件监听
+  // English engineering note.
   if (messagesContainer.value) {
     messagesContainer.value.addEventListener('scroll', checkScrollPosition)
     messagesContainer.value.addEventListener('wheel', handleWheel, { passive: true })
   }
 })
 
-// 组件卸载时清理
+// English engineering note.
 onBeforeUnmount(() => {
   stopGeneration()
   if (messagesContainer.value) {
@@ -236,12 +236,12 @@ onBeforeUnmount(() => {
   }
 })
 
-// 处理停止按钮
+// English engineering note.
 function handleStop() {
   stopGeneration()
 }
 
-// 监听消息变化，自动滚动
+// English engineering note.
 watch(
   () => messages.value.length,
   () => {
@@ -249,7 +249,7 @@ watch(
   }
 )
 
-// 监听 AI 响应流式更新
+// English engineering note.
 watch(
   () => messages.value[messages.value.length - 1]?.content,
   () => {
@@ -257,7 +257,7 @@ watch(
   }
 )
 
-// 监听 AI 响应 contentBlocks 更新（工具调用状态变化）
+// English engineering note.
 watch(
   () => messages.value[messages.value.length - 1]?.contentBlocks?.length,
   () => {
@@ -265,7 +265,7 @@ watch(
   }
 )
 
-// 监听全局 AI 配置变化（从设置弹窗保存时触发）
+// English engineering note.
 watch(
   () => promptStore.aiConfigVersion,
   async () => {
@@ -276,7 +276,7 @@ watch(
 
 <template>
   <div class="main-content flex h-full overflow-hidden">
-    <!-- 左侧：对话记录列表 -->
+    <!-- English UI note -->
     <ConversationList
       ref="conversationListRef"
       :session-id="sessionId"
@@ -287,13 +287,13 @@ watch(
       @delete="handleDeleteConversation"
     />
 
-    <!-- 中间：对话区域 -->
+    <!-- English UI note -->
     <div class="flex h-full flex-1">
       <div class="relative flex min-w-[480px] flex-1 flex-col overflow-hidden">
-        <!-- 消息列表 -->
+        <!-- English UI note -->
         <div ref="messagesContainer" class="min-h-0 flex-1 overflow-y-auto p-4">
           <div ref="conversationContentRef" class="mx-auto max-w-3xl space-y-4">
-            <!-- 对话截屏按钮 -->
+            <!-- English UI note -->
             <div v-if="qaPairs.length > 0 && !isAIThinking" class="flex justify-end">
               <CaptureButton
                 :label="t('ai.chat.capture')"
@@ -303,10 +303,10 @@ watch(
               />
             </div>
 
-            <!-- QA 对渲染 -->
+            <!-- English UI note -->
             <template v-for="pair in qaPairs" :key="pair.id">
               <div class="qa-pair space-y-4">
-                <!-- 用户问题 -->
+                <!-- English UI note -->
                 <ChatMessage
                   v-if="pair.user && (pair.user.role === 'user' || pair.user.content)"
                   :role="pair.user.role"
@@ -315,7 +315,7 @@ watch(
                   :is-streaming="pair.user.isStreaming"
                   :content-blocks="pair.user.contentBlocks"
                 />
-                <!-- AI 回复 -->
+                <!-- English UI note -->
                 <ChatMessage
                   v-if="
                     pair.assistant &&
@@ -332,7 +332,7 @@ watch(
               </div>
             </template>
 
-            <!-- AI 思考中指示器（仅在没有任何内容块时显示） -->
+            <!-- English UI note -->
             <AIThinkingIndicator
               v-if="
                 isAIThinking &&
@@ -345,7 +345,7 @@ watch(
           </div>
         </div>
 
-        <!-- 返回底部浮动按钮（固定在输入框上方） -->
+        <!-- English UI note -->
         <Transition name="fade-up">
           <button
             v-if="showScrollToBottom"
@@ -357,7 +357,7 @@ watch(
           </button>
         </Transition>
 
-        <!-- 输入框区域 -->
+        <!-- English UI note -->
         <div class="px-4 pb-2">
           <div class="mx-auto max-w-3xl">
             <ChatInput
@@ -367,7 +367,7 @@ watch(
               @stop="handleStop"
             />
 
-            <!-- 底部状态栏 -->
+            <!-- English UI note -->
             <ChatStatusBar
               :chat-type="currentChatType"
               :session-token-usage="sessionTokenUsage"
@@ -379,7 +379,7 @@ watch(
       </div>
     </div>
 
-    <!-- 右侧：数据源面板 -->
+    <!-- English UI note -->
     <Transition name="slide-fade">
       <div
         v-if="sourceMessages.length > 0 && !isSourcePanelCollapsed"

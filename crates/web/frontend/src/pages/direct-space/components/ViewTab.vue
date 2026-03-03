@@ -17,17 +17,17 @@ const props = defineProps<{
   timeFilter?: TimeFilter
 }>()
 
-// 子 Tab 配置（私聊只有消息视图）
+// English engineering note.
 const subTabs = computed(() => [
   { id: 'message', label: t('analysis.subTabs.view.message'), icon: 'i-heroicons-chat-bubble-left-right' },
 ])
 
 const activeSubTab = ref('message')
 
-// 成员筛选
+// English engineering note.
 const selectedMemberId = ref<number | null>(null)
 
-// 构建 timeFilter（含 memberId）
+// English engineering note.
 const viewTimeFilter = computed(() => ({
   ...props.timeFilter,
   memberId: selectedMemberId.value,
@@ -36,14 +36,14 @@ const viewTimeFilter = computed(() => ({
 
 <template>
   <div class="flex h-full flex-col">
-    <!-- 子 Tab 导航（右侧插槽放成员筛选） -->
+    <!-- English UI note -->
     <SubTabs v-model="activeSubTab" :items="subTabs" persist-key="privateViewTab">
       <template #right>
         <UserSelect v-model="selectedMemberId" :session-id="props.sessionId" />
       </template>
     </SubTabs>
 
-    <!-- 子 Tab 内容 -->
+    <!-- English UI note -->
     <div class="flex-1 min-h-0 overflow-auto">
       <Transition name="fade" mode="out-in">
         <XenoMessageView

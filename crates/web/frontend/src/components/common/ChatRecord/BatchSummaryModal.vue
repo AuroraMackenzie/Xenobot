@@ -15,29 +15,29 @@ const emit = defineEmits<{
 
 const { t, locale } = useI18n()
 
-// 计算属性：双向绑定 open
+// English engineering note.
 const isOpen = computed({
   get: () => props.open,
   set: (val) => emit('update:open', val),
 })
 
-// 查询模式：按时间 / 按范围
+// English engineering note.
 type QueryMode = 'time' | 'range'
 const queryMode = ref<QueryMode>('range')
 
-// 按范围选项（百分比 0-100）
+// English engineering note.
 const rangePercent = ref(50)
-const totalSessionCount = ref(0) // 总会话数
+const totalSessionCount = ref(0) // English engineering note.
 
-// 时间范围选项
+// English engineering note.
 type TimeRangePreset = 'today' | 'yesterday' | 'week' | 'month' | 'custom'
 const selectedPreset = ref<TimeRangePreset>('today')
 
-// 自定义时间范围
+// English engineering note.
 const customStartDate = ref<Date | null>(null)
 const customEndDate = ref<Date | null>(null)
 
-// 会话列表
+// English engineering note.
 interface SessionItem {
   id: number
   startTs: number
@@ -48,24 +48,24 @@ interface SessionItem {
 const sessions = ref<SessionItem[]>([])
 const isLoading = ref(false)
 
-// 生成状态
+// English engineering note.
 const isGenerating = ref(false)
 const currentIndex = ref(0)
-const totalToGenerate = ref(0) // 记录开始时的总数
+const totalToGenerate = ref(0) // English engineering note.
 const results = ref<
   Array<{ id: number; status: 'success' | 'failed' | 'skipped'; message?: string; summary?: string }>
 >([])
 const shouldStop = ref(false)
 
-// 判断是否是消息数量太少的错误
+// English engineering note.
 function isTooFewMessagesError(error: string): boolean {
   return error.includes('少于3条') || error.includes('less than 3') || error.includes('无需生成摘要')
 }
 
-// 滚动容器引用
+// English engineering note.
 const resultsContainer = ref<HTMLElement | null>(null)
 
-// 计算时间范围
+// English engineering note.
 const timeRange = computed(() => {
   const now = new Date()
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
@@ -104,7 +104,7 @@ const timeRange = computed(() => {
       if (customStartDate.value && customEndDate.value) {
         return {
           start: customStartDate.value.getTime(),
-          end: new Date(customEndDate.value.getTime() + 24 * 60 * 60 * 1000 - 1).getTime(), // 当天结束
+          end: new Date(customEndDate.value.getTime() + 24 * 60 * 60 * 1000 - 1).getTime(), // English engineering note.
         }
       }
       return null
@@ -113,11 +113,11 @@ const timeRange = computed(() => {
   }
 })
 
-// 会话可生成状态检查结果
+// English engineering note.
 const canGenerateMap = ref<Record<number, { canGenerate: boolean; reason?: string }>>({})
 const isChecking = ref(false)
 
-// 待生成的会话（排除已有摘要的 + 消息太少的）
+// English engineering note.
 const pendingSessions = computed(() => {
   return sessions.value.filter((s) => {
     if (s.summary) return false
@@ -126,12 +126,12 @@ const pendingSessions = computed(() => {
   })
 })
 
-// 已有摘要的会话数
+// English engineering note.
 const existingSummaryCount = computed(() => {
   return sessions.value.filter((s) => s.summary).length
 })
 
-// 消息数量太少的会话数（无摘要但无法生成）
+// English engineering note.
 const tooFewMessagesCount = computed(() => {
   return sessions.value.filter((s) => {
     if (s.summary) return false
@@ -140,13 +140,13 @@ const tooFewMessagesCount = computed(() => {
   }).length
 })
 
-// 进度百分比
+// English engineering note.
 const progressPercent = computed(() => {
   if (totalToGenerate.value === 0) return 100
   return Math.round((currentIndex.value / totalToGenerate.value) * 100)
 })
 
-// 统计结果
+// English engineering note.
 const stats = computed(() => {
   const success = results.value.filter((r) => r.status === 'success').length
   const failed = results.value.filter((r) => r.status === 'failed').length
@@ -154,33 +154,33 @@ const stats = computed(() => {
   return { success, failed, skipped }
 })
 
-// 查询会话
+// English engineering note.
 async function fetchSessions() {
   isLoading.value = true
   canGenerateMap.value = {}
 
   try {
     if (queryMode.value === 'range') {
-      // 按范围查询：先获取总数，再按百分比计算数量
+      // English engineering note.
       const allSessions = await window.sessionApi.getSessions(props.sessionId)
       totalSessionCount.value = allSessions.length
       const count = Math.ceil(allSessions.length * (rangePercent.value / 100))
-      // 取最近的 count 个会话（按时间倒序取后面的）
+      // English engineering note.
       sessions.value = allSessions.slice(-count)
     } else {
-      // 按时间查询
+      // English engineering note.
       if (!timeRange.value) {
         sessions.value = []
         return
       }
-      // 将时间戳转换为秒（数据库中使用秒）
+      // English engineering note.
       const startTs = Math.floor(timeRange.value.start / 1000)
       const endTs = Math.floor(timeRange.value.end / 1000)
 
       sessions.value = await window.sessionApi.getByTimeRange(props.sessionId, startTs, endTs)
     }
 
-    // 检查哪些会话可以生成摘要
+    // English engineering note.
     if (sessions.value.length > 0) {
       await checkCanGenerate()
     }
@@ -192,7 +192,7 @@ async function fetchSessions() {
   }
 }
 
-// 批量检查会话是否可以生成摘要
+// English engineering note.
 async function checkCanGenerate() {
   const noSummaryIds = sessions.value.filter((s) => !s.summary).map((s) => s.id)
   if (noSummaryIds.length === 0) return
@@ -207,12 +207,12 @@ async function checkCanGenerate() {
   }
 }
 
-// 防抖版本的 fetchSessions（用于滑块拖动）
+// English engineering note.
 const debouncedFetchSessions = useDebounceFn(() => {
   fetchSessions()
 }, 300)
 
-// 监听查询条件变化
+// English engineering note.
 watch(
   () => [queryMode.value, selectedPreset.value, customStartDate.value, customEndDate.value],
   () => {
@@ -225,7 +225,7 @@ watch(
   { immediate: true }
 )
 
-// 单独监听滑块值变化（使用防抖）
+// English engineering note.
 watch(
   () => rangePercent.value,
   () => {
@@ -235,12 +235,12 @@ watch(
   }
 )
 
-// 监听弹窗打开
+// English engineering note.
 watch(
   () => props.open,
   (isOpen) => {
     if (isOpen) {
-      // 重置状态
+      // English engineering note.
       isGenerating.value = false
       currentIndex.value = 0
       results.value = []
@@ -250,9 +250,9 @@ watch(
   }
 )
 
-// 开始生成
+// English engineering note.
 async function startGenerate() {
-  // 复制一份静态数组，避免在循环中因 computed 值变化导致问题
+  // English engineering note.
   const sessionsToProcess = [...pendingSessions.value]
   if (sessionsToProcess.length === 0) return
 
@@ -270,26 +270,26 @@ async function startGenerate() {
         const result = await window.sessionApi.generateSummary(props.sessionId, session.id, locale.value, false)
 
         if (result.success) {
-          // 成功：显示摘要内容
+          // English engineering note.
           results.value.push({
             id: session.id,
             status: 'success',
             summary: result.summary || '',
           })
-          // 更新本地会话数据
+          // English engineering note.
           const idx = sessions.value.findIndex((s) => s.id === session.id)
           if (idx !== -1) {
             sessions.value[idx].summary = result.summary || ''
           }
         } else if (result.error && isTooFewMessagesError(result.error)) {
-          // 消息数量太少：标记为跳过
+          // English engineering note.
           results.value.push({
             id: session.id,
             status: 'skipped',
             message: result.error,
           })
         } else {
-          // 其他错误：标记为失败
+          // English engineering note.
           results.value.push({
             id: session.id,
             status: 'failed',
@@ -302,29 +302,29 @@ async function startGenerate() {
 
       currentIndex.value++
 
-      // 自动滚动到底部
+      // English engineering note.
       await nextTick()
       if (resultsContainer.value) {
         resultsContainer.value.scrollTop = resultsContainer.value.scrollHeight
       }
     }
   } finally {
-    // 确保无论如何都结束生成状态
+    // English engineering note.
     isGenerating.value = false
   }
 
-  // 如果有成功生成的，通知父组件刷新
+  // English engineering note.
   if (stats.value.success > 0) {
     emit('completed')
   }
 }
 
-// 停止生成
+// English engineering note.
 function stopGenerate() {
   shouldStop.value = true
 }
 
-// 关闭弹窗
+// English engineering note.
 function close() {
   if (isGenerating.value) {
     shouldStop.value = true
@@ -332,7 +332,7 @@ function close() {
   emit('update:open', false)
 }
 
-// 格式化时间戳
+// English engineering note.
 function formatTs(ts: number) {
   return useDateFormat(new Date(ts * 1000), 'MM-DD HH:mm').value
 }
@@ -350,7 +350,7 @@ function formatTs(ts: number) {
         </template>
 
         <div class="space-y-4">
-          <!-- 查询模式切换 -->
+          <!-- English UI note -->
           <div class="flex gap-2 border-b border-gray-200 dark:border-gray-700 pb-3">
             <UButton
               :color="queryMode === 'range' ? 'primary' : 'neutral'"
@@ -372,7 +372,7 @@ function formatTs(ts: number) {
             </UButton>
           </div>
 
-          <!-- 按范围选择 -->
+          <!-- English UI note -->
           <div v-if="queryMode === 'range'">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               {{ t('records.batchSummary.selectRange', '选择范围') }}
@@ -396,7 +396,7 @@ function formatTs(ts: number) {
             </div>
           </div>
 
-          <!-- 按时间范围选择 -->
+          <!-- English UI note -->
           <div v-else-if="queryMode === 'time'">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               {{ t('records.batchSummary.timeRange', '选择时间范围') }}
@@ -421,7 +421,7 @@ function formatTs(ts: number) {
               </UButton>
             </div>
 
-            <!-- 自定义日期选择 -->
+            <!-- English UI note -->
             <div v-if="selectedPreset === 'custom'" class="mt-3 flex items-center gap-2">
               <UInput v-model="customStartDate" type="date" :disabled="isGenerating" size="sm" />
               <span class="text-gray-500">—</span>
@@ -429,7 +429,7 @@ function formatTs(ts: number) {
             </div>
           </div>
 
-          <!-- 会话预览 -->
+          <!-- English UI note -->
           <div v-if="!isLoading && !isChecking" class="text-sm text-gray-600 dark:text-gray-400">
             <template v-if="sessions.length > 0">
               <p>
@@ -474,19 +474,19 @@ function formatTs(ts: number) {
             {{ t('records.batchSummary.loading', '加载中...') }}
           </div>
 
-          <!-- 进度条 -->
+          <!-- English UI note -->
           <div v-if="isGenerating || results.length > 0" class="space-y-2">
             <div class="flex items-center justify-between text-sm">
               <span>{{ t('records.batchSummary.progress', '进度') }}</span>
               <span>{{ currentIndex }} / {{ totalToGenerate || pendingSessions.length }}</span>
             </div>
-            <!-- 进行中：显示动画进度条 -->
+            <!-- English UI note -->
             <UProgress v-if="isGenerating" :value="progressPercent" />
-            <!-- 已完成：显示静态完成条 -->
+            <!-- English UI note -->
             <div v-else class="h-2 w-full rounded-full bg-green-500" />
           </div>
 
-          <!-- 结果列表 -->
+          <!-- English UI note -->
           <div
             v-if="results.length > 0"
             ref="resultsContainer"
@@ -497,7 +497,7 @@ function formatTs(ts: number) {
               :key="result.id"
               class="flex flex-col gap-1 px-3 py-2 text-sm border-b border-gray-200 dark:border-gray-700 last:border-b-0"
             >
-              <!-- 第一行：状态图标 + 会话ID + 状态文字 -->
+              <!-- English UI note -->
               <div class="flex items-center gap-2">
                 <UIcon
                   :name="
@@ -532,7 +532,7 @@ function formatTs(ts: number) {
                   }}
                 </span>
               </div>
-              <!-- 第二行：摘要内容或错误信息 -->
+              <!-- English UI note -->
               <div v-if="result.summary" class="pl-6 text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
                 {{ result.summary }}
               </div>
@@ -545,7 +545,7 @@ function formatTs(ts: number) {
             </div>
           </div>
 
-          <!-- 统计结果 -->
+          <!-- English UI note -->
           <div v-if="!isGenerating && results.length > 0" class="flex items-center gap-4 text-sm">
             <span class="text-green-600 dark:text-green-400">
               <UIcon name="i-heroicons-check-circle" class="mr-1" />

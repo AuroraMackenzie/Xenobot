@@ -32,7 +32,7 @@ const props = defineProps<{
   memberId?: number | null
 }>()
 
-// 状态
+// English engineering note.
 const isLoading = ref(false)
 const wordcloudData = ref<EChartWordcloudData>({ words: [] })
 const stats = ref({
@@ -41,44 +41,44 @@ const stats = ref({
   uniqueWords: 0,
 })
 
-// 颜色方案（固定为默认）
+// English engineering note.
 const colorScheme = 'default' as const
 
-// 字体大小倍率（默认大）
+// English engineering note.
 const sizeScale = ref(1.25)
 
-// 最大显示词数（默认 150）
+// English engineering note.
 const maxWords = ref(150)
 
-// 词性过滤模式
+// English engineering note.
 const posFilterMode = ref<PosFilterMode>('meaningful')
 
-// 停用词过滤开关
+// English engineering note.
 const enableStopwords = ref(true)
 
-// 自定义词性标签（用于 custom 模式）
+// English engineering note.
 const customPosTags = ref<string[]>([])
 
-// 所有词性标签定义
+// English engineering note.
 const posTagDefinitions = ref<PosTagInfo[]>([])
 
-// 词性统计（每个词性有多少词）
+// English engineering note.
 const posTagStats = ref<Map<string, number>>(new Map())
 
-// 用户筛选（本地状态，覆盖 props.memberId）
+// English engineering note.
 const selectedMemberId = ref<number | null>(null)
 
-// 获取当前语言设置
+// English engineering note.
 const locale = computed(() => settingsStore.locale as 'zh-CN' | 'en-US')
 
-// 词性过滤模式选项
+// English engineering note.
 const posFilterModeOptions = computed(() => [
   { label: t('quotes.wordcloud.posFilter.all'), value: 'all' },
   { label: t('quotes.wordcloud.posFilter.meaningful'), value: 'meaningful' },
   { label: t('quotes.wordcloud.posFilter.custom'), value: 'custom' },
 ])
 
-// 词数选项
+// English engineering note.
 const maxWordsOptions = [
   { label: '80', value: 80 },
   { label: '100', value: 100 },
@@ -87,7 +87,7 @@ const maxWordsOptions = [
   { label: '300', value: 300 },
 ]
 
-// 字体大小选项
+// English engineering note.
 const sizeScaleOptions = computed(() => [
   { label: t('quotes.wordcloud.size.small'), value: 0.75 },
   { label: t('quotes.wordcloud.size.medium'), value: 1 },
@@ -95,7 +95,7 @@ const sizeScaleOptions = computed(() => [
   { label: t('quotes.wordcloud.size.xlarge'), value: 1.5 },
 ])
 
-// 词性标签选项（用于多选，带词数）
+// English engineering note.
 const posTagOptions = computed(() =>
   posTagDefinitions.value.map((p) => ({
     label: p.name,
@@ -106,19 +106,19 @@ const posTagOptions = computed(() =>
   }))
 )
 
-// 加载词性标签定义
+// English engineering note.
 async function loadPosTagDefinitions() {
   try {
     const tags = await window.nlpApi.getPosTags()
     posTagDefinitions.value = tags
-    // 初始化自定义词性为有意义的词性
+    // English engineering note.
     customPosTags.value = tags.filter((t) => t.meaningful).map((t) => t.tag)
   } catch (error) {
     console.error('加载词性标签失败:', error)
   }
 }
 
-// 加载词频数据
+// English engineering note.
 async function loadWordFrequency() {
   if (!props.sessionId) return
 
@@ -150,7 +150,7 @@ async function loadWordFrequency() {
       uniqueWords: result.uniqueWords,
     }
 
-    // 更新词性统计
+    // English engineering note.
     if (result.posTagStats) {
       const statsMap = new Map<string, number>()
       for (const stat of result.posTagStats) {
@@ -166,7 +166,7 @@ async function loadWordFrequency() {
   }
 }
 
-// 监听参数变化
+// English engineering note.
 watch(
   () => [
     props.sessionId,
@@ -182,7 +182,7 @@ watch(
   { immediate: true, deep: true }
 )
 
-// 监听自定义词性变化（仅在 custom 模式下）
+// English engineering note.
 watch(
   customPosTags,
   () => {
@@ -193,19 +193,19 @@ watch(
   { deep: true }
 )
 
-// 监听语言变化（需要重新分词）
+// English engineering note.
 watch(locale, () => {
   loadWordFrequency()
 })
 
-// 点击词语，打开聊天记录查看器
+// English engineering note.
 function handleWordClick(word: string) {
   layoutStore.openChatRecordDrawer({
     keywords: [word],
   })
 }
 
-// 初始化
+// English engineering note.
 onMounted(() => {
   loadPosTagDefinitions()
 })
@@ -214,18 +214,18 @@ onMounted(() => {
 <template>
   <div class="main-content mx-auto max-w-6xl py-6">
     <div class="flex gap-6">
-      <!-- 左侧：词云主展示区 + 统计信息 -->
+      <!-- English UI note -->
       <div class="flex-1 min-w-0 space-y-4">
-        <!-- 词云区域（固定 16:9 长宽比） -->
+        <!-- English UI note -->
         <div class="relative w-full" style="aspect-ratio: 16 / 9">
-          <!-- 加载状态 -->
+          <!-- English UI note -->
           <LoadingState
             v-if="isLoading"
             :text="t('quotes.wordcloud.loading')"
             class="absolute inset-0 z-10 rounded-lg bg-white/80 dark:bg-gray-900/80"
           />
 
-          <!-- 空状态 -->
+          <!-- English UI note -->
           <EmptyState
             v-else-if="wordcloudData.words.length === 0"
             icon="i-heroicons-cloud"
@@ -234,7 +234,7 @@ onMounted(() => {
             class="h-full"
           />
 
-          <!-- 词云图表 -->
+          <!-- English UI note -->
           <EChartWordcloud
             v-else
             :data="wordcloudData"
@@ -247,7 +247,7 @@ onMounted(() => {
           />
         </div>
 
-        <!-- 统计信息（横向排列，美观展示） -->
+        <!-- English UI note -->
         <div class="flex items-center justify-center gap-8 py-3">
           <div class="flex items-center gap-2">
             <UIcon name="i-heroicons-chat-bubble-left-right" class="text-lg text-primary-500" />
@@ -283,9 +283,9 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- 右侧：筛选与配置面板 -->
+      <!-- English UI note -->
       <div class="w-[300px] shrink-0 space-y-4">
-        <!-- 显示词数 -->
+        <!-- English UI note -->
         <div>
           <h4 class="mb-2 text-xs font-medium text-gray-600 dark:text-gray-400">
             {{ t('quotes.wordcloud.config.maxWords') }}
@@ -293,7 +293,7 @@ onMounted(() => {
           <UITabs v-model="maxWords" size="xs" :items="maxWordsOptions" />
         </div>
 
-        <!-- 字体大小 -->
+        <!-- English UI note -->
         <div>
           <h4 class="mb-2 text-xs font-medium text-gray-600 dark:text-gray-400">
             {{ t('quotes.wordcloud.config.sizeScale') }}
@@ -301,7 +301,7 @@ onMounted(() => {
           <UITabs v-model="sizeScale" size="xs" :items="sizeScaleOptions" />
         </div>
 
-        <!-- 用户筛选 -->
+        <!-- English UI note -->
         <div>
           <h4 class="mb-2 text-xs font-medium text-gray-600 dark:text-gray-400">
             {{ t('quotes.wordcloud.config.userFilter') }}
@@ -309,7 +309,7 @@ onMounted(() => {
           <UserSelect v-model="selectedMemberId" :session-id="props.sessionId" class="w-full" />
         </div>
 
-        <!-- 词性过滤 -->
+        <!-- English UI note -->
         <div>
           <h4 class="mb-2 text-xs font-medium text-gray-600 dark:text-gray-400">
             {{ t('quotes.wordcloud.config.posFilter') }}
@@ -317,18 +317,18 @@ onMounted(() => {
           <UITabs v-model="posFilterMode" size="xs" :items="posFilterModeOptions" />
         </div>
 
-        <!-- 停用词过滤 -->
+        <!-- English UI note -->
         <div class="flex items-center">
           <UCheckbox v-model="enableStopwords" :label="t('quotes.wordcloud.config.enableStopwords')" />
         </div>
 
-        <!-- 自定义词性选择（仅在 custom 模式下显示） -->
+        <!-- English UI note -->
         <div v-if="posFilterMode === 'custom'" class="space-y-2">
           <div class="flex items-center justify-between">
             <h4 class="text-xs font-medium text-gray-600 dark:text-gray-400">
               {{ t('quotes.wordcloud.posFilter.customHint') }}
             </h4>
-            <!-- 快捷操作 -->
+            <!-- English UI note -->
             <div class="flex gap-1">
               <UButton
                 size="xs"
@@ -351,7 +351,7 @@ onMounted(() => {
               </UButton>
             </div>
           </div>
-          <!-- 词性标签（带滚动） -->
+          <!-- English UI note -->
           <div class="flex flex-wrap gap-1.5 max-h-[360px] overflow-y-auto">
             <UBadge
               v-for="tag in posTagOptions"

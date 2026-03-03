@@ -1,10 +1,10 @@
 /**
- * 支持的语言类型
+ * English note.
  */
 export type LocaleType = 'zh-CN' | 'en-US'
 
 /**
- * 语言配置项
+ * English note.
  */
 export interface LocaleOption {
   code: LocaleType
@@ -13,7 +13,7 @@ export interface LocaleOption {
 }
 
 /**
- * 可用的语言列表
+ * English note.
  */
 export const availableLocales: LocaleOption[] = [
   { code: 'zh-CN', name: 'Chinese (Simplified)', nativeName: '简体中文' },
@@ -21,12 +21,12 @@ export const availableLocales: LocaleOption[] = [
 ]
 
 /**
- * 默认语言
+ * English note.
  */
 export const defaultLocale: LocaleType = 'zh-CN'
 
 /**
- * 检测系统语言
+ * English note.
  */
 export function detectSystemLocale(): LocaleType {
   const systemLocale = navigator.language
@@ -37,32 +37,32 @@ export function detectSystemLocale(): LocaleType {
 }
 
 /**
- * 功能模块的语言支持配置
- * 某些功能可能只支持特定语言
+ * English note.
+ * English note.
  */
 export interface FeatureLocaleSupport {
-  /** 功能标识 */
+  /** English note.
   feature: string
-  /** 支持的语言列表，如果为空则支持所有语言 */
+  /** English note.
   supportedLocales: LocaleType[]
 }
 
 /**
- * 功能语言限制配置
- * 用于控制某些功能只在特定语言下显示
+ * English note.
+ * English note.
  */
 export const featureLocaleRestrictions: Record<string, LocaleType[]> = {
-  // 榜单（龙王、夜猫等）只在中文下显示
+  // English engineering note.
   groupRanking: ['zh-CN'],
-  // 以后可以在这里添加更多限制
+  // English engineering note.
 }
 
 /**
- * 检查功能是否支持当前语言
+ * English note.
  */
 export function isFeatureSupported(feature: string, currentLocale: LocaleType): boolean {
   const supportedLocales = featureLocaleRestrictions[feature]
-  // 如果没有配置限制，则支持所有语言
+  // English engineering note.
   if (!supportedLocales || supportedLocales.length === 0) {
     return true
   }

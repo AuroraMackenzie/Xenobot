@@ -1,7 +1,7 @@
 import { ref, onMounted, onUnmounted, type Ref, type ComputedRef } from 'vue'
 
 /**
- * 导航项配置
+ * English note.
  */
 export interface SubTabNavItem {
   id: string
@@ -10,39 +10,39 @@ export interface SubTabNavItem {
 }
 
 /**
- * 二级导航滚动联动 composable
- * 实现左侧锚点导航与右侧内容区域的滚动联动
+ * English note.
+ * English note.
  */
 export function useSubTabsScroll(navItems: ComputedRef<SubTabNavItem[]> | Ref<SubTabNavItem[]>) {
-  // 当前激活的导航项
+  // English engineering note.
   const activeNav = ref(navItems.value[0]?.id || '')
 
-  // 是否由用户点击触发（用于区分点击滚动和手动滚动）
+  // English engineering note.
   const isUserClick = ref(false)
 
-  // 滚动容器引用
+  // English engineering note.
   const scrollContainerRef = ref<HTMLElement | null>(null)
 
-  // Section 引用
+  // English engineering note.
   const sectionRefs = ref<Record<string, HTMLElement | null>>({})
 
   /**
-   * 设置 section 引用
+   * English note.
    */
   function setSectionRef(id: string, el: HTMLElement | null) {
     sectionRefs.value[id] = el
   }
 
   /**
-   * 处理导航点击（通过 @change 事件）
+   * English note.
    */
   function handleNavChange(id: string) {
     const section = sectionRefs.value[id]
     if (section && scrollContainerRef.value) {
-      // 标记为用户点击触发
+      // English engineering note.
       isUserClick.value = true
       section.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      // 滚动动画结束后恢复
+      // English engineering note.
       setTimeout(() => {
         isUserClick.value = false
       }, 500)
@@ -50,20 +50,20 @@ export function useSubTabsScroll(navItems: ComputedRef<SubTabNavItem[]> | Ref<Su
   }
 
   /**
-   * 监听滚动更新当前激活项
+   * English note.
    */
   function handleScroll() {
-    // 如果是用户点击触发的滚动，不更新 activeNav（避免冲突）
+    // English engineering note.
     if (isUserClick.value || !scrollContainerRef.value) return
 
     const container = scrollContainerRef.value
     const containerRect = container.getBoundingClientRect()
-    const offset = 50 // 偏移量，提前触发
+    const offset = 50 // English engineering note.
 
-    // 检查是否滚动到底部（误差范围 5px）
+    // English engineering note.
     const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 5
     if (isAtBottom) {
-      // 滚动到底部时，激活最后一个导航项
+      // English engineering note.
       const lastItem = navItems.value[navItems.value.length - 1]
       if (lastItem) {
         activeNav.value = lastItem.id
@@ -71,12 +71,12 @@ export function useSubTabsScroll(navItems: ComputedRef<SubTabNavItem[]> | Ref<Su
       return
     }
 
-    // 检查每个 section 的位置
+    // English engineering note.
     for (const item of navItems.value) {
       const section = sectionRefs.value[item.id]
       if (section) {
         const rect = section.getBoundingClientRect()
-        // 如果 section 顶部在容器可视区域内
+        // English engineering note.
         if (rect.top <= containerRect.top + offset && rect.bottom > containerRect.top + offset) {
           activeNav.value = item.id
           break
@@ -85,7 +85,7 @@ export function useSubTabsScroll(navItems: ComputedRef<SubTabNavItem[]> | Ref<Su
     }
   }
 
-  // 生命周期钩子
+  // English engineering note.
   onMounted(() => {
     scrollContainerRef.value?.addEventListener('scroll', handleScroll)
   })
@@ -95,7 +95,7 @@ export function useSubTabsScroll(navItems: ComputedRef<SubTabNavItem[]> | Ref<Su
   })
 
   /**
-   * 程序化滚动到指定 section（供外部调用）
+   * English note.
    */
   function scrollToId(id: string) {
     const section = sectionRefs.value[id]

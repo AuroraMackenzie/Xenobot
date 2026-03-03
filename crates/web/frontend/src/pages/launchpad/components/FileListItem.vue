@@ -1,22 +1,22 @@
 <script setup lang="ts">
 /**
- * 文件列表项组件
- * 用于批量导入/合并导入的文件列表显示
+ * English note.
+ * English note.
  */
 defineProps<{
-  /** 文件名 */
+  /** English note.
   name: string
-  /** 状态图标名称 */
+  /** English note.
   statusIcon: string
-  /** 状态图标样式类 */
+  /** English note.
   statusClass: string
-  /** 进度/状态描述文本 */
+  /** English note.
   progressText?: string
-  /** 当前索引（从0开始） */
+  /** English note.
   index: number
-  /** 总数 */
+  /** English note.
   total: number
-  /** 是否高亮当前项 */
+  /** English note.
   highlight?: boolean
 }>()
 </script>
@@ -34,11 +34,11 @@ defineProps<{
       <p v-if="progressText" class="text-xs text-gray-500 dark:text-gray-400">
         {{ progressText }}
       </p>
-      <!-- 额外内容插槽（如错误信息、操作按钮等） -->
+      <!-- English UI note -->
       <slot name="extra" />
     </div>
     <span class="text-xs text-gray-400">{{ index + 1 }}/{{ total }}</span>
-    <!-- 操作按钮插槽 -->
+    <!-- English UI note -->
     <slot name="action" />
   </div>
 </template>

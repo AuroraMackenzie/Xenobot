@@ -15,7 +15,7 @@ export interface ExportLabels {
 }
 
 /**
- * 格式化对话为 Markdown 格式
+ * English note.
  */
 export function formatAsMarkdown(
   title: string,
@@ -25,7 +25,7 @@ export function formatAsMarkdown(
 ): string {
   const lines: string[] = []
 
-  // 标题
+  // English engineering note.
   lines.push(`# ${title}`)
   lines.push('')
   lines.push(`> ${labels.createdAt}: ${dayjs(createdAt).format('YYYY-MM-DD HH:mm:ss')}`)
@@ -33,7 +33,7 @@ export function formatAsMarkdown(
   lines.push('---')
   lines.push('')
 
-  // 消息
+  // English engineering note.
   for (const msg of messages) {
     const time = dayjs(msg.timestamp).format('YYYY-MM-DD HH:mm:ss')
     const roleLabel = msg.role === 'user' ? labels.user : labels.assistant
@@ -51,7 +51,7 @@ export function formatAsMarkdown(
 }
 
 /**
- * 格式化对话为纯文本格式
+ * English note.
  */
 export function formatAsPlainText(
   title: string,
@@ -61,14 +61,14 @@ export function formatAsPlainText(
 ): string {
   const lines: string[] = []
 
-  // 标题
+  // English engineering note.
   lines.push(`${title}`)
   lines.push(`${labels.createdAt}: ${dayjs(createdAt).format('YYYY-MM-DD HH:mm:ss')}`)
   lines.push('')
   lines.push('='.repeat(50))
   lines.push('')
 
-  // 消息
+  // English engineering note.
   for (const msg of messages) {
     const time = dayjs(msg.timestamp).format('YYYY-MM-DD HH:mm:ss')
     const roleLabel = msg.role === 'user' ? labels.user : labels.assistant
@@ -85,14 +85,14 @@ export function formatAsPlainText(
 }
 
 /**
- * 清理文件名中的非法字符
+ * English note.
  */
 export function sanitizeFilename(filename: string): string {
   return filename.replace(/[/\\?%*:|"<>]/g, '_')
 }
 
 /**
- * 导出对话到下载目录
+ * English note.
  */
 export async function exportConversation(
   title: string,
@@ -105,7 +105,7 @@ export async function exportConversation(
     return { success: false, error: 'No messages to export' }
   }
 
-  // 格式化内容
+  // English engineering note.
   let content: string
   let filename: string
   const timestamp = dayjs(createdAt).format('YYYYMMDD_HHmmss')
@@ -119,7 +119,7 @@ export async function exportConversation(
     filename = `${safeTitle}_${timestamp}.txt`
   }
 
-  // 转换为 data URL 并保存
+  // English engineering note.
   const dataUrl = `data:text/plain;charset=utf-8,${encodeURIComponent(content)}`
   const result = await window.cacheApi.saveToDownloads(filename, dataUrl)
 

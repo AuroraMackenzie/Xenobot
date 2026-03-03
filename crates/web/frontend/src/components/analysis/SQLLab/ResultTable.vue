@@ -17,32 +17,32 @@ const promptStore = usePromptStore()
 const layoutStore = useLayoutStore()
 const { aiGlobalSettings } = storeToRefs(promptStore)
 
-// 时间戳列名匹配模式
+// English engineering note.
 const TIMESTAMP_COLUMN_PATTERNS = [
   /^ts$/i,
   /^timestamp$/i,
   /^time$/i,
-  /_at$/i, // created_at, updated_at 等
+  /_at$/i, // English engineering note.
   /_ts$/i,
   /_time$/i,
   /^date$/i,
 ]
 
 /**
- * 判断列名是否可能是时间戳
+ * English note.
  */
 function isTimestampColumn(columnName: string): boolean {
   return TIMESTAMP_COLUMN_PATTERNS.some((pattern) => pattern.test(columnName))
 }
 
 /**
- * 判断值是否是合理的时间戳（2000年~2100年）
+ * English note.
  */
 function isValidTimestamp(value: unknown): boolean {
   if (typeof value !== 'number' || !Number.isFinite(value)) return false
 
-  // 秒级时间戳范围：946684800 (2000-01-01) ~ 4102444800 (2100-01-01)
-  // 毫秒级时间戳范围：946684800000 ~ 4102444800000
+  // English engineering note.
+  // English engineering note.
   const MIN_SECONDS = 946684800
   const MAX_SECONDS = 4102444800
   const MIN_MILLIS = MIN_SECONDS * 1000
@@ -52,27 +52,27 @@ function isValidTimestamp(value: unknown): boolean {
 }
 
 /**
- * 将时间戳转换为可读时间
+ * English note.
  */
 function formatTimestamp(value: number): string {
-  // 判断是毫秒级还是秒级
+  // English engineering note.
   const isMillis = value > 10000000000
   const ts = isMillis ? value : value * 1000
   return dayjs(ts).format('YYYY-MM-DD HH:mm:ss')
 }
 
-// 消息 ID 列名匹配模式
+// English engineering note.
 const MESSAGE_ID_COLUMN_PATTERNS = [/^id$/i, /^message_id$/i, /^msg_id$/i, /^msgid$/i]
 
 /**
- * 检测结果中是否有消息 ID 列，返回列索引
+ * English note.
  */
 function getMessageIdColumnIndex(columns: string[]): number {
   return columns.findIndex((col) => MESSAGE_ID_COLUMN_PATTERNS.some((pattern) => pattern.test(col)))
 }
 
 /**
- * 查看消息上下文
+ * English note.
  */
 function viewMessageContext(messageId: number) {
   layoutStore.openChatRecordDrawer({
@@ -80,7 +80,7 @@ function viewMessageContext(messageId: number) {
   })
 }
 
-// 创建 markdown-it 实例
+// English engineering note.
 const md = new MarkdownIt({
   html: false,
   breaks: true,
@@ -92,48 +92,48 @@ const md = new MarkdownIt({
 const props = defineProps<{
   result: SQLResult | null
   error: string | null
-  sql?: string // 当前 SQL 语句
-  prompt?: string // 用户提示词（AI 生成时）
+  sql?: string // English engineering note.
+  prompt?: string // English engineering note.
 }>()
 
-// 表格排序
+// English engineering note.
 const sortColumn = ref<string | null>(null)
 const sortDirection = ref<'asc' | 'desc'>('asc')
 
-// 分页相关
+// English engineering note.
 const currentPage = ref(1)
-const pageSize = ref(100) // 每页显示行数
+const pageSize = ref(100) // English engineering note.
 const pageSizeOptions = [50, 100, 200, 500]
 
-// 时间戳转可读时间（从 localStorage 读取，默认开启）
+// English engineering note.
 const showReadableTime = ref(localStorage.getItem('sql-lab-readable-time') !== 'false')
 
-// 监听并持久化时间戳显示设置
+// English engineering note.
 function toggleReadableTime() {
   showReadableTime.value = !showReadableTime.value
   localStorage.setItem('sql-lab-readable-time', String(showReadableTime.value))
 }
 
-// AI 总结相关状态
+// English engineering note.
 const showSummaryModal = ref(false)
 const isSummarizing = ref(false)
 const summaryContent = ref('')
 const summaryError = ref<string | null>(null)
 const streamingContent = ref('')
 
-// 导出相关状态
+// English engineering note.
 const isExporting = ref(false)
 
-// 获取列的标签（尝试匹配所有表的列）
+// English engineering note.
 function getColumnLabelLocal(columnName: string): string | null {
-  // 处理带表名前缀的情况，如 "message.sender_id" 或 "m.sender_id"
+  // English engineering note.
   const parts = columnName.split('.')
   const colName = parts.length > 1 ? parts[parts.length - 1] : columnName
 
-  // 获取当前语言的标签
+  // English engineering note.
   const localeLabels = COLUMN_LABELS[locale.value as 'zh-CN' | 'en-US'] || COLUMN_LABELS['zh-CN']
 
-  // 遍历所有表查找匹配
+  // English engineering note.
   for (const tableColumns of Object.values(localeLabels)) {
     if (tableColumns[colName]) {
       return tableColumns[colName]
@@ -142,7 +142,7 @@ function getColumnLabelLocal(columnName: string): string | null {
   return null
 }
 
-// 排序后的所有行数据
+// English engineering note.
 const allSortedRows = computed(() => {
   if (!props.result || !sortColumn.value) {
     return props.result?.rows || []
@@ -167,29 +167,29 @@ const allSortedRows = computed(() => {
   })
 })
 
-// 总页数
+// English engineering note.
 const totalPages = computed(() => {
   if (!props.result) return 0
   return Math.ceil(allSortedRows.value.length / pageSize.value)
 })
 
-// 当前页的数据
+// English engineering note.
 const sortedRows = computed(() => {
   const start = (currentPage.value - 1) * pageSize.value
   const end = start + pageSize.value
   return allSortedRows.value.slice(start, end)
 })
 
-// 消息 ID 列索引（-1 表示没有）
+// English engineering note.
 const messageIdColumnIndex = computed(() => {
   if (!props.result) return -1
   return getMessageIdColumnIndex(props.result.columns)
 })
 
-// 是否显示查看消息按钮
+// English engineering note.
 const showViewMessageButton = computed(() => messageIdColumnIndex.value !== -1)
 
-// 处理列排序
+// English engineering note.
 function handleSort(column: string) {
   if (sortColumn.value === column) {
     sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc'
@@ -197,22 +197,22 @@ function handleSort(column: string) {
     sortColumn.value = column
     sortDirection.value = 'asc'
   }
-  // 排序后回到第一页
+  // English engineering note.
   currentPage.value = 1
 }
 
-// 处理每页显示数量变化
+// English engineering note.
 function handlePageSizeChange(size: number) {
   pageSize.value = size
   currentPage.value = 1
 }
 
-// 格式化单元格值
+// English engineering note.
 function formatCellValue(value: any, columnName?: string): string {
   if (value === null) return 'NULL'
   if (typeof value === 'object') return JSON.stringify(value)
 
-  // 时间戳转换（仅在开启且是时间戳列时）
+  // English engineering note.
   if (showReadableTime.value && columnName && isTimestampColumn(columnName) && isValidTimestamp(value)) {
     return formatTimestamp(value)
   }
@@ -220,7 +220,7 @@ function formatCellValue(value: any, columnName?: string): string {
   return String(value)
 }
 
-// 导出结果到文件（导出所有数据，不受分页限制）
+// English engineering note.
 async function exportResult() {
   if (!props.result || isExporting.value) return
 
@@ -230,7 +230,7 @@ async function exportResult() {
     const result = await exportSQLResult(
       {
         columns: props.result.columns,
-        rows: props.result.rows, // 导出所有数据
+        rows: props.result.rows, // English engineering note.
       },
       format
     )
@@ -275,23 +275,23 @@ async function exportResult() {
   }
 }
 
-// 重置排序和分页状态（供父组件调用）
+// English engineering note.
 function resetSort() {
   sortColumn.value = null
   sortDirection.value = 'asc'
   currentPage.value = 1
 }
 
-// ==================== AI 总结功能 ====================
+// English engineering note.
 
-// 构建总结结果的数据（取前 50 行避免 token 过多）
+// English engineering note.
 function buildResultSummary(): string {
   if (!props.result) return ''
 
   const maxRows = 50
   const rows = props.result.rows.slice(0, maxRows)
 
-  // 构建表格形式的结果
+  // English engineering note.
   const header = props.result.columns.join(' | ')
   const separator = props.result.columns.map(() => '---').join(' | ')
   const dataRows = rows.map((row) =>
@@ -308,7 +308,7 @@ function buildResultSummary(): string {
   return resultText
 }
 
-// 打开总结弹窗并开始总结
+// English engineering note.
 async function openSummaryModal() {
   showSummaryModal.value = true
   summaryContent.value = ''
@@ -317,7 +317,7 @@ async function openSummaryModal() {
   await generateSummary()
 }
 
-// AI 总结
+// English engineering note.
 async function generateSummary() {
   const hasConfig = await window.llmApi.hasConfig()
   if (!hasConfig) {
@@ -379,7 +379,7 @@ ${resultSummary}
   }
 }
 
-// 关闭总结弹窗
+// English engineering note.
 function closeSummaryModal() {
   showSummaryModal.value = false
   summaryContent.value = ''
@@ -392,7 +392,7 @@ defineExpose({ resetSort })
 
 <template>
   <div class="flex flex-1 flex-col overflow-hidden">
-    <!-- 错误提示 -->
+    <!-- English UI note -->
     <div v-if="error" class="border-b border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950">
       <div class="flex items-start gap-2">
         <UIcon name="i-heroicons-exclamation-circle" class="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
@@ -403,13 +403,13 @@ defineExpose({ resetSort })
       </div>
     </div>
 
-    <!-- 结果统计栏 -->
+    <!-- English UI note -->
     <div
       v-if="result"
       class="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-4 py-2 dark:border-gray-800 dark:bg-gray-900"
     >
       <div class="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
-        <!-- 时间戳转日期开关 -->
+        <!-- English UI note -->
         <label class="flex cursor-pointer items-center gap-1.5">
           <UCheckbox :model-value="showReadableTime" size="xs" @update:model-value="toggleReadableTime" />
           <span class="text-xs">{{ t('ai.sqlLab.result.readableTime') }}</span>
@@ -436,7 +436,7 @@ defineExpose({ resetSort })
       </div>
     </div>
 
-    <!-- 结果表格 -->
+    <!-- English UI note -->
     <div v-if="result && result.rows.length > 0" class="flex-1 overflow-auto">
       <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
         <thead class="sticky top-0 bg-gray-100 dark:bg-gray-800">
@@ -461,7 +461,7 @@ defineExpose({ resetSort })
                 />
               </div>
             </th>
-            <!-- 操作列（当有消息 ID 时显示） -->
+            <!-- English UI note -->
             <th v-if="showViewMessageButton" class="sticky right-0 w-12 bg-gray-100 px-2 py-2 dark:bg-gray-800"></th>
           </tr>
         </thead>
@@ -476,7 +476,7 @@ defineExpose({ resetSort })
             >
               {{ formatCellValue(cell, result.columns[cellIndex]) }}
             </td>
-            <!-- 查看消息按钮 -->
+            <!-- English UI note -->
             <td v-if="showViewMessageButton" class="sticky right-0 w-12 bg-white px-2 py-2 dark:bg-gray-900">
               <UButton
                 icon="i-heroicons-chat-bubble-left-right"
@@ -492,12 +492,12 @@ defineExpose({ resetSort })
       </table>
     </div>
 
-    <!-- 分页栏 -->
+    <!-- English UI note -->
     <div
       v-if="result && result.rows.length > 0 && totalPages > 1"
       class="flex shrink-0 items-center gap-4 border-t border-gray-200 bg-gray-50 px-4 py-2 dark:border-gray-800 dark:bg-gray-900"
     >
-      <!-- 翻页按钮 -->
+      <!-- English UI note -->
       <div class="flex items-center gap-1">
         <UButton
           icon="i-heroicons-chevron-double-left"
@@ -529,7 +529,7 @@ defineExpose({ resetSort })
           @click="currentPage = totalPages"
         />
       </div>
-      <!-- 每页数量选择 -->
+      <!-- English UI note -->
       <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
         <span>{{ t('ai.sqlLab.result.pageSize') }}</span>
         <USelect
@@ -542,7 +542,7 @@ defineExpose({ resetSort })
       </div>
     </div>
 
-    <!-- 空结果 -->
+    <!-- English UI note -->
     <div
       v-if="result && result.rows.length === 0"
       class="flex flex-1 items-center justify-center text-gray-500 dark:text-gray-400"
@@ -553,7 +553,7 @@ defineExpose({ resetSort })
       </div>
     </div>
 
-    <!-- 初始状态 -->
+    <!-- English UI note -->
     <div v-if="!result && !error" class="flex flex-1 items-center justify-center text-gray-500 dark:text-gray-400">
       <div class="text-center">
         <UIcon name="i-heroicons-command-line" class="mx-auto h-12 w-12 text-gray-300 dark:text-gray-600" />
@@ -562,7 +562,7 @@ defineExpose({ resetSort })
       </div>
     </div>
 
-    <!-- AI 总结弹窗 -->
+    <!-- English UI note -->
     <UModal v-model:open="showSummaryModal">
       <template #content>
         <div class="max-h-[70vh] overflow-hidden p-6">
@@ -573,13 +573,13 @@ defineExpose({ resetSort })
             </h3>
           </div>
 
-          <!-- 加载状态 -->
+          <!-- English UI note -->
           <div v-if="isSummarizing && !streamingContent" class="flex items-center justify-center py-8">
             <UIcon name="i-heroicons-arrow-path" class="h-6 w-6 animate-spin text-pink-500" />
             <span class="ml-2 text-sm text-gray-500">{{ t('ai.sqlLab.result.analyzing') }}</span>
           </div>
 
-          <!-- 流式输出 / 最终结果 -->
+          <!-- English UI note -->
           <div v-else-if="streamingContent || summaryContent" class="max-h-[50vh] overflow-y-auto">
             <div
               class="prose prose-sm max-w-none rounded-lg bg-gray-50 p-4 dark:prose-invert dark:bg-gray-900"
@@ -591,12 +591,12 @@ defineExpose({ resetSort })
             </div>
           </div>
 
-          <!-- 错误提示 -->
+          <!-- English UI note -->
           <div v-if="summaryError" class="rounded-lg bg-red-50 p-4 dark:bg-red-950">
             <p class="text-sm text-red-600 dark:text-red-400">{{ summaryError }}</p>
           </div>
 
-          <!-- 底部按钮 -->
+          <!-- English UI note -->
           <div class="mt-4 flex justify-end gap-2">
             <UButton v-if="!isSummarizing && summaryContent" variant="outline" @click="generateSummary">
               <UIcon name="i-heroicons-arrow-path" class="mr-1 h-4 w-4" />
@@ -610,4 +610,4 @@ defineExpose({ resetSort })
   </div>
 </template>
 
-<!-- Markdown 样式已提取到全局 src/assets/styles/markdown.css -->
+<!-- English UI note -->

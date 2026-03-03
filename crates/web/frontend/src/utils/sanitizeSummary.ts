@@ -27,7 +27,7 @@ function normalizeAllowedAttrs(allowedAttrs?: Record<string, string[]>) {
   return normalized
 }
 
-// 简单 URL 白名单校验（拦截 javascript/data 等危险协议）
+// English engineering note.
 function isSafeUrl(url: string, allowedProtocols: string[]) {
   const trimmed = url.trim()
   if (!trimmed) return false
@@ -43,7 +43,7 @@ function isSafeUrl(url: string, allowedProtocols: string[]) {
   }
 }
 
-// 对 summary 进行最小化净化，仅保留允许的标签与属性（防止 XSS）
+// English engineering note.
 export function sanitizeSummary(raw: string, options: SanitizeSummaryOptions = {}) {
   const allowedTags = normalizeAllowedTags(options.allowedTags)
   const allowedAttrs = normalizeAllowedAttrs(options.allowedAttrs)
@@ -60,7 +60,7 @@ export function sanitizeSummary(raw: string, options: SanitizeSummaryOptions = {
     for (const child of children) {
       const tag = child.tagName
       if (!allowedTags.has(tag)) {
-        // 不允许的标签直接展开其子节点，保留文本内容
+        // English engineering note.
         const parent = child.parentNode
         if (parent) {
           while (child.firstChild) {

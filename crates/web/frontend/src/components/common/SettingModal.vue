@@ -11,7 +11,7 @@ import SubTabs from '@/components/UI/SubTabs.vue'
 const { t } = useI18n()
 const layoutStore = useLayoutStore()
 
-// 可滚动 Tab 的通用接口（支持 section 跳转的 Tab 需实现此接口）
+// English engineering note.
 interface ScrollableTab {
   scrollToSection?: (sectionId: string) => void
   refresh?: () => void
@@ -28,7 +28,7 @@ const emit = defineEmits<{
   'ai-config-saved': []
 }>()
 
-// Tab 配置（使用 computed 以便语言切换时自动更新）
+// English engineering note.
 const tabs = computed(() => [
   { id: 'settings', label: t('settings.tabs.basic'), icon: 'i-heroicons-cog-6-tooth' },
   { id: 'ai', label: t('settings.tabs.ai'), icon: 'i-heroicons-sparkles' },
@@ -38,62 +38,62 @@ const tabs = computed(() => [
 
 const activeTab = ref('settings')
 
-// 统一的 Tab 引用管理（通过 setTabRef 动态设置）
+// English engineering note.
 const tabRefs = ref<Record<string, ScrollableTab | null>>({})
 
 /**
- * 设置 Tab 引用（在模板中通过 :ref 调用）
+ * English note.
  */
 function setTabRef(tabId: string, el: unknown) {
   tabRefs.value[tabId] = el as ScrollableTab | null
 }
 
-// AI 配置变更回调
+// English engineering note.
 function handleAIConfigChanged() {
   emit('ai-config-saved')
 }
 
-// 关闭弹窗
+// English engineering note.
 function closeModal() {
   emit('update:open', false)
   layoutStore.clearSettingTarget()
 }
 
-// 监听打开状态
+// English engineering note.
 watch(
   () => props.open,
   async (newVal) => {
     if (newVal) {
-      // 检查是否有指定的跳转目标
+      // English engineering note.
       const target = layoutStore.settingTarget
       if (target) {
         activeTab.value = target.tab
-        // 如果有指定 section，等待渲染后滚动（通用逻辑）
+        // English engineering note.
         if (target.section) {
           await nextTick()
-          // 延迟一下确保目标 Tab 已渲染
+          // English engineering note.
           setTimeout(() => {
             const tabRef = tabRefs.value[target.tab]
             tabRef?.scrollToSection?.(target.section!)
           }, 100)
         }
       } else {
-        activeTab.value = 'settings' // 默认打开基础设置 Tab
+        activeTab.value = 'settings' // English engineering note.
       }
-      // 刷新存储管理
+      // English engineering note.
       tabRefs.value['storage']?.refresh?.()
     } else {
-      // 弹窗关闭时清空 target
+      // English engineering note.
       layoutStore.clearSettingTarget()
     }
   }
 )
 
-// 监听 Tab 切换，刷新对应数据
+// English engineering note.
 watch(
   () => activeTab.value,
   (newTab) => {
-    // 通用刷新逻辑
+    // English engineering note.
     tabRefs.value[newTab]?.refresh?.()
   }
 )
@@ -113,29 +113,29 @@ watch(
           <UButton icon="i-heroicons-x-mark" variant="ghost" size="sm" @click="closeModal" />
         </div>
 
-        <!-- Tab 导航 -->
+        <!-- English UI note -->
         <div class="mb-6 -mx-6">
           <SubTabs v-model="activeTab" :items="tabs" />
         </div>
 
-        <!-- Tab 内容 -->
+        <!-- English UI note -->
         <div class="h-[500px] overflow-y-auto">
-          <!-- 基础设置 -->
+          <!-- English UI note -->
           <div v-show="activeTab === 'settings'">
             <BasicSettingsTab />
           </div>
 
-          <!-- AI 设置 -->
+          <!-- English UI note -->
           <div v-show="activeTab === 'ai'" class="h-full">
             <AISettingsTab :ref="(el) => setTabRef('ai', el)" @config-changed="handleAIConfigChanged" />
           </div>
 
-          <!-- 存储管理 -->
+          <!-- English UI note -->
           <div v-show="activeTab === 'storage'" class="h-full">
             <StorageTab :ref="(el) => setTabRef('storage', el)" />
           </div>
 
-          <!-- 关于 -->
+          <!-- English UI note -->
           <div v-show="activeTab === 'about'">
             <AboutTab />
           </div>

@@ -20,7 +20,7 @@ const emit = defineEmits<{
   runSQL: [sql: string]
 }>()
 
-// 状态
+// English engineering note.
 const aiPrompt = ref('')
 const isGenerating = ref(false)
 const aiError = ref<string | null>(null)
@@ -29,7 +29,7 @@ const generatedExplanation = ref('')
 const streamingContent = ref('')
 const showStreamingContent = ref(false)
 
-// 构建 Schema 描述（用于 AI 提示词）
+// English engineering note.
 function buildSchemaDescription(): string {
   const lines: string[] = []
 
@@ -50,7 +50,7 @@ function buildSchemaDescription(): string {
   return lines.join('\n')
 }
 
-// 构建 AI 提示词
+// English engineering note.
 function buildAIPrompt(userRequest: string): string {
   const schemaDesc = buildSchemaDescription()
 
@@ -94,10 +94,10 @@ ${userRequest}
 3. 确保 SQL 语法正确`
 }
 
-// 关闭弹窗
+// English engineering note.
 function closeModal() {
   emit('update:open', false)
-  // 重置状态
+  // English engineering note.
   aiPrompt.value = ''
   aiError.value = null
   generatedSQL.value = ''
@@ -106,14 +106,14 @@ function closeModal() {
   showStreamingContent.value = false
 }
 
-// AI 生成 SQL
+// English engineering note.
 async function generateSQL() {
   if (!aiPrompt.value.trim()) {
     aiError.value = t('ai.sqlLab.generate.errorEmptyPrompt')
     return
   }
 
-  // 检查是否配置了 LLM
+  // English engineering note.
   const hasConfig = await window.llmApi.hasConfig()
   if (!hasConfig) {
     aiError.value = t('common.errorNoAIConfig')
@@ -155,7 +155,7 @@ async function generateSQL() {
         generatedExplanation.value = (parsed.explanation || '').trim()
         showStreamingContent.value = false
 
-        // 通知父组件生成成功
+        // English engineering note.
         if (generatedSQL.value) {
           emit('generated', generatedSQL.value, generatedExplanation.value, aiPrompt.value)
         }
@@ -179,7 +179,7 @@ async function generateSQL() {
   }
 }
 
-// 使用生成的 SQL
+// English engineering note.
 function useGeneratedSQL() {
   if (generatedSQL.value) {
     emit('useSQL', generatedSQL.value)
@@ -187,7 +187,7 @@ function useGeneratedSQL() {
   }
 }
 
-// 使用并运行 SQL
+// English engineering note.
 function useAndRunSQL() {
   if (generatedSQL.value) {
     emit('runSQL', generatedSQL.value)
@@ -209,7 +209,7 @@ function useAndRunSQL() {
           {{ t('ai.sqlLab.generate.description') }}
         </p>
 
-        <!-- 输入框 -->
+        <!-- English UI note -->
         <textarea
           v-model="aiPrompt"
           class="mb-4 h-24 w-full resize-none rounded-lg border border-gray-300 bg-white p-3 text-sm text-gray-800 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
@@ -217,7 +217,7 @@ function useAndRunSQL() {
           :disabled="isGenerating"
         />
 
-        <!-- 实时流式输出 -->
+        <!-- English UI note -->
         <div v-if="streamingContent || isGenerating" class="mb-4">
           <button
             class="mb-1.5 flex w-full items-center gap-1.5 text-left text-xs font-medium text-gray-500 dark:text-gray-400"
@@ -241,14 +241,14 @@ function useAndRunSQL() {
           </div>
         </div>
 
-        <!-- 错误提示 -->
+        <!-- English UI note -->
         <div v-if="aiError" class="mb-4 rounded-lg bg-red-50 p-3 dark:bg-red-950">
           <p class="text-sm text-red-600 dark:text-red-400">{{ aiError }}</p>
         </div>
 
-        <!-- 生成结果 -->
+        <!-- English UI note -->
         <div v-if="generatedSQL" class="mb-4 space-y-3">
-          <!-- SQL 语句 -->
+          <!-- English UI note -->
           <div>
             <p class="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-gray-500 dark:text-gray-400">
               <UIcon name="i-heroicons-code-bracket" class="h-3.5 w-3.5" />
@@ -261,7 +261,7 @@ function useAndRunSQL() {
             </div>
           </div>
 
-          <!-- 解释说明 -->
+          <!-- English UI note -->
           <div v-if="generatedExplanation">
             <p class="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-gray-500 dark:text-gray-400">
               <UIcon name="i-heroicons-light-bulb" class="h-3.5 w-3.5" />
@@ -273,7 +273,7 @@ function useAndRunSQL() {
           </div>
         </div>
 
-        <!-- 操作按钮 -->
+        <!-- English UI note -->
         <div class="flex justify-end gap-2">
           <UButton variant="ghost" @click="closeModal">{{ t('common.cancel') }}</UButton>
 

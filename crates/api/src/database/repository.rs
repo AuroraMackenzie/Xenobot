@@ -1,4 +1,4 @@
-// 时间过滤参数
+// English engineering note.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TimeFilter {
     pub start_ts: Option<i64>,
@@ -6,7 +6,7 @@ pub struct TimeFilter {
     pub member_id: Option<i64>,
 }
 
-// 成员活跃度查询结果
+// English engineering note.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MemberActivity {
     pub member_id: i64,
@@ -17,28 +17,28 @@ pub struct MemberActivity {
     pub percentage: f64,
 }
 
-// 时段分布查询结果
+// English engineering note.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TimeActivity {
     pub period: i64,
     pub message_count: i64,
 }
 
-// 消息长度分布结果
+// English engineering note.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MessageLengthDistribution {
     pub length_range: String,
     pub count: i64,
 }
 
-// 消息类型分布结果
+// English engineering note.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MessageTypeDistribution {
     pub msg_type: i64,
     pub count: i64,
 }
 
-// 时间范围结果
+// English engineering note.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TimeRange {
     pub earliest: Option<i64>,
@@ -784,7 +784,7 @@ impl Repository {
             .collect())
     }
 
-    /// 构建时间过滤 WHERE 子句
+    /// English documentation note.
     fn build_time_filter(
         &self,
         filter: &TimeFilter,
@@ -835,7 +835,7 @@ impl Repository {
         query
     }
 
-    /// 构建排除系统消息的过滤条件
+    /// English documentation note.
     fn build_system_message_filter(&self, existing_clause: &str) -> String {
         let system_filter = "COALESCE(m.account_name, '') != '系统消息'".to_string();
         if existing_clause.contains("WHERE") {
@@ -845,20 +845,20 @@ impl Repository {
         }
     }
 
-    /// 获取成员活跃度排行（带时间过滤）
+    /// English documentation note.
     pub async fn get_member_activity_with_filter(
         &self,
         meta_id: i64,
         filter: Option<TimeFilter>,
     ) -> SqlxResult<Vec<MemberActivity>> {
-        // 构建时间过滤条件
+        // English engineering note.
         let (time_clause, mut params) = if let Some(ref f) = filter {
             self.build_time_filter(f, Some("msg"))
         } else {
             (String::new(), Vec::new())
         };
 
-        // 添加 meta_id 条件
+        // English engineering note.
         let meta_condition = " WHERE msg.meta_id = ?".to_string();
         let mut clause = meta_condition;
         if !time_clause.is_empty() {
@@ -867,10 +867,10 @@ impl Repository {
         }
         params.insert(0, meta_id);
 
-        // 构建排除系统消息的过滤条件
+        // English engineering note.
         let clause_with_system = self.build_system_message_filter(&clause);
 
-        // 计算总消息数（排除系统消息）
+        // English engineering note.
         let total_query = format!(
             "SELECT COUNT(*) as count FROM message msg JOIN member m ON msg.sender_id = m.id {}",
             clause_with_system
@@ -884,7 +884,7 @@ impl Repository {
             .await?;
         let total_messages = total_row.count;
 
-        // 查询成员活跃度
+        // English engineering note.
         let member_query = format!(
             r#"
             SELECT
@@ -914,7 +914,7 @@ impl Repository {
             .fetch_all(&*self.pool)
             .await?;
 
-        // 计算百分比
+        // English engineering note.
         let result = rows
             .into_iter()
             .map(|row| {
@@ -1298,20 +1298,20 @@ impl Repository {
 
     // Advanced Analysis methods
 
-    /// 获取口头禅分析
+    /// English documentation note.
     pub async fn get_catchphrase_analysis(
         &self,
         meta_id: i64,
         filter: Option<TimeFilter>,
     ) -> SqlxResult<CatchphraseAnalysis> {
-        // 构建时间过滤条件
+        // English engineering note.
         let (time_clause, mut params) = if let Some(ref f) = filter {
             self.build_time_filter(f, Some("msg"))
         } else {
             (String::new(), Vec::new())
         };
 
-        // 添加 meta_id 条件
+        // English engineering note.
         let meta_condition = " WHERE msg.meta_id = ?".to_string();
         let mut clause = meta_condition;
         if !time_clause.is_empty() {
@@ -1320,10 +1320,10 @@ impl Repository {
         }
         params.insert(0, meta_id);
 
-        // 构建排除系统消息的过滤条件
+        // English engineering note.
         let clause_with_system = self.build_system_message_filter(&clause);
 
-        // 查询重复短语
+        // English engineering note.
         let query = format!(
             r#"
             SELECT
@@ -1357,7 +1357,7 @@ impl Repository {
             .fetch_all(&*self.pool)
             .await?;
 
-        // 按成员分组，每个成员保留前5个口头禅
+        // English engineering note.
         let mut members_map: std::collections::HashMap<i64, MemberCatchphrase> =
             std::collections::HashMap::new();
         for row in rows {
@@ -1371,7 +1371,7 @@ impl Repository {
                         catchphrases: Vec::new(),
                     });
 
-            // 每个成员最多保留5个口头禅
+            // English engineering note.
             if member_entry.catchphrases.len() < 5 {
                 member_entry.catchphrases.push(CatchphraseItem {
                     content: row.content,
@@ -1380,7 +1380,7 @@ impl Repository {
             }
         }
 
-        // 转换为向量并按总catchphrase数排序
+        // English engineering note.
         let mut members: Vec<MemberCatchphrase> = members_map.into_values().collect();
         members.sort_by(|a, b| {
             let a_total: i64 = a.catchphrases.iter().map(|c| c.count).sum();
@@ -1391,7 +1391,7 @@ impl Repository {
         Ok(CatchphraseAnalysis { members })
     }
 
-    /// 获取提及分析
+    /// English documentation note.
     pub async fn get_mention_analysis(
         &self,
         meta_id: i64,
@@ -1400,14 +1400,14 @@ impl Repository {
         use regex::Regex;
         use std::collections::{HashMap, HashSet};
 
-        // 构建时间过滤条件
+        // English engineering note.
         let (time_clause, mut params) = if let Some(ref f) = filter {
             self.build_time_filter(f, Some("msg"))
         } else {
             (String::new(), Vec::new())
         };
 
-        // 添加 meta_id 条件
+        // English engineering note.
         let meta_condition = " WHERE msg.meta_id = ?".to_string();
         let mut clause = meta_condition;
         if !time_clause.is_empty() {
@@ -1416,10 +1416,10 @@ impl Repository {
         }
         params.insert(0, meta_id);
 
-        // 构建排除系统消息的过滤条件
+        // English engineering note.
         let clause_with_system = self.build_system_message_filter(&clause);
 
-        // 1. 查询所有成员及其历史名称
+        // English engineering note.
         let members_query = r#"
             SELECT m.id, m.platform_id, m.account_name, m.group_nickname, 
                    COALESCE((SELECT GROUP_CONCAT(name) FROM member_name_history WHERE member_id = m.id), "") as history_names
@@ -1442,7 +1442,7 @@ impl Repository {
             .fetch_all(&*self.pool)
             .await?;
 
-        // 构建名称到成员ID的映射
+        // English engineering note.
         let mut name_to_id: HashMap<String, Vec<i64>> = HashMap::new();
         for row in &member_rows {
             let names = vec![
@@ -1456,7 +1456,7 @@ impl Repository {
                     .or_insert_with(Vec::new)
                     .push(row.id);
             }
-            // 历史名称（逗号分隔）
+            // English engineering note.
             if !row.history_names.is_empty() {
                 for name in row.history_names.split(',') {
                     let trimmed = name.trim();
@@ -1470,7 +1470,7 @@ impl Repository {
             }
         }
 
-        // 2. 查询包含@的消息
+        // English engineering note.
         let messages_query = format!(
             r#"
             SELECT msg.sender_id, msg.content
@@ -1495,7 +1495,7 @@ impl Repository {
                 .fetch_all(&*self.pool)
                 .await?;
 
-        // 3. 解析提及并构建矩阵
+        // English engineering note.
         let mention_regex = Regex::new(r"@([^\s@]+)").unwrap();
         let mut mention_matrix: HashMap<i64, HashMap<i64, i64>> = HashMap::new();
         let mut mentioned_count: HashMap<i64, i64> = HashMap::new();
@@ -1505,15 +1505,15 @@ impl Repository {
             let sender_id = msg.sender_id;
             let content = msg.content;
 
-            // 收集本消息中提及的成员ID（去重）
+            // English engineering note.
             let mut mentioned_in_msg: HashSet<i64> = HashSet::new();
             for cap in mention_regex.captures_iter(&content) {
                 let mention_name = cap.get(1).unwrap().as_str().to_lowercase();
-                // 查找匹配的成员ID
+                // English engineering note.
                 if let Some(ids) = name_to_id.get(&mention_name) {
-                    // 如果有多个匹配，选择第一个
+                    // English engineering note.
                     if let Some(&matched_id) = ids.first() {
-                        // 排除自我提及
+                        // English engineering note.
                         if matched_id != sender_id {
                             mentioned_in_msg.insert(matched_id);
                         }
@@ -1521,7 +1521,7 @@ impl Repository {
                 }
             }
 
-            // 更新矩阵和计数
+            // English engineering note.
             for &mentioned_id in &mentioned_in_msg {
                 *mention_matrix
                     .entry(sender_id)
@@ -1540,7 +1540,7 @@ impl Repository {
             .map(|m| m.values().sum::<i64>())
             .sum();
 
-        // 4. 构建成员详情
+        // English engineering note.
         let mut member_details: Vec<MentionMemberDetail> = Vec::new();
         for row in member_rows {
             let mentioned = mentioned_count.get(&row.id).copied().unwrap_or(0);
@@ -1567,17 +1567,17 @@ impl Repository {
             });
         }
 
-        // 排序：最常提及他人
+        // English engineering note.
         let mut top_mentioners = member_details.clone();
         top_mentioners.sort_by(|a, b| b.mentioner_count.cmp(&a.mentioner_count));
         let top_mentioners = top_mentioners.into_iter().take(10).collect();
 
-        // 排序：最常被提及
+        // English engineering note.
         let mut top_mentioned = member_details.clone();
         top_mentioned.sort_by(|a, b| b.mentioned_count.cmp(&a.mentioned_count));
         let top_mentioned = top_mentioned.into_iter().take(10).collect();
 
-        // 5. 计算单向关系 (A @ B 比例 >= 80%)
+        // English engineering note.
         let mut one_way: Vec<OneWayMention> = Vec::new();
         for (&from_id, targets) in &mention_matrix {
             for (&to_id, &count) in targets {
@@ -1614,7 +1614,7 @@ impl Repository {
         }
         one_way.sort_by(|a, b| b.count.cmp(&a.count));
 
-        // 6. 计算双向关系 (CP)
+        // English engineering note.
         let mut two_way: Vec<TwoWayMention> = Vec::new();
         for (&a_id, targets) in &mention_matrix {
             for (&b_id, &ab_count) in targets {
@@ -2324,20 +2324,20 @@ impl Repository {
         .await
     }
 
-    /// 获取每小时活跃度分布（带时间过滤）
+    /// English documentation note.
     pub async fn get_hourly_activity_with_filter(
         &self,
         meta_id: i64,
         filter: Option<TimeFilter>,
     ) -> SqlxResult<Vec<TimeActivity>> {
-        // 构建时间过滤条件
+        // English engineering note.
         let (time_clause, mut params) = if let Some(ref f) = filter {
             self.build_time_filter(f, Some("msg"))
         } else {
             (String::new(), Vec::new())
         };
 
-        // 添加 meta_id 条件
+        // English engineering note.
         let meta_condition = " WHERE msg.meta_id = ?".to_string();
         let mut clause = meta_condition;
         if !time_clause.is_empty() {
@@ -2346,10 +2346,10 @@ impl Repository {
         }
         params.insert(0, meta_id);
 
-        // 构建排除系统消息的过滤条件
+        // English engineering note.
         let clause_with_system = self.build_system_message_filter(&clause);
 
-        // 查询每小时活跃度
+        // English engineering note.
         let query = format!(
             r#"
             SELECT
@@ -2374,7 +2374,7 @@ impl Repository {
             .fetch_all(&*self.pool)
             .await?;
 
-        // 确保返回0-23所有小时
+        // English engineering note.
         let mut result = Vec::with_capacity(24);
         for hour in 0..24 {
             if let Some(row) = rows.iter().find(|r| r.period == hour) {
@@ -2392,20 +2392,20 @@ impl Repository {
 
         Ok(result)
     }
-    /// 获取每日活跃度趋势（带时间过滤）
+    /// English documentation note.
     pub async fn get_daily_activity_with_filter(
         &self,
         meta_id: i64,
         filter: Option<TimeFilter>,
     ) -> SqlxResult<Vec<TimeActivity>> {
-        // 构建时间过滤条件
+        // English engineering note.
         let (time_clause, mut params) = if let Some(ref f) = filter {
             self.build_time_filter(f, Some("msg"))
         } else {
             (String::new(), Vec::new())
         };
 
-        // 添加 meta_id 条件
+        // English engineering note.
         let meta_condition = " WHERE msg.meta_id = ?".to_string();
         let mut clause = meta_condition;
         if !time_clause.is_empty() {
@@ -2414,10 +2414,10 @@ impl Repository {
         }
         params.insert(0, meta_id);
 
-        // 构建排除系统消息的过滤条件
+        // English engineering note.
         let clause_with_system = self.build_system_message_filter(&clause);
 
-        // 查询每日活跃度
+        // English engineering note.
         let query = format!(
             r#"
             SELECT
@@ -2452,20 +2452,20 @@ impl Repository {
 
         Ok(result)
     }
-    /// 获取星期活跃度分布（带时间过滤）
+    /// English documentation note.
     pub async fn get_weekday_activity_with_filter(
         &self,
         meta_id: i64,
         filter: Option<TimeFilter>,
     ) -> SqlxResult<Vec<TimeActivity>> {
-        // 构建时间过滤条件
+        // English engineering note.
         let (time_clause, mut params) = if let Some(ref f) = filter {
             self.build_time_filter(f, Some("msg"))
         } else {
             (String::new(), Vec::new())
         };
 
-        // 添加 meta_id 条件
+        // English engineering note.
         let meta_condition = " WHERE msg.meta_id = ?".to_string();
         let mut clause = meta_condition;
         if !time_clause.is_empty() {
@@ -2474,10 +2474,10 @@ impl Repository {
         }
         params.insert(0, meta_id);
 
-        // 构建排除系统消息的过滤条件
+        // English engineering note.
         let clause_with_system = self.build_system_message_filter(&clause);
 
-        // 查询星期活跃度
+        // English engineering note.
         let query = format!(
             r#"
             SELECT
@@ -2505,7 +2505,7 @@ impl Repository {
             .fetch_all(&*self.pool)
             .await?;
 
-        // 确保返回1-7所有星期
+        // English engineering note.
         let mut result = Vec::with_capacity(7);
         for weekday in 1..=7 {
             if let Some(row) = rows.iter().find(|r| r.period == weekday) {
@@ -2524,20 +2524,20 @@ impl Repository {
         Ok(result)
     }
 
-    /// 获取月份活跃度分布（带时间过滤）
+    /// English documentation note.
     pub async fn get_monthly_activity_with_filter(
         &self,
         meta_id: i64,
         filter: Option<TimeFilter>,
     ) -> SqlxResult<Vec<TimeActivity>> {
-        // 构建时间过滤条件
+        // English engineering note.
         let (time_clause, mut params) = if let Some(ref f) = filter {
             self.build_time_filter(f, Some("msg"))
         } else {
             (String::new(), Vec::new())
         };
 
-        // 添加 meta_id 条件
+        // English engineering note.
         let meta_condition = " WHERE msg.meta_id = ?".to_string();
         let mut clause = meta_condition;
         if !time_clause.is_empty() {
@@ -2546,10 +2546,10 @@ impl Repository {
         }
         params.insert(0, meta_id);
 
-        // 构建排除系统消息的过滤条件
+        // English engineering note.
         let clause_with_system = self.build_system_message_filter(&clause);
 
-        // 查询月份活跃度
+        // English engineering note.
         let query = format!(
             r#"
             SELECT
@@ -2574,7 +2574,7 @@ impl Repository {
             .fetch_all(&*self.pool)
             .await?;
 
-        // 确保返回1-12所有月份
+        // English engineering note.
         let mut result = Vec::with_capacity(12);
         for month in 1..=12 {
             if let Some(row) = rows.iter().find(|r| r.period == month) {
@@ -2592,20 +2592,20 @@ impl Repository {
 
         Ok(result)
     }
-    /// 获取年份活跃度分布（带时间过滤）
+    /// English documentation note.
     pub async fn get_yearly_activity_with_filter(
         &self,
         meta_id: i64,
         filter: Option<TimeFilter>,
     ) -> SqlxResult<Vec<TimeActivity>> {
-        // 构建时间过滤条件
+        // English engineering note.
         let (time_clause, mut params) = if let Some(ref f) = filter {
             self.build_time_filter(f, Some("msg"))
         } else {
             (String::new(), Vec::new())
         };
 
-        // 添加 meta_id 条件
+        // English engineering note.
         let meta_condition = " WHERE msg.meta_id = ?".to_string();
         let mut clause = meta_condition;
         if !time_clause.is_empty() {
@@ -2614,10 +2614,10 @@ impl Repository {
         }
         params.insert(0, meta_id);
 
-        // 构建排除系统消息的过滤条件
+        // English engineering note.
         let clause_with_system = self.build_system_message_filter(&clause);
 
-        // 查询年份活跃度
+        // English engineering note.
         let query = format!(
             r#"
             SELECT
@@ -2653,20 +2653,20 @@ impl Repository {
         Ok(result)
     }
 
-    /// 获取消息类型分布（带时间过滤）
+    /// English documentation note.
     pub async fn get_message_type_distribution_with_filter(
         &self,
         meta_id: i64,
         filter: Option<TimeFilter>,
     ) -> SqlxResult<Vec<MessageTypeDistribution>> {
-        // 构建时间过滤条件
+        // English engineering note.
         let (time_clause, mut params) = if let Some(ref f) = filter {
             self.build_time_filter(f, Some("msg"))
         } else {
             (String::new(), Vec::new())
         };
 
-        // 添加 meta_id 条件
+        // English engineering note.
         let meta_condition = " WHERE msg.meta_id = ?".to_string();
         let mut clause = meta_condition;
         if !time_clause.is_empty() {
@@ -2675,10 +2675,10 @@ impl Repository {
         }
         params.insert(0, meta_id);
 
-        // 构建排除系统消息的过滤条件
+        // English engineering note.
         let clause_with_system = self.build_system_message_filter(&clause);
 
-        // 查询消息类型分布
+        // English engineering note.
         let query = format!(
             r#"
             SELECT
@@ -2714,20 +2714,20 @@ impl Repository {
         Ok(result)
     }
 
-    /// 获取消息长度分布（带时间过滤，仅统计文字消息）
+    /// English documentation note.
     pub async fn get_message_length_distribution_with_filter(
         &self,
         meta_id: i64,
         filter: Option<TimeFilter>,
     ) -> SqlxResult<MessageLengthDistributionResult> {
-        // 构建时间过滤条件
+        // English engineering note.
         let (time_clause, mut params) = if let Some(ref f) = filter {
             self.build_time_filter(f, Some("msg"))
         } else {
             (String::new(), Vec::new())
         };
 
-        // 添加 meta_id 条件
+        // English engineering note.
         let meta_condition = " WHERE msg.meta_id = ?".to_string();
         let mut clause = meta_condition;
         if !time_clause.is_empty() {
@@ -2736,10 +2736,10 @@ impl Repository {
         }
         params.insert(0, meta_id);
 
-        // 构建排除系统消息的过滤条件
+        // English engineering note.
         let clause_with_system = self.build_system_message_filter(&clause);
 
-        // 只统计文字消息 (type = 0)，并且 content 不为空且长度大于0
+        // English engineering note.
         let type_condition = if clause_with_system.contains("WHERE") {
             format!(
                 "{} AND msg.msg_type = 0 AND msg.content IS NOT NULL AND LENGTH(msg.content) > 0",
@@ -2751,7 +2751,7 @@ impl Repository {
             )
         };
 
-        // 查询消息长度分布
+        // English engineering note.
         let query = format!(
             r#"
             SELECT
@@ -2776,7 +2776,7 @@ impl Repository {
             .fetch_all(&*self.pool)
             .await?;
 
-        // 构建 detail：1-25 逐字
+        // English engineering note.
         let mut detail = Vec::new();
         for i in 1..=25 {
             let found = rows.iter().find(|r| r.len == i);
@@ -2786,7 +2786,7 @@ impl Repository {
             });
         }
 
-        // 构建 grouped：每5字一段（与Xenobot相同范围）
+        // English engineering note.
         let ranges5 = [
             (1, 5, "1-5".to_string()),
             (6, 10, "6-10".to_string()),
@@ -2821,7 +2821,7 @@ impl Repository {
         Ok(MessageLengthDistributionResult { detail, grouped })
     }
 
-    /// 获取时间范围（最早和最晚消息时间戳）
+    /// English documentation note.
     pub async fn get_time_range(&self, meta_id: i64) -> SqlxResult<Option<TimeRange>> {
         let query = r#"
             SELECT MIN(ts) as earliest, MAX(ts) as latest
@@ -2849,7 +2849,7 @@ impl Repository {
         }
     }
 
-    /// 获取会话中可用的年份列表
+    /// English documentation note.
     pub async fn get_available_years(&self, meta_id: i64) -> SqlxResult<Vec<i64>> {
         let query = r#"
             SELECT DISTINCT CAST(strftime('%Y', msg.ts, 'unixepoch', 'localtime') AS INTEGER) as year

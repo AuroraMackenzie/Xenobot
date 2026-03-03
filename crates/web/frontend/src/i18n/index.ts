@@ -3,7 +3,7 @@ import zhCN from './locales/zh-CN'
 import enUS from './locales/en-US'
 import { detectSystemLocale, type LocaleType } from './types'
 
-// 导出类型
+// English engineering note.
 export type { LocaleType } from './types'
 export {
   availableLocales,
@@ -13,20 +13,20 @@ export {
   featureLocaleRestrictions,
 } from './types'
 
-// 用于标记用户是否明确设置过语言的 key
+// English engineering note.
 const LOCALE_SET_KEY = 'xenobot_locale_set_by_user'
-const PINIA_SETTINGS_KEY = 'settings' // Pinia persist 的 key
+const PINIA_SETTINGS_KEY = 'settings' // English engineering note.
 
 /**
- * 获取初始语言（在应用启动时，越早越好）
- * - 如果用户之前设置过语言，从 Pinia persist 恢复
- * - 如果是首次使用，检测系统语言
+ * English note.
+ * English note.
+ * English note.
  */
 function getInitialLocale(): LocaleType {
   const hasUserSetLocale = localStorage.getItem(LOCALE_SET_KEY)
 
   if (hasUserSetLocale) {
-    // 用户已设置过，尝试从 Pinia persist 恢复
+    // English engineering note.
     try {
       const piniaSettings = localStorage.getItem(PINIA_SETTINGS_KEY)
       if (piniaSettings) {
@@ -36,21 +36,21 @@ function getInitialLocale(): LocaleType {
         }
       }
     } catch {
-      // 解析失败，使用系统语言
+      // English engineering note.
     }
   }
 
-  // 首次启动或无法恢复，检测系统语言
+  // English engineering note.
   return detectSystemLocale()
 }
 
 /**
- * 创建 i18n 实例
+ * English note.
  */
 export const i18n = createI18n({
-  legacy: false, // 使用 Composition API 模式
-  locale: getInitialLocale(), // 首次启动检测系统语言
-  fallbackLocale: 'en-US', // 回退语言
+  legacy: false, // English engineering note.
+  locale: getInitialLocale(), // English engineering note.
+  fallbackLocale: 'en-US', // English engineering note.
   messages: {
     'zh-CN': zhCN,
     'en-US': enUS,
@@ -58,14 +58,14 @@ export const i18n = createI18n({
 })
 
 /**
- * 动态切换语言
+ * English note.
  */
 export function setLocale(locale: LocaleType) {
   i18n.global.locale.value = locale
 }
 
 /**
- * 获取当前语言
+ * English note.
  */
 export function getLocale(): LocaleType {
   return i18n.global.locale.value as LocaleType

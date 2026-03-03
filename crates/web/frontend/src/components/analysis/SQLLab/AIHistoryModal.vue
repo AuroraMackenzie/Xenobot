@@ -17,7 +17,7 @@ const emit = defineEmits<{
   delete: [id: string]
 }>()
 
-// 格式化时间
+// English engineering note.
 function formatHistoryTime(timestamp: number): string {
   const date = new Date(timestamp)
   const now = new Date()
@@ -41,14 +41,14 @@ function formatHistoryTime(timestamp: number): string {
           <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{{ t('ai.sqlLab.history.title') }}</h3>
         </div>
 
-        <!-- 历史列表 -->
+        <!-- English UI note -->
         <div v-if="history.length > 0" class="max-h-[50vh] space-y-3 overflow-y-auto pr-2">
           <div
             v-for="record in history"
             :key="record.id"
             class="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900"
           >
-            <!-- 头部：用户输入 + 时间 -->
+            <!-- English UI note -->
             <div class="mb-2 flex items-start justify-between gap-2">
               <p class="flex-1 text-sm font-medium text-gray-700 dark:text-gray-300">{{ record.prompt }}</p>
               <span class="shrink-0 text-xs text-gray-400">{{ formatHistoryTime(record.timestamp) }}</span>
@@ -61,12 +61,12 @@ function formatHistoryTime(timestamp: number): string {
               }}</pre>
             </div>
 
-            <!-- 说明 -->
+            <!-- English UI note -->
             <p v-if="record.explanation" class="mb-2 text-xs text-gray-500 dark:text-gray-400">
               {{ record.explanation }}
             </p>
 
-            <!-- 操作按钮 -->
+            <!-- English UI note -->
             <div class="flex justify-end gap-2">
               <UButton variant="ghost" size="xs" color="error" @click="emit('delete', record.id)">
                 <UIcon name="i-heroicons-trash" class="h-3.5 w-3.5" />
@@ -79,13 +79,13 @@ function formatHistoryTime(timestamp: number): string {
           </div>
         </div>
 
-        <!-- 空状态 -->
+        <!-- English UI note -->
         <div v-else class="py-8 text-center text-gray-500 dark:text-gray-400">
           <UIcon name="i-heroicons-clock" class="mx-auto mb-2 h-8 w-8 text-gray-300 dark:text-gray-600" />
           <p class="text-sm">{{ t('ai.sqlLab.history.empty') }}</p>
         </div>
 
-        <!-- 底部按钮 -->
+        <!-- English UI note -->
         <div class="mt-4 flex justify-end">
           <UButton variant="ghost" @click="emit('update:open', false)">{{ t('common.close') }}</UButton>
         </div>

@@ -17,7 +17,7 @@ const props = defineProps<{
   timeFilter?: TimeFilter
 }>()
 
-// ==================== 口头禅分析 ====================
+// English engineering note.
 const catchphraseAnalysis = ref<CatchphraseAnalysis | null>(null)
 const isLoading = ref(false)
 
@@ -38,7 +38,7 @@ function truncateContent(content: string, maxLength = 20): string {
   return content.slice(0, maxLength) + '...'
 }
 
-// 监听 sessionId 和 timeFilter 变化
+// English engineering note.
 watch(
   () => [props.sessionId, props.timeFilter],
   () => {
@@ -50,10 +50,10 @@ watch(
 
 <template>
   <div class="main-content mx-auto max-w-3xl p-6">
-    <!-- 加载中 -->
+    <!-- English UI note -->
     <LoadingState v-if="isLoading" :text="t('quotes.catchphrase.loading')" />
 
-    <!-- 口头禅列表 -->
+    <!-- English UI note -->
     <ListPro
       v-else-if="catchphraseAnalysis && catchphraseAnalysis.members.length > 0"
       :items="catchphraseAnalysis.members"
@@ -96,7 +96,7 @@ watch(
       </template>
     </ListPro>
 
-    <!-- 空状态 -->
+    <!-- English UI note -->
     <SectionCard v-else :title="t('quotes.catchphrase.title')">
       <EmptyState :text="t('quotes.catchphrase.empty')" />
     </SectionCard>

@@ -1,32 +1,32 @@
 <script setup lang="ts">
 /**
- * 通用聊天选择器弹窗
- * 用于包含多个聊天的导出文件（如 Telegram 官方导出），
- * 让用户选择要导入的聊天。
+ * English note.
+ * English note.
+ * English note.
  *
- * 自治组件：传入 filePath 后自动扫描聊天列表，
- * 内部管理 loading / error / retry 状态。
+ * English note.
+ * English note.
  */
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-/** 聊天信息通用结构 */
+/** English note.
 export interface ChatInfo {
-  /** 在源文件中的索引 */
+  /** English note.
   index: number
-  /** 聊天名称 */
+  /** English note.
   name: string
-  /** 聊天类型（平台特定的原始类型字符串） */
+  /** English note.
   type: string
-  /** 聊天 ID */
+  /** English note.
   id: number
-  /** 消息数量 */
+  /** English note.
   messageCount: number
 }
 
 const props = defineProps<{
   open: boolean
-  /** 要扫描的文件路径 */
+  /** English note.
   filePath: string
 }>()
 
@@ -37,27 +37,27 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-// 双向绑定 open
+// English engineering note.
 const isOpen = computed({
   get: () => props.open,
   set: (value) => emit('update:open', value),
 })
 
-// 内部状态
+// English engineering note.
 const chats = ref<ChatInfo[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
 const selectedIndexes = ref<Set<number>>(new Set())
 
-// 已选数量
+// English engineering note.
 const selectedCount = computed(() => selectedIndexes.value.size)
 
-// 是否全选
+// English engineering note.
 const isAllSelected = computed(() => chats.value.length > 0 && selectedIndexes.value.size === chats.value.length)
 
-// ==================== 图标逻辑 ====================
+// English engineering note.
 
-/** 根据类型字符串的关键词自动匹配图标 */
+/** English note.
 function getChatTypeIcon(type: string): string {
   const t = type.toLowerCase()
   if (t.includes('personal') || t.includes('private_chat') || t.includes('bot') || t.includes('saved')) {
@@ -69,12 +69,12 @@ function getChatTypeIcon(type: string): string {
   return 'i-heroicons-chat-bubble-left-right'
 }
 
-/** 格式化类型标签：去下划线、首字母大写 */
+/** English note.
 function formatTypeLabel(type: string): string {
   return type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
-// ==================== 扫描逻辑 ====================
+// English engineering note.
 
 async function scan() {
   loading.value = true
@@ -96,7 +96,7 @@ async function scan() {
   }
 }
 
-// 打开弹窗时自动扫描
+// English engineering note.
 watch(
   () => props.open,
   (val) => {
@@ -106,7 +106,7 @@ watch(
   }
 )
 
-// ==================== 选择逻辑 ====================
+// English engineering note.
 
 function toggleSelect(index: number) {
   const newSet = new Set(selectedIndexes.value)
@@ -141,13 +141,13 @@ function handleClose() {
   <UModal v-model:open="isOpen" :title="t('home.chatSelector.title')">
     <template #body>
       <div class="min-h-[200px]">
-        <!-- 加载中 -->
+        <!-- English UI note -->
         <div v-if="loading" class="flex flex-col items-center justify-center py-12">
           <UIcon name="i-heroicons-arrow-path" class="mb-4 h-8 w-8 animate-spin text-pink-500" />
           <p class="text-gray-500 dark:text-gray-400">{{ t('home.chatSelector.scanning') }}</p>
         </div>
 
-        <!-- 加载错误 -->
+        <!-- English UI note -->
         <div v-else-if="error" class="flex flex-col items-center justify-center py-12">
           <UIcon name="i-heroicons-exclamation-circle" class="mb-4 h-8 w-8 text-red-500" />
           <p class="text-red-600 dark:text-red-400">{{ error }}</p>
@@ -156,9 +156,9 @@ function handleClose() {
           </UButton>
         </div>
 
-        <!-- 聊天列表 -->
+        <!-- English UI note -->
         <div v-else-if="chats.length > 0">
-          <!-- 全选和统计 -->
+          <!-- English UI note -->
           <div class="mb-2 flex items-center justify-between">
             <div class="flex items-center gap-2">
               <UCheckbox
@@ -176,7 +176,7 @@ function handleClose() {
             </span>
           </div>
 
-          <!-- 聊天列表 -->
+          <!-- English UI note -->
           <div class="max-h-[420px] space-y-0.5 overflow-y-auto pr-1">
             <div
               v-for="chat in chats"
@@ -219,7 +219,7 @@ function handleClose() {
           </div>
         </div>
 
-        <!-- 无聊天 -->
+        <!-- English UI note -->
         <div v-else class="flex flex-col items-center justify-center py-12">
           <UIcon name="i-heroicons-chat-bubble-left-right" class="mb-4 h-8 w-8 text-gray-400" />
           <p class="text-gray-500 dark:text-gray-400">{{ t('home.chatSelector.noChats') }}</p>

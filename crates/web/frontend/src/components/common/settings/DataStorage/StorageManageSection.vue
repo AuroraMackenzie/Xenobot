@@ -1,14 +1,14 @@
 <script setup lang="ts">
 /**
- * 存储管理区块
- * 显示本地缓存目录信息及清理功能
+ * English note.
+ * English note.
  */
 import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 
-// 缓存目录信息类型
+// English engineering note.
 interface CacheDirectoryInfo {
   id: string
   name: string
@@ -27,7 +27,7 @@ interface CacheInfo {
   totalSize: number
 }
 
-// 状态
+// English engineering note.
 const cacheInfo = ref<CacheInfo | null>(null)
 const isLoading = ref(false)
 const clearingId = ref<string | null>(null)
@@ -36,15 +36,15 @@ const isCustomDataDir = ref(false)
 const isUpdatingDataDir = ref(false)
 const dataDirError = ref<string | null>(null)
 
-// 确认弹窗状态
+// English engineering note.
 const showConfirmModal = ref(false)
 const pendingNewDir = ref<string | null>(null)
 const pendingMigrate = ref(false)
 
-// 重启弹窗状态
+// English engineering note.
 const showRelaunchModal = ref(false)
 
-// 格式化文件大小
+// English engineering note.
 function formatSize(bytes: number): string {
   if (bytes === 0) return '0 B'
   const units = ['B', 'KB', 'MB', 'GB']
@@ -53,13 +53,13 @@ function formatSize(bytes: number): string {
   return `${size} ${units[i]}`
 }
 
-// 计算总大小
+// English engineering note.
 const totalSizeFormatted = computed(() => {
   if (!cacheInfo.value) return '0 B'
   return formatSize(cacheInfo.value.totalSize)
 })
 
-// 加载缓存信息
+// English engineering note.
 async function loadCacheInfo() {
   isLoading.value = true
   try {
@@ -71,7 +71,7 @@ async function loadCacheInfo() {
   }
 }
 
-// 加载数据目录
+// English engineering note.
 async function loadDataDir() {
   try {
     const info = await window.cacheApi.getDataDir()
@@ -82,13 +82,13 @@ async function loadDataDir() {
   }
 }
 
-// 清理缓存
+// English engineering note.
 async function clearCache(cacheId: string) {
   clearingId.value = cacheId
   try {
     const result = await window.cacheApi.clear(cacheId)
     if (result.success) {
-      // 刷新缓存信息
+      // English engineering note.
       await loadCacheInfo()
     } else {
       console.error('清理缓存失败:', result.error)
@@ -100,7 +100,7 @@ async function clearCache(cacheId: string) {
   }
 }
 
-// 打开目录
+// English engineering note.
 async function openDirectory(cacheId: string) {
   try {
     await window.cacheApi.openDir(cacheId)
@@ -109,19 +109,19 @@ async function openDirectory(cacheId: string) {
   }
 }
 
-// 打开数据根目录
+// English engineering note.
 async function openBaseDir() {
   await openDirectory('base')
 }
 
-// 选择数据目录
+// English engineering note.
 async function selectDataDir() {
   dataDirError.value = null
   try {
     const result = await window.cacheApi.selectDataDir()
     if (!result.success || !result.path) return
 
-    // 显示确认弹窗
+    // English engineering note.
     pendingNewDir.value = result.path
     pendingMigrate.value = true
     showConfirmModal.value = true
@@ -130,29 +130,29 @@ async function selectDataDir() {
   }
 }
 
-// 恢复默认数据目录
+// English engineering note.
 async function resetDataDir() {
   dataDirError.value = null
-  // 显示确认弹窗
+  // English engineering note.
   pendingNewDir.value = null
   pendingMigrate.value = true
   showConfirmModal.value = true
 }
 
-// 确认切换数据目录
+// English engineering note.
 async function confirmDataDirChange() {
   showConfirmModal.value = false
   await applyDataDirChange(pendingNewDir.value, pendingMigrate.value)
 }
 
-// 取消切换
+// English engineering note.
 function cancelDataDirChange() {
   showConfirmModal.value = false
   pendingNewDir.value = null
   pendingMigrate.value = false
 }
 
-// 应用数据目录变更
+// English engineering note.
 async function applyDataDirChange(newDir: string | null, migrate: boolean) {
   isUpdatingDataDir.value = true
   try {
@@ -162,7 +162,7 @@ async function applyDataDirChange(newDir: string | null, migrate: boolean) {
       return
     }
 
-    // 迁移成功，显示强制重启弹窗
+    // English engineering note.
     showRelaunchModal.value = true
   } catch (error) {
     dataDirError.value = error instanceof Error ? error.message : String(error)
@@ -171,18 +171,18 @@ async function applyDataDirChange(newDir: string | null, migrate: boolean) {
   }
 }
 
-// 重启应用
+// English engineering note.
 async function relaunchApp() {
   await window.api.app.relaunch()
 }
 
-// 组件挂载时加载数据
+// English engineering note.
 onMounted(() => {
   loadCacheInfo()
   loadDataDir()
 })
 
-// 暴露刷新方法
+// English engineering note.
 defineExpose({
   refresh: loadCacheInfo,
 })
@@ -190,7 +190,7 @@ defineExpose({
 
 <template>
   <div class="space-y-6">
-    <!-- 标题和总览 -->
+    <!-- English UI note -->
     <div class="flex items-center justify-between">
       <div>
         <h3 class="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
@@ -200,23 +200,23 @@ defineExpose({
         <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('settings.storage.description') }}</p>
       </div>
       <div class="flex items-center gap-2">
-        <!-- 总大小 -->
+        <!-- English UI note -->
         <div class="rounded-lg bg-gray-100 px-3 py-1.5 dark:bg-gray-800">
           <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('settings.storage.totalUsage') }}</span>
           <span class="text-sm font-semibold text-gray-900 dark:text-white">{{ totalSizeFormatted }}</span>
         </div>
-        <!-- 刷新按钮 -->
+        <!-- English UI note -->
         <UButton icon="i-heroicons-arrow-path" variant="ghost" size="sm" :loading="isLoading" @click="loadCacheInfo" />
       </div>
     </div>
 
-    <!-- 加载状态 -->
+    <!-- English UI note -->
     <div v-if="isLoading && !cacheInfo" class="flex items-center justify-center py-8">
       <UIcon name="i-heroicons-arrow-path" class="h-5 w-5 animate-spin text-gray-400" />
       <span class="ml-2 text-sm text-gray-500">{{ t('settings.storage.loading') }}</span>
     </div>
 
-    <!-- 缓存目录列表 -->
+    <!-- English UI note -->
     <div v-else-if="cacheInfo" class="space-y-2">
       <div
         v-for="dir in cacheInfo.directories"
@@ -224,7 +224,7 @@ defineExpose({
         class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 transition-colors hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800/50 dark:hover:bg-gray-800"
       >
         <div class="flex items-center justify-between">
-          <!-- 左侧信息 -->
+          <!-- English UI note -->
           <div class="flex items-center gap-3">
             <div
               class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
@@ -257,14 +257,14 @@ defineExpose({
             </div>
           </div>
 
-          <!-- 右侧信息和操作按钮 -->
+          <!-- English UI note -->
           <div class="flex items-center">
-            <!-- 文件数和大小（固定宽度对齐） -->
+            <!-- English UI note -->
             <div class="flex items-center gap-2 text-xs text-gray-400">
               <span class="w-14 text-right">{{ dir.fileCount }} {{ t('settings.storage.files') }}</span>
               <span class="w-16 text-right">{{ formatSize(dir.size) }}</span>
             </div>
-            <!-- 操作按钮（固定宽度） -->
+            <!-- English UI note -->
             <div class="ml-4 flex w-36 shrink-0 items-center justify-end gap-1">
               <UButton
                 v-if="dir.canClear && dir.size > 0"
@@ -287,7 +287,7 @@ defineExpose({
       </div>
     </div>
 
-    <!-- 数据目录设置 -->
+    <!-- English UI note -->
     <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50">
       <div class="flex items-start justify-between gap-3">
         <div class="min-w-0 flex-1">
@@ -329,7 +329,7 @@ defineExpose({
       </p>
     </div>
 
-    <!-- 提示信息 -->
+    <!-- English UI note -->
     <div class="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800/50 dark:bg-amber-900/20">
       <div class="flex items-start gap-2">
         <UIcon name="i-heroicons-exclamation-triangle" class="h-4 w-4 shrink-0 text-amber-500" />
@@ -343,7 +343,7 @@ defineExpose({
       </div>
     </div>
 
-    <!-- 切换数据目录确认弹窗 -->
+    <!-- English UI note -->
     <UModal v-model:open="showConfirmModal">
       <template #content>
         <div class="p-5">
@@ -387,7 +387,7 @@ defineExpose({
       </template>
     </UModal>
 
-    <!-- 迁移成功后强制重启弹窗 -->
+    <!-- English UI note -->
     <UModal v-model:open="showRelaunchModal" :dismissible="false">
       <template #content>
         <div class="p-5">

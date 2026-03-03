@@ -1,14 +1,14 @@
 <script setup lang="ts">
 /**
- * 通用提示组件
- * 支持通过 props 传入 icon 和 html 内容
+ * English note.
+ * English note.
  */
 defineProps<{
-  /** 图标名称（iconify 格式） */
+  /** English note.
   icon?: string
-  /** HTML 内容（通过 v-html 渲染） */
+  /** English note.
   content: string
-  /** 提示颜色，默认 error */
+  /** English note.
   color?: 'error' | 'warning' | 'info' | 'success'
 }>()
 </script>

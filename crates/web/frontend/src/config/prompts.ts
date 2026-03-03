@@ -1,29 +1,29 @@
 /**
- * AI 提示词统一配置
+ * English note.
  *
- * 本文件集中管理所有 AI 提示词相关的配置：
- * - 内置预设定义（统一版本，不再区分群聊/私聊）
- * - 默认角色定义/回答要求
- * - 锁定部分说明（用于前端预览）
+ * English note.
+ * English note.
+ * English note.
+ * English note.
  *
- * 注意：群聊/私聊的差异化内容（如成员查询策略）由后端 agent.ts 根据运行时 chatType 自动处理。
+ * English note.
  */
 
 import type { PromptPreset } from '@/types/ai'
 
-// ==================== 类型定义 ====================
+// English engineering note.
 
 export type LocaleType = 'zh-CN' | 'en-US'
 
-// ==================== 国际化内容配置 ====================
+// English engineering note.
 
 const i18nContent = {
   'zh-CN': {
     presetName: '默认分析助手',
-    // 默认角色定义：适中幽默，允许 B 站/网络热梗与表情
+    // English engineering note.
     roleDefinition: `你是一个专业但风格轻松的聊天记录分析助手。
 你的任务是帮助用户理解和分析他们的聊天记录数据，同时可以适度使用 B 站/网络热梗和表情/颜文字活跃气氛，但不影响结论的准确性。`,
-    // 默认回答要求：强调严谨优先，适度玩梗
+    // English engineering note.
     responseRules: `1. 基于工具返回的数据回答，不要编造信息
 2. 如果数据不足以回答问题，请说明
 3. 回答要简洁明了，使用 Markdown 格式
@@ -44,13 +44,13 @@ const i18nContent = {
 `,
       memberNote: {
         group: `成员查询策略：
-- 当用户提到特定群成员（如"张三说过什么"、"小明的发言"等）时，应先调用 get_group_members 获取成员列表
+- 当用户提到特定群成员（如"张三说过什么"、"小明的发言"等）时，应先调用 member_list 获取成员列表
 - 群成员有三种名称：accountName（原始昵称）、groupNickname（群昵称）、aliases（用户自定义别名）
-- 通过 get_group_members 的 search 参数可以模糊搜索这三种名称
+- 在 member_list 返回结果中匹配这三种名称
 - 找到成员后，使用其 id 字段作为 search_messages 的 sender_id 参数来获取该成员的发言`,
         private: `成员查询策略：
 - 私聊只有两个人，可以直接获取成员列表
-- 当用户提到"对方"、"他/她"时，通过 get_group_members 获取另一方信息`,
+- 当用户提到"对方"、"他/她"时，通过 member_list 获取另一方信息`,
       },
       currentDatePrefix: '当前日期是',
       timeParamsTemplate: (year: number, prevYear: number) =>
@@ -85,13 +85,13 @@ Your task is to help users understand and analyze their chat records.`,
 `,
       memberNote: {
         group: `Member query strategy:
-- When the user mentions a specific group member (e.g., "what did John say", "Mary's messages"), first call get_group_members to get the member list
+- When the user mentions a specific group member (e.g., "what did John say", "Mary's messages"), first call member_list to get the member list
 - Group members have three name types: accountName (original nickname), groupNickname (group nickname), aliases (user-defined aliases)
-- Use the search parameter of get_group_members to fuzzy search across all three name types
+- Match the returned member_list records across all three name types
 - After finding the member, use their id field as the sender_id parameter for search_messages to get their messages`,
         private: `Member query strategy:
 - Private chats have only two people, you can directly get the member list
-- When the user mentions "the other person" or "he/she", use get_group_members to get the other party's information`,
+- When the user mentions "the other person" or "he/she", use member_list to identify the other party`,
       },
       currentDatePrefix: 'The current date is',
       timeParamsTemplate: (year: number, prevYear: number) =>
@@ -107,21 +107,21 @@ Default to ${year} if year not specified, use ${prevYear} if the month hasn't ar
   },
 }
 
-// ==================== 预设 ID 常量 ====================
+// English engineering note.
 
-/** 默认预设ID */
+/** English note.
 export const DEFAULT_PRESET_ID = 'builtin-default'
 
-/** @deprecated 使用 DEFAULT_PRESET_ID 代替 */
+/** English note.
 export const DEFAULT_GROUP_PRESET_ID = DEFAULT_PRESET_ID
-/** @deprecated 使用 DEFAULT_PRESET_ID 代替 */
+/** English note.
 export const DEFAULT_PRIVATE_PRESET_ID = DEFAULT_PRESET_ID
 
-// ==================== 默认提示词内容 ====================
+// English engineering note.
 
 /**
- * 获取默认角色定义
- * @param locale 语言设置
+ * English note.
+ * English note.
  */
 export function getDefaultRoleDefinition(locale: LocaleType = 'zh-CN'): string {
   const content = i18nContent[locale] || i18nContent['zh-CN']
@@ -129,8 +129,8 @@ export function getDefaultRoleDefinition(locale: LocaleType = 'zh-CN'): string {
 }
 
 /**
- * 获取默认回答要求
- * @param locale 语言设置
+ * English note.
+ * English note.
  */
 export function getDefaultResponseRules(locale: LocaleType = 'zh-CN'): string {
   const content = i18nContent[locale] || i18nContent['zh-CN']
@@ -138,19 +138,19 @@ export function getDefaultResponseRules(locale: LocaleType = 'zh-CN'): string {
 }
 
 /**
- * 获取内置预设名称
- * @param locale 语言设置
+ * English note.
+ * English note.
  */
 export function getBuiltinPresetName(locale: LocaleType = 'zh-CN'): string {
   const content = i18nContent[locale] || i18nContent['zh-CN']
   return content.presetName
 }
 
-// ==================== 内置预设定义 ====================
+// English engineering note.
 
 /**
- * 获取内置预设列表
- * @param locale 语言设置
+ * English note.
+ * English note.
  */
 export function getBuiltinPresets(locale: LocaleType = 'zh-CN'): PromptPreset[] {
   const now = Date.now()
@@ -168,33 +168,33 @@ export function getBuiltinPresets(locale: LocaleType = 'zh-CN'): PromptPreset[] 
   return [BUILTIN_DEFAULT]
 }
 
-/** 所有内置预设（原始版本，用于重置）- 默认中文 */
+/** English note.
 export const BUILTIN_PRESETS: PromptPreset[] = getBuiltinPresets('zh-CN')
 
 /**
- * 获取内置预设的原始版本（用于重置）
- * @param presetId 预设ID
- * @param locale 语言设置
+ * English note.
+ * English note.
+ * English note.
  */
 export function getOriginalBuiltinPreset(presetId: string, locale: LocaleType = 'zh-CN'): PromptPreset | undefined {
   const presets = getBuiltinPresets(locale)
   return presets.find((p) => p.id === presetId)
 }
 
-// ==================== 锁定部分预览（仅用于前端展示） ====================
+// English engineering note.
 
-/** Owner 信息（用于前端预览） */
+/** English note.
 export interface OwnerInfoPreview {
   displayName: string
 }
 
 /**
- * 获取锁定部分的提示词预览
- * 注意：实际执行时由主进程 agent.ts 生成，包含动态日期和差异化内容
+ * English note.
+ * English note.
  *
- * @param chatType 聊天类型（用于展示对应的成员策略）
- * @param ownerInfo Owner 信息（可选，用于预览时显示）
- * @param locale 语言设置
+ * English note.
+ * English note.
+ * English note.
  */
 export function getLockedPromptSectionPreview(
   chatType: 'group' | 'private' = 'group',
@@ -204,7 +204,7 @@ export function getLockedPromptSectionPreview(
   const content = i18nContent[locale] || i18nContent['zh-CN']
   const now = new Date()
 
-  // 根据语言格式化日期
+  // English engineering note.
   const dateLocale = locale === 'zh-CN' ? 'zh-CN' : 'en-US'
   const currentDate = now.toLocaleDateString(dateLocale, {
     year: 'numeric',
@@ -215,7 +215,7 @@ export function getLockedPromptSectionPreview(
 
   const chatContext = content.lockedSection.chatContext[chatType]
 
-  // Owner 说明（当用户设置了"我是谁"时）
+  // English engineering note.
   const ownerNote = ownerInfo ? content.lockedSection.ownerNoteTemplate(ownerInfo.displayName, chatContext) : ''
 
   const memberNote = content.lockedSection.memberNote[chatType]
@@ -232,12 +232,12 @@ ${content.lockedSection.conclusion}`
 }
 
 /**
- * 构建完整提示词预览（用于前端展示）
- * @param roleDefinition 角色定义
- * @param responseRules 回答要求
- * @param chatType 聊天类型（用于展示对应的锁定部分）
- * @param ownerInfo Owner 信息（可选）
- * @param locale 语言设置
+ * English note.
+ * English note.
+ * English note.
+ * English note.
+ * English note.
+ * English note.
  */
 export function buildPromptPreview(
   roleDefinition: string,

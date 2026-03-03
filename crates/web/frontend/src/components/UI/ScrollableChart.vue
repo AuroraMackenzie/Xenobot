@@ -1,16 +1,16 @@
 <script setup lang="ts">
 /**
- * 可滚动图表容器
- * 提供最大高度限制和自动滚动功能
+ * English note.
+ * English note.
  */
 import { computed } from 'vue'
 
 interface Props {
-  /** 内容实际高度（像素） */
+  /** English note.
   contentHeight: number
-  /** 最大高度（vh 单位），默认 60vh */
+  /** English note.
   maxHeightVh?: number
-  /** 内边距类名 */
+  /** English note.
   paddingClass?: string
 }
 
@@ -19,16 +19,16 @@ const props = withDefaults(defineProps<Props>(), {
   paddingClass: 'px-3 py-2',
 })
 
-// 计算最大高度（像素）
+// English engineering note.
 const maxHeightPx = computed(() => {
   if (typeof window === 'undefined') return 500
   return Math.round((window.innerHeight * props.maxHeightVh) / 100)
 })
 
-// 是否需要滚动
+// English engineering note.
 const needScroll = computed(() => props.contentHeight > maxHeightPx.value)
 
-// 容器样式
+// English engineering note.
 const containerStyle = computed(() => ({
   maxHeight: `${props.maxHeightVh}vh`,
   overflowY: (needScroll.value ? 'auto' : 'hidden') as 'auto' | 'hidden',

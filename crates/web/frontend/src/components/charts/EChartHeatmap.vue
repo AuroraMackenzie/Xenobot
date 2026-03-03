@@ -1,37 +1,37 @@
 <script setup lang="ts">
 /**
- * ECharts 热力图组件
- * 用于展示二维数据的密度分布，如小时x星期的消息分布
+ * English note.
+ * English note.
  */
 import { computed } from 'vue'
 import type { EChartsOption } from 'echarts'
 import EChart from './EChart.vue'
 
 export interface EChartHeatmapData {
-  /** X 轴标签 */
+  /** English note.
   xLabels: string[]
-  /** Y 轴标签 */
+  /** English note.
   yLabels: string[]
-  /** 数据：[x索引, y索引, 值] */
+  /** English note.
   data: Array<[number, number, number]>
 }
 
 interface Props {
   data: EChartHeatmapData
   height?: number
-  /** 最小值颜色 */
+  /** English note.
   minColor?: string
-  /** 最大值颜色 */
+  /** English note.
   maxColor?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
   height: 280,
-  minColor: '#d6f1f7', // 项目主题 pink-100
-  maxColor: '#0ea5c9', // 项目主题 pink-500
+  minColor: '#d6f1f7', // English engineering note.
+  maxColor: '#0ea5c9', // English engineering note.
 })
 
-// 计算数据的最大值
+// English engineering note.
 const maxValue = computed(() => {
   let max = 0
   for (const [, , value] of props.data.data) {

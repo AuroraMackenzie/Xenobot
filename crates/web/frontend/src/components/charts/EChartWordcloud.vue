@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * ECharts 词云图组件
- * 使用 echarts-wordcloud 扩展
+ * English note.
+ * English note.
  */
 import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import * as echarts from 'echarts/core'
@@ -9,7 +9,7 @@ import { CanvasRenderer } from 'echarts/renderers'
 import { TooltipComponent } from 'echarts/components'
 import 'echarts-wordcloud'
 
-// 注册必要的组件
+// English engineering note.
 echarts.use([CanvasRenderer, TooltipComponent])
 
 export interface WordcloudData {
@@ -24,11 +24,11 @@ interface Props {
   data: WordcloudData
   height?: number | string
   loading?: boolean
-  /** 最大显示词数 */
+  /** English note.
   maxWords?: number
-  /** 颜色方案 */
+  /** English note.
   colorScheme?: 'default' | 'warm' | 'cool' | 'rainbow'
-  /** 字体大小倍率 (0.5-2.0) */
+  /** English note.
   sizeScale?: number
 }
 
@@ -41,14 +41,14 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const emit = defineEmits<{
-  /** 词语点击事件 */
+  /** English note.
   wordClick: [word: string, count: number]
 }>()
 
 const chartRef = ref<HTMLDivElement>()
 let chartInstance: echarts.ECharts | null = null
 
-// 计算高度样式
+// English engineering note.
 const heightStyle = computed(() => {
   if (typeof props.height === 'number') {
     return `${props.height}px`
@@ -56,12 +56,12 @@ const heightStyle = computed(() => {
   return props.height
 })
 
-// 检测暗色模式
+// English engineering note.
 const isDark = computed(() => {
   return document.documentElement.classList.contains('dark')
 })
 
-// 颜色方案
+// English engineering note.
 const colorSchemes = {
   default: ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316', '#22c55e', '#14b8a6', '#3b82f6'],
   warm: ['#f97316', '#fb923c', '#fbbf24', '#facc15', '#f59e0b', '#ea580c', '#dc2626', '#ef4444'],
@@ -69,32 +69,32 @@ const colorSchemes = {
   rainbow: ['#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#3b82f6', '#8b5cf6', '#ec4899'],
 }
 
-// 获取词云配置
+// English engineering note.
 const getOption = () => {
   const words = props.data.words.slice(0, props.maxWords)
   if (words.length === 0) return null
 
-  // 计算最大和最小值用于归一化
+  // English engineering note.
   const maxCount = Math.max(...words.map((w) => w.count))
   const minCount = Math.min(...words.map((w) => w.count))
   const range = maxCount - minCount || 1
 
   const colors = colorSchemes[props.colorScheme]
 
-  // 基础字体大小范围
+  // English engineering note.
   const baseSizeMin = 14
   const baseSizeMax = 56
-  // 根据缩放倍率调整
+  // English engineering note.
   const sizeMin = Math.round(baseSizeMin * props.sizeScale)
   const sizeMax = Math.round(baseSizeMax * props.sizeScale)
   const sizeRange = sizeMax - sizeMin
 
-  // 转换为 echarts-wordcloud 格式，每个词直接指定颜色
+  // English engineering note.
   const seriesData = words.map((item, index) => {
-    // 归一化字体大小
+    // English engineering note.
     const normalized = (item.count - minCount) / range
     const fontSize = Math.round(sizeMin + normalized * sizeRange)
-    // 为每个词分配一个颜色
+    // English engineering note.
     const color = colors[index % colors.length]
 
     return {
@@ -125,32 +125,32 @@ const getOption = () => {
     series: [
       {
         type: 'wordCloud',
-        // 词云形状：circle, cardioid, diamond, triangle-forward, triangle, pentagon, star
+        // English engineering note.
         shape: 'circle',
-        // 填满整个容器（无边距）
+        // English engineering note.
         left: 0,
         top: 0,
         right: 0,
         bottom: 0,
         width: '100%',
         height: '100%',
-        // 词间距（更紧凑）
+        // English engineering note.
         gridSize: Math.max(2, Math.round(4 * props.sizeScale)),
-        // 文字大小范围（根据缩放调整）
+        // English engineering note.
         sizeRange: [sizeMin, sizeMax],
-        // 文字旋转范围
+        // English engineering note.
         rotationRange: [-45, 45],
         rotationStep: 15,
-        // 允许词语部分超出画布
+        // English engineering note.
         drawOutOfBound: false,
-        // 布局动画
+        // English engineering note.
         layoutAnimation: true,
-        // 全局文本样式
+        // English engineering note.
         textStyle: {
           fontFamily: 'sans-serif',
           fontWeight: 'bold',
         },
-        // 高亮样式
+        // English engineering note.
         emphasis: {
           focus: 'self',
           textStyle: {
@@ -164,16 +164,16 @@ const getOption = () => {
   }
 }
 
-// 初始化图表
+// English engineering note.
 function initChart() {
   if (!chartRef.value) return
 
-  // 销毁旧实例
+  // English engineering note.
   if (chartInstance) {
     chartInstance.dispose()
   }
 
-  // 创建新实例（不使用主题，避免覆盖词云颜色）
+  // English engineering note.
   chartInstance = echarts.init(chartRef.value)
 
   const option = getOption()
@@ -181,7 +181,7 @@ function initChart() {
     chartInstance.setOption(option)
   }
 
-  // 绑定点击事件
+  // English engineering note.
   chartInstance.on('click', (params) => {
     if (params.componentType === 'series' && params.seriesType === 'wordCloud') {
       emit('wordClick', params.name, params.value as number)
@@ -189,7 +189,7 @@ function initChart() {
   })
 }
 
-// 更新图表
+// English engineering note.
 function updateChart() {
   if (!chartInstance) {
     initChart()
@@ -202,26 +202,26 @@ function updateChart() {
   }
 }
 
-// 调整大小
+// English engineering note.
 function handleResize() {
   chartInstance?.resize()
 }
 
-// 监听数据变化
+// English engineering note.
 watch(() => props.data, updateChart, { deep: true })
 
-// 监听颜色方案变化
+// English engineering note.
 watch(() => props.colorScheme, updateChart)
 
-// 监听字体大小倍率变化
+// English engineering note.
 watch(() => props.sizeScale, updateChart)
 
-// 监听主题变化
+// English engineering note.
 watch(isDark, () => {
   initChart()
 })
 
-// 监听加载状态
+// English engineering note.
 watch(
   () => props.loading,
   (loading) => {
@@ -237,14 +237,14 @@ watch(
   }
 )
 
-// 监听暗色模式变化
+// English engineering note.
 let observer: MutationObserver | null = null
 
 onMounted(() => {
   initChart()
   window.addEventListener('resize', handleResize)
 
-  // 监听 HTML 元素的 class 变化（用于检测暗色模式切换）
+  // English engineering note.
   observer = new MutationObserver(() => {
     initChart()
   })
@@ -261,7 +261,7 @@ onUnmounted(() => {
   chartInstance = null
 })
 
-// 暴露方法供父组件调用
+// English engineering note.
 defineExpose({
   getInstance: () => chartInstance,
   resize: handleResize,

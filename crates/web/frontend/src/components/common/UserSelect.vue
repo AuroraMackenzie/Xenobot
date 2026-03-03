@@ -16,14 +16,14 @@ const emit = defineEmits<{
   (e: 'update:modelValue', value: number | null): void
 }>()
 
-// 成员数据
+// English engineering note.
 const members = ref<MemberWithStats[]>([])
 const isLoading = ref(false)
 
-// 特殊值表示全部成员
+// English engineering note.
 const ALL_MEMBERS_VALUE = '__ALL__'
 
-// 内部选中值（字符串类型，通过 value-key 指定）
+// English engineering note.
 const internalValue = computed({
   get: () => {
     return props.modelValue === null ? ALL_MEMBERS_VALUE : String(props.modelValue)
@@ -33,7 +33,7 @@ const internalValue = computed({
   },
 })
 
-// 成员选项
+// English engineering note.
 const memberOptions = computed(() => {
   const options: { value: string; label: string }[] = [
     { value: ALL_MEMBERS_VALUE, label: t('common.userSelect.allMembers') },
@@ -48,13 +48,13 @@ const memberOptions = computed(() => {
   return options
 })
 
-// 加载成员列表
+// English engineering note.
 async function loadMembers() {
   if (!props.sessionId) return
   isLoading.value = true
   try {
     const result = await window.chatApi.getMembers(props.sessionId)
-    // 按消息数排序
+    // English engineering note.
     members.value = result.sort((a, b) => b.messageCount - a.messageCount)
   } catch (error) {
     console.error('加载成员列表失败:', error)
@@ -63,11 +63,11 @@ async function loadMembers() {
   }
 }
 
-// 监听 sessionId 变化
+// English engineering note.
 watch(
   () => props.sessionId,
   () => {
-    emit('update:modelValue', null) // 重置选择
+    emit('update:modelValue', null) // English engineering note.
     loadMembers()
   },
   { immediate: true }

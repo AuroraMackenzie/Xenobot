@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * 本地 AI 分析弹窗
- * 支持预设分析和自定义提问
+ * English note.
+ * English note.
  */
 
 import { ref, computed, watch } from 'vue'
@@ -9,7 +9,7 @@ import { useI18n } from 'vue-i18n'
 import { useSessionStore } from '@/stores/session'
 import MarkdownIt from 'markdown-it'
 
-// 创建 markdown-it 实例
+// English engineering note.
 const md = new MarkdownIt({
   html: false,
   breaks: true,
@@ -20,7 +20,7 @@ const md = new MarkdownIt({
 const { t } = useI18n()
 const sessionStore = useSessionStore()
 
-// 筛选结果消息类型
+// English engineering note.
 interface FilterMessage {
   id: number
   senderName: string
@@ -56,19 +56,19 @@ const props = defineProps<{
 
 const open = defineModel<boolean>('open', { default: false })
 
-// 数据量阈值（超过此数量时提示数据量过大）
+// English engineering note.
 const DATA_TOO_LARGE_THRESHOLD = 5000
 
-// 检查数据量是否过大
+// English engineering note.
 const isDataTooLarge = computed(() => {
   if (!props.filterResult) return false
   return props.filterResult.stats.totalMessages > DATA_TOO_LARGE_THRESHOLD
 })
 
-// 分析模式：'preset' | 'custom'
+// English engineering note.
 const analysisMode = ref<'preset' | 'custom'>('preset')
 
-// 预设分析选项
+// English engineering note.
 const presetOptions = [
   { id: 'summary', label: '总结对话要点', prompt: '请总结这段对话的主要内容和关键要点。' },
   { id: 'sentiment', label: '情感分析', prompt: '请分析这段对话中参与者的情感变化和整体氛围。' },
@@ -79,18 +79,18 @@ const presetOptions = [
 const selectedPreset = ref(presetOptions[0].id)
 const customPrompt = ref('')
 
-// 可编辑的预设提示词（允许用户临时修改）
+// English engineering note.
 const editablePresetPrompt = ref(presetOptions[0].prompt)
 
-// 分析状态
+// English engineering note.
 const isAnalyzing = ref(false)
 const analysisResult = ref('')
 const analysisError = ref('')
 
-// 当前请求 ID（用于中止）
+// English engineering note.
 let currentRequestId: string | null = null
 
-// 构建上下文内容
+// English engineering note.
 const contextContent = computed(() => {
   if (!props.filterResult) return ''
 
@@ -107,7 +107,7 @@ const contextContent = computed(() => {
   return content
 })
 
-// 获取用户提问
+// English engineering note.
 const userQuestion = computed(() => {
   if (analysisMode.value === 'preset') {
     return editablePresetPrompt.value
@@ -115,7 +115,7 @@ const userQuestion = computed(() => {
   return customPrompt.value
 })
 
-// 执行分析
+// English engineering note.
 async function executeAnalysis() {
   if (!props.filterResult || !userQuestion.value) return
 
@@ -124,7 +124,7 @@ async function executeAnalysis() {
   analysisError.value = ''
 
   try {
-    // 构建完整的消息
+    // English engineering note.
     const fullMessage = `以下是一段聊天记录，请根据用户的问题进行分析：
 
 ${contextContent.value}
@@ -132,7 +132,7 @@ ${contextContent.value}
 ---
 用户问题：${userQuestion.value}`
 
-    // 调用 Agent API
+    // English engineering note.
     const context = {
       sessionId: sessionStore.currentSessionId || '',
     }
@@ -147,7 +147,7 @@ ${contextContent.value}
           analysisError.value = chunk.error || '分析出错'
         }
       },
-      [], // 不需要历史消息
+      [], // English engineering note.
       sessionStore.currentSession?.type === 'group' ? 'group' : 'private'
     )
 
@@ -167,7 +167,7 @@ ${contextContent.value}
   }
 }
 
-// 中止分析
+// English engineering note.
 async function abortAnalysis() {
   if (currentRequestId) {
     try {
@@ -180,7 +180,7 @@ async function abortAnalysis() {
   }
 }
 
-// 复制结果
+// English engineering note.
 async function copyResult() {
   try {
     await navigator.clipboard.writeText(analysisResult.value)
@@ -189,7 +189,7 @@ async function copyResult() {
   }
 }
 
-// 监听预设选择变化，更新可编辑的提示词
+// English engineering note.
 watch(selectedPreset, (newPresetId) => {
   const preset = presetOptions.find((p) => p.id === newPresetId)
   if (preset) {
@@ -197,7 +197,7 @@ watch(selectedPreset, (newPresetId) => {
   }
 })
 
-// 关闭时重置状态
+// English engineering note.
 watch(open, (val) => {
   if (!val) {
     analysisResult.value = ''
@@ -206,7 +206,7 @@ watch(open, (val) => {
       abortAnalysis()
     }
   } else {
-    // 打开时重置为默认预设
+    // English engineering note.
     editablePresetPrompt.value = presetOptions.find((p) => p.id === selectedPreset.value)?.prompt || ''
   }
 })
@@ -224,7 +224,7 @@ watch(open, (val) => {
         </template>
 
         <div class="space-y-4">
-          <!-- 上下文摘要 -->
+          <!-- English UI note -->
           <div class="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-sm">
             <div class="flex items-center gap-4 text-gray-600 dark:text-gray-400">
               <span>{{ filterResult?.blocks.length || 0 }} 个对话块</span>
@@ -233,7 +233,7 @@ watch(open, (val) => {
             </div>
           </div>
 
-          <!-- 数据量过大警告 -->
+          <!-- English UI note -->
           <div
             v-if="isDataTooLarge"
             class="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg"
@@ -251,7 +251,7 @@ watch(open, (val) => {
             </div>
           </div>
 
-          <!-- 分析模式切换 -->
+          <!-- English UI note -->
           <div class="flex items-center gap-1 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg w-fit">
             <button
               class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
@@ -277,7 +277,7 @@ watch(open, (val) => {
             </button>
           </div>
 
-          <!-- 预设分析选项 -->
+          <!-- English UI note -->
           <div v-if="analysisMode === 'preset'" class="space-y-3">
             <div class="grid grid-cols-2 gap-2">
               <label
@@ -295,7 +295,7 @@ watch(open, (val) => {
               </label>
             </div>
 
-            <!-- 可编辑的提示词 -->
+            <!-- English UI note -->
             <div class="space-y-1">
               <label class="text-xs text-gray-500 dark:text-gray-400">
                 {{ t('analysis.filter.editablePromptLabel') }}
@@ -304,7 +304,7 @@ watch(open, (val) => {
             </div>
           </div>
 
-          <!-- 自定义提问 -->
+          <!-- English UI note -->
           <div v-else>
             <UTextarea
               v-model="customPrompt"
@@ -314,7 +314,7 @@ watch(open, (val) => {
             />
           </div>
 
-          <!-- 分析按钮 -->
+          <!-- English UI note -->
           <div class="flex justify-end gap-2">
             <UButton v-if="isAnalyzing" color="red" variant="outline" @click="abortAnalysis">
               {{ t('common.cancel') }}
@@ -330,7 +330,7 @@ watch(open, (val) => {
             </UButton>
           </div>
 
-          <!-- 分析结果 -->
+          <!-- English UI note -->
           <div v-if="analysisResult || analysisError" class="border-t border-gray-200 dark:border-gray-700 pt-4">
             <div class="flex items-center justify-between mb-2">
               <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -342,7 +342,7 @@ watch(open, (val) => {
               </UButton>
             </div>
 
-            <!-- 错误提示 -->
+            <!-- English UI note -->
             <div
               v-if="analysisError"
               class="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg text-sm"
@@ -350,7 +350,7 @@ watch(open, (val) => {
               {{ analysisError }}
             </div>
 
-            <!-- 结果内容 -->
+            <!-- English UI note -->
             <div
               v-else-if="analysisResult"
               class="prose prose-sm dark:prose-invert max-w-none p-4 bg-gray-50 dark:bg-gray-800 rounded-lg max-h-80 overflow-y-auto"

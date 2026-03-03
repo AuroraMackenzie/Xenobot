@@ -7,13 +7,13 @@ const { t } = useI18n()
 
 const props = defineProps<{
   history: MemberNameHistory[]
-  /** 是否使用紧凑模式（用于弹窗展示） */
+  /** English note.
   compact?: boolean
 }>()
 
 /**
- * 格式化时间戳为日期字符串
- * 格式：YYYY-MM-DD
+ * English note.
+ * English note.
  */
 function formatDate(ts: number): string {
   const date = new Date(ts * 1000)
@@ -24,7 +24,7 @@ function formatDate(ts: number): string {
 }
 
 /**
- * 格式化时间段
+ * English note.
  */
 function formatPeriod(startTs: number, endTs: number | null): string {
   const start = formatDate(startTs)
@@ -39,26 +39,26 @@ function formatPeriod(startTs: number, endTs: number | null): string {
 }
 
 /**
- * 计算是否为当前昵称
+ * English note.
  */
 function isCurrent(item: MemberNameHistory): boolean {
   return item.endTs === null
 }
 
 /**
- * 是否有历史记录
+ * English note.
  */
 const hasHistory = computed(() => props.history.length > 0)
 
 /**
- * 是否只有一个昵称（无变更）
+ * English note.
  */
 const singleNickname = computed(() => props.history.length === 1)
 </script>
 
 <template>
   <div v-if="hasHistory" :class="compact ? 'py-1' : 'py-2'">
-    <!-- 单个昵称时的简化展示 -->
+    <!-- English UI note -->
     <div v-if="singleNickname" class="flex items-center gap-1 text-sm">
       <span class="text-gray-900 dark:text-white">{{ history[0].name }}</span>
       <span class="text-xs text-gray-500 dark:text-gray-400">
@@ -66,10 +66,10 @@ const singleNickname = computed(() => props.history.length === 1)
       </span>
     </div>
 
-    <!-- 多个昵称时的时间线展示 -->
+    <!-- English UI note -->
     <div v-else class="space-y-0">
       <div v-for="(item, index) in history" :key="index" class="flex gap-3">
-        <!-- 时间线节点 -->
+        <!-- English UI note -->
         <div class="flex flex-col items-center">
           <div
             class="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full"
@@ -78,7 +78,7 @@ const singleNickname = computed(() => props.history.length === 1)
           <div v-if="index < history.length - 1" class="h-full min-h-[24px] w-px grow bg-gray-200 dark:bg-gray-700" />
         </div>
 
-        <!-- 内容区域 -->
+        <!-- English UI note -->
         <div :class="compact ? 'pb-2' : 'pb-4'" class="flex-1">
           <div class="flex items-center gap-2">
             <span class="text-gray-900 dark:text-white" :class="{ 'font-semibold text-[#0a88ac]': isCurrent(item) }">
@@ -96,7 +96,7 @@ const singleNickname = computed(() => props.history.length === 1)
     </div>
   </div>
 
-  <!-- 无历史记录 -->
+  <!-- English UI note -->
   <div v-else class="py-4 text-center">
     <span class="text-sm text-gray-400">{{ t('views.charts.nicknameHistory.empty') }}</span>
   </div>

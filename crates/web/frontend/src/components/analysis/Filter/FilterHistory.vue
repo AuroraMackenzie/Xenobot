@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * 筛选历史记录弹窗
- * 使用 localStorage 存储历史记录（后续可改为 SQLite）
+ * English note.
+ * English note.
  */
 
 import { ref, watch, onMounted } from 'vue'
@@ -30,7 +30,7 @@ const emit = defineEmits<{
   ]
 }>()
 
-// 历史记录类型
+// English engineering note.
 interface FilterHistoryItem {
   id: string
   sessionId: string
@@ -46,23 +46,23 @@ interface FilterHistoryItem {
   selectedSessionIds?: number[]
 }
 
-// 历史记录列表
+// English engineering note.
 const historyList = ref<FilterHistoryItem[]>([])
 
-// 编辑模式
+// English engineering note.
 const editingId = ref<string | null>(null)
 const editingName = ref('')
 
-// 存储键
+// English engineering note.
 const STORAGE_KEY = 'xenobot_filter_history'
 
-// 加载历史记录
+// English engineering note.
 function loadHistory() {
   try {
     const data = localStorage.getItem(STORAGE_KEY)
     if (data) {
       const allHistory: FilterHistoryItem[] = JSON.parse(data)
-      // 过滤当前会话的历史
+      // English engineering note.
       historyList.value = allHistory.filter((h) => h.sessionId === sessionStore.currentSessionId)
     }
   } catch (error) {
@@ -70,13 +70,13 @@ function loadHistory() {
   }
 }
 
-// 保存历史记录
+// English engineering note.
 function saveHistory() {
   try {
     const data = localStorage.getItem(STORAGE_KEY)
     let allHistory: FilterHistoryItem[] = data ? JSON.parse(data) : []
 
-    // 移除当前会话的历史，然后添加新的
+    // English engineering note.
     allHistory = allHistory.filter((h) => h.sessionId !== sessionStore.currentSessionId)
     allHistory = [...allHistory, ...historyList.value]
 
@@ -86,13 +86,13 @@ function saveHistory() {
   }
 }
 
-// 删除历史记录
+// English engineering note.
 function deleteHistory(id: string) {
   historyList.value = historyList.value.filter((h) => h.id !== id)
   saveHistory()
 }
 
-// 加载历史条件
+// English engineering note.
 function loadCondition(item: FilterHistoryItem) {
   emit('load', {
     mode: item.mode,
@@ -101,30 +101,30 @@ function loadCondition(item: FilterHistoryItem) {
   })
 }
 
-// 开始编辑名称
+// English engineering note.
 function startEdit(item: FilterHistoryItem) {
   editingId.value = item.id
   editingName.value = item.name
 }
 
-// 保存名称
+// English engineering note.
 function saveName(item: FilterHistoryItem) {
   item.name = editingName.value || item.name
   editingId.value = null
   saveHistory()
 }
 
-// 取消编辑
+// English engineering note.
 function cancelEdit() {
   editingId.value = null
 }
 
-// 格式化时间
+// English engineering note.
 function formatTime(ts: number): string {
   return new Date(ts).toLocaleString()
 }
 
-// 格式化条件摘要
+// English engineering note.
 function formatSummary(item: FilterHistoryItem): string {
   if (item.mode === 'condition') {
     const parts: string[] = []
@@ -140,7 +140,7 @@ function formatSummary(item: FilterHistoryItem): string {
   }
 }
 
-// 监听打开状态
+// English engineering note.
 watch(open, (val) => {
   if (val) {
     loadHistory()
@@ -151,7 +151,7 @@ onMounted(() => {
   loadHistory()
 })
 
-// 暴露保存方法供外部使用
+// English engineering note.
 defineExpose({
   saveCondition(condition: Omit<FilterHistoryItem, 'id' | 'sessionId' | 'createdAt' | 'name'>) {
     const newItem: FilterHistoryItem = {
@@ -162,7 +162,7 @@ defineExpose({
       ...condition,
     }
     historyList.value.unshift(newItem)
-    // 只保留最近 20 条
+    // English engineering note.
     historyList.value = historyList.value.slice(0, 20)
     saveHistory()
   },
@@ -193,7 +193,7 @@ defineExpose({
             >
               <div class="flex items-start justify-between gap-2">
                 <div class="flex-1 min-w-0">
-                  <!-- 名称 -->
+                  <!-- English UI note -->
                   <div v-if="editingId === item.id" class="flex items-center gap-2 mb-1">
                     <UInput v-model="editingName" size="sm" class="flex-1" @keydown.enter="saveName(item)" />
                     <UButton size="xs" @click="saveName(item)">{{ t('common.save') }}</UButton>
@@ -209,18 +209,18 @@ defineExpose({
                     </button>
                   </div>
 
-                  <!-- 摘要 -->
+                  <!-- English UI note -->
                   <p class="text-sm text-gray-600 dark:text-gray-400 truncate">
                     {{ formatSummary(item) }}
                   </p>
 
-                  <!-- 时间 -->
+                  <!-- English UI note -->
                   <p class="text-xs text-gray-400 mt-1">
                     {{ formatTime(item.createdAt) }}
                   </p>
                 </div>
 
-                <!-- 操作按钮 -->
+                <!-- English UI note -->
                 <div class="flex items-center gap-1">
                   <UButton size="xs" variant="soft" @click="loadCondition(item)">
                     {{ t('common.load') }}

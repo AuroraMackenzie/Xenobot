@@ -1,13 +1,13 @@
 <script setup lang="ts">
 /**
- * 自定义筛选 Tab
- * 用于精准提取聊天记录上下文，供 AI 分析使用
+ * English note.
+ * English note.
  *
- * 支持两种互斥的筛选模式：
- * 1. 条件筛选：按关键词、时间、发送者筛选，并自动扩展上下文
- * 2. 会话筛选：直接选择已有的会话（对话段落）
+ * English note.
+ * English note.
+ * English note.
  *
- * 支持分页加载，避免大数据量时内存溢出
+ * English note.
  */
 
 import { ref, computed, watch, toRaw } from 'vue'
@@ -24,10 +24,10 @@ const { t } = useI18n()
 const toast = useToast()
 const sessionStore = useSessionStore()
 
-// 筛选模式：'condition' | 'session'
+// English engineering note.
 const filterMode = ref<'condition' | 'session'>('condition')
 
-// 条件筛选参数
+// English engineering note.
 const conditionFilter = ref<{
   keywords: string[]
   timeRange: { start: number; end: number } | null
@@ -40,10 +40,10 @@ const conditionFilter = ref<{
   contextSize: 10,
 })
 
-// 会话筛选参数
+// English engineering note.
 const selectedSessionIds = ref<number[]>([])
 
-// 筛选结果消息类型
+// English engineering note.
 interface FilterMessage {
   id: number
   senderName: string
@@ -59,7 +59,7 @@ interface FilterMessage {
   isHit: boolean
 }
 
-// 分页信息类型
+// English engineering note.
 interface PaginationInfo {
   page: number
   pageSize: number
@@ -68,7 +68,7 @@ interface PaginationInfo {
   hasMore: boolean
 }
 
-// 筛选结果（带分页）
+// English engineering note.
 const filterResult = ref<{
   blocks: Array<{
     startTs: number
@@ -84,25 +84,25 @@ const filterResult = ref<{
   pagination: PaginationInfo
 } | null>(null)
 
-// 加载状态
+// English engineering note.
 const isFiltering = ref(false)
 const isLoadingMore = ref(false)
 const showHistory = ref(false)
 const showAnalysisModal = ref(false)
 
-// 每页块数
+// English engineering note.
 const PAGE_SIZE = 50
 
-// 估算 Token 数
-// 中文：1 字符 ≈ 1.5 token（因为中文分词后每个字符可能产生 1-2 个 token）
-// 考虑到消息格式（时间、发送人等），使用 1.5 作为估算系数
+// English engineering note.
+// English engineering note.
+// English engineering note.
 const estimatedTokens = computed(() => {
   if (!filterResult.value) return 0
   return Math.ceil(filterResult.value.stats.totalChars * 1.5)
 })
 
-// Token 状态：green < 50000, yellow 50000-100000, red > 100000
-// （基于大多数模型的上下文窗口大小）
+// English engineering note.
+// English engineering note.
 const tokenStatus = computed(() => {
   const tokens = estimatedTokens.value
   if (tokens < 50000) return 'green'
@@ -110,24 +110,24 @@ const tokenStatus = computed(() => {
   return 'red'
 })
 
-// 是否可以执行筛选
+// English engineering note.
 const canExecuteFilter = computed(() => {
   if (isFiltering.value) return false
 
   if (filterMode.value === 'condition') {
-    // 条件模式：至少有一个条件
+    // English engineering note.
     return (
       conditionFilter.value.keywords.length > 0 ||
       conditionFilter.value.senderIds.length > 0 ||
       conditionFilter.value.timeRange !== null
     )
   } else {
-    // 会话模式：至少选择一个会话
+    // English engineering note.
     return selectedSessionIds.value.length > 0
   }
 })
 
-// 执行筛选（首次加载）
+// English engineering note.
 async function executeFilter() {
   const sessionId = sessionStore.currentSessionId
   if (!sessionId) return
@@ -137,7 +137,7 @@ async function executeFilter() {
 
   try {
     if (filterMode.value === 'condition') {
-      // 条件筛选模式 - 使用 toRaw 去除 Vue Proxy
+      // English engineering note.
       const rawFilter = toRaw(conditionFilter.value)
       const keywords = rawFilter.keywords.length > 0 ? [...rawFilter.keywords] : undefined
       const timeFilter = rawFilter.timeRange
@@ -152,12 +152,12 @@ async function executeFilter() {
         timeFilter,
         senderIds,
         contextSize,
-        1, // 第一页
+        1, // English engineering note.
         PAGE_SIZE
       )
       filterResult.value = result
     } else {
-      // 会话筛选模式
+      // English engineering note.
       if (selectedSessionIds.value.length === 0) return
       const sessionIds = [...toRaw(selectedSessionIds.value)]
       const result = await window.aiApi.getMultipleSessionsMessages(sessionId, sessionIds, 1, PAGE_SIZE)
@@ -170,7 +170,7 @@ async function executeFilter() {
   }
 }
 
-// 加载更多块
+// English engineering note.
 async function loadMoreBlocks() {
   const sessionId = sessionStore.currentSessionId
   if (!sessionId || !filterResult.value || !filterResult.value.pagination.hasMore || isLoadingMore.value) return
@@ -203,11 +203,11 @@ async function loadMoreBlocks() {
       result = await window.aiApi.getMultipleSessionsMessages(sessionId, sessionIds, nextPage, PAGE_SIZE)
     }
 
-    // 合并新加载的块到现有结果
+    // English engineering note.
     if (result && result.blocks.length > 0) {
       filterResult.value = {
         blocks: [...filterResult.value.blocks, ...result.blocks],
-        stats: filterResult.value.stats, // 统计信息保持不变（第一页已获取）
+        stats: filterResult.value.stats, // English engineering note.
         pagination: result.pagination,
       }
     }
@@ -218,14 +218,14 @@ async function loadMoreBlocks() {
   }
 }
 
-// 导出状态
+// English engineering note.
 const isExporting = ref(false)
 const exportProgress = ref<{
   percentage: number
   message: string
 } | null>(null)
 
-// 监听导出进度
+// English engineering note.
 let unsubscribeExportProgress: (() => void) | null = null
 
 function startExportProgressListener() {
@@ -234,7 +234,7 @@ function startExportProgressListener() {
       percentage: progress.percentage,
       message: progress.message,
     }
-    // 如果完成或出错，不再需要监听
+    // English engineering note.
     if (progress.stage === 'done' || progress.stage === 'error') {
       exportProgress.value = null
     }
@@ -249,7 +249,7 @@ function stopExportProgressListener() {
   exportProgress.value = null
 }
 
-// 导出投喂包（后端生成 Markdown 文件，支持大数据量）
+// English engineering note.
 async function exportFeedPack() {
   if (!filterResult.value || filterResult.value.blocks.length === 0) return
 
@@ -259,7 +259,7 @@ async function exportFeedPack() {
   const sessionInfo = sessionStore.currentSession
   const sessionName = sessionInfo?.name || '未知会话'
 
-  // 让用户选择保存目录
+  // English engineering note.
   const dialogResult = await window.api.dialog.showOpenDialog({
     title: '选择保存目录',
     properties: ['openDirectory', 'createDirectory'],
@@ -270,11 +270,11 @@ async function exportFeedPack() {
   isExporting.value = true
   exportProgress.value = { percentage: 0, message: t('analysis.filter.exportPreparing') }
 
-  // 开始监听进度
+  // English engineering note.
   startExportProgressListener()
 
   try {
-    // 构建导出参数
+    // English engineering note.
     const rawFilter = toRaw(conditionFilter.value)
     const exportParams = {
       sessionId,
@@ -290,11 +290,11 @@ async function exportFeedPack() {
       chatSessionIds: filterMode.value === 'session' ? [...toRaw(selectedSessionIds.value)] : undefined,
     }
 
-    // 调用后端导出
+    // English engineering note.
     const exportResult = await window.aiApi.exportFilterResultToFile(exportParams)
 
     if (exportResult.success && exportResult.filePath) {
-      // 导出成功
+      // English engineering note.
       toast.add({
         title: t('analysis.filter.exportSuccess'),
         description: exportResult.filePath,
@@ -302,7 +302,7 @@ async function exportFeedPack() {
         icon: 'i-heroicons-check-circle',
       })
     } else {
-      // 导出失败
+      // English engineering note.
       toast.add({
         title: t('analysis.filter.exportFailed'),
         description: exportResult.error || t('common.error.unknown'),
@@ -324,18 +324,18 @@ async function exportFeedPack() {
   }
 }
 
-// 打开本地 AI 分析
+// English engineering note.
 function openLocalAnalysis() {
   if (!filterResult.value || filterResult.value.blocks.length === 0) return
   showAnalysisModal.value = true
 }
 
-// 切换模式时清空结果
+// English engineering note.
 watch(filterMode, () => {
   filterResult.value = null
 })
 
-// 加载历史筛选条件
+// English engineering note.
 function loadHistoryCondition(condition: {
   mode: 'condition' | 'session'
   conditionFilter?: typeof conditionFilter.value
@@ -353,12 +353,12 @@ function loadHistoryCondition(condition: {
 
 <template>
   <div class="h-full flex flex-col">
-    <!-- 顶部工具栏 -->
+    <!-- English UI note -->
     <div class="flex-none flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
       <div class="flex items-center gap-4">
         <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ t('analysis.filter.title') }}</h2>
 
-        <!-- 模式切换 -->
+        <!-- English UI note -->
         <div class="flex items-center gap-1 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg">
           <button
             class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
@@ -386,18 +386,18 @@ function loadHistoryCondition(condition: {
       </div>
 
       <div class="flex items-center gap-2">
-        <!-- 历史记录按钮 -->
+        <!-- English UI note -->
         <UButton variant="ghost" icon="i-heroicons-clock" size="sm" @click="showHistory = true">
           {{ t('analysis.filter.history') }}
         </UButton>
       </div>
     </div>
 
-    <!-- 主体内容区 -->
+    <!-- English UI note -->
     <div class="flex-1 flex overflow-hidden">
-      <!-- 左侧筛选面板 -->
+      <!-- English UI note -->
       <div class="w-80 flex-none border-r border-gray-200 dark:border-gray-700 flex flex-col">
-        <!-- 筛选条件区域（可滚动） -->
+        <!-- English UI note -->
         <div class="flex-1 min-h-0 overflow-y-auto">
           <ConditionPanel
             v-if="filterMode === 'condition'"
@@ -409,7 +409,7 @@ function loadHistoryCondition(condition: {
           <SessionPanel v-else v-model:selected-ids="selectedSessionIds" />
         </div>
 
-        <!-- 执行筛选按钮（固定在底部） -->
+        <!-- English UI note -->
         <div class="flex-none p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
           <UButton block color="primary" :loading="isFiltering" :disabled="!canExecuteFilter" @click="executeFilter">
             {{ t('analysis.filter.execute') }}
@@ -417,7 +417,7 @@ function loadHistoryCondition(condition: {
         </div>
       </div>
 
-      <!-- 右侧预览面板 -->
+      <!-- English UI note -->
       <div class="flex-1 flex flex-col overflow-hidden">
         <PreviewPanel
           :result="filterResult"
@@ -428,12 +428,12 @@ function loadHistoryCondition(condition: {
           @load-more="loadMoreBlocks"
         />
 
-        <!-- 底部操作按钮 -->
+        <!-- English UI note -->
         <div
           v-if="filterResult && filterResult.blocks.length > 0"
           class="flex-none flex flex-col gap-2 px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800"
         >
-          <!-- 导出进度条 -->
+          <!-- English UI note -->
           <div v-if="isExporting && exportProgress" class="w-full">
             <div class="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-1">
               <span>{{ exportProgress.message }}</span>
@@ -446,7 +446,7 @@ function loadHistoryCondition(condition: {
               />
             </div>
           </div>
-          <!-- 操作按钮 -->
+          <!-- English UI note -->
           <div class="flex items-center justify-end gap-3">
             <UButton
               variant="outline"
@@ -465,10 +465,10 @@ function loadHistoryCondition(condition: {
       </div>
     </div>
 
-    <!-- 历史记录弹窗 -->
+    <!-- English UI note -->
     <FilterHistory v-model:open="showHistory" @load="loadHistoryCondition" />
 
-    <!-- 本地 AI 分析弹窗 -->
+    <!-- English UI note -->
     <LocalAnalysisModal v-model:open="showAnalysisModal" :filter-result="filterResult" :filter-mode="filterMode" />
   </div>
 </template>

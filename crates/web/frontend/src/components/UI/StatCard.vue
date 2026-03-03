@@ -1,24 +1,24 @@
 <script setup lang="ts">
 /**
- * 统计卡片组件
- * 用于展示单个统计指标
+ * English note.
+ * English note.
  */
 defineProps<{
-  /** 指标标签 */
+  /** English note.
   label: string
-  /** 指标值 */
+  /** English note.
   value: string | number
-  /** 指标值颜色 */
+  /** English note.
   valueColor?: 'pink' | 'amber' | 'blue' | 'green' | 'red' | 'gray'
-  /** 副文本/补充说明 */
+  /** English note.
   subtext?: string
-  /** 可选的图标（emoji 或 icon name） */
+  /** English note.
   icon?: string
-  /** 图标背景色 */
+  /** English note.
   iconBg?: 'pink' | 'amber' | 'blue' | 'green' | 'red' | 'gray'
 }>()
 
-// 颜色映射
+// English engineering note.
 const valueColorMap: Record<string, string> = {
   pink: 'text-pink-600 dark:text-pink-400',
   amber: 'text-amber-600 dark:text-amber-400',
@@ -40,7 +40,7 @@ const iconBgMap: Record<string, string> = {
 
 <template>
   <div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-    <!-- 带图标的布局 -->
+    <!-- English UI note -->
     <template v-if="icon">
       <div class="flex items-center gap-3">
         <div
@@ -61,7 +61,7 @@ const iconBgMap: Record<string, string> = {
       </div>
     </template>
 
-    <!-- 简单布局 -->
+    <!-- English UI note -->
     <template v-else>
       <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ label }}</p>
       <p class="mt-1 text-2xl font-bold" :class="valueColorMap[valueColor || 'pink']">{{ value }}</p>

@@ -9,7 +9,7 @@ import Tabs from '@/components/UI/Tabs.vue'
 const { t, locale } = useI18n()
 const settingsStore = useSettingsStore()
 
-// 仅在中文环境显示的提供商（中国市场特定）
+// English engineering note.
 const CHINA_MARKET_PROVIDERS = ['kimi', 'doubao']
 
 // Get localized provider name
@@ -33,7 +33,7 @@ function getLocalizedModelDescription(providerId: string, modelId: string): stri
   return translated === key ? '' : translated
 }
 
-// ============ 类型定义 ============
+// English engineering note.
 
 interface AIServiceConfig {
   id: string
@@ -57,7 +57,7 @@ interface Provider {
   models: Array<{ id: string; name: string; description?: string }>
 }
 
-// 三种配置类型
+// English engineering note.
 type ConfigType = 'preset' | 'local' | 'openai-compatible'
 
 const aiTips = computed(() => {
@@ -81,7 +81,7 @@ const emit = defineEmits<{
   saved: []
 }>()
 
-// ============ 状态 ============
+// English engineering note.
 
 const configType = ref<ConfigType>('preset')
 const isValidating = ref(false)
@@ -94,21 +94,21 @@ const formData = ref({
   apiKey: '',
   model: '',
   baseUrl: '',
-  disableThinking: true, // 默认禁用思考模式
-  isReasoningModel: false, // 是否为推理模型
+  disableThinking: true, // English engineering note.
+  isReasoningModel: false, // English engineering note.
 })
 
 const validationResult = ref<'idle' | 'valid' | 'invalid'>('idle')
 const validationMessage = ref('')
 
-// ============ 计算属性 ============
+// English engineering note.
 
-// 预设服务商（排除 openai-compatible，英文环境下排除中国市场特定提供商）
+// English engineering note.
 const presetProviders = computed(() => {
   return props.providers.filter((p) => {
-    // 排除 openai-compatible（通过另一个配置类型访问）
+    // English engineering note.
     if (p.id === 'openai-compatible') return false
-    // 非中文环境下，排除中国市场特定提供商
+    // English engineering note.
     if (settingsStore.locale !== 'zh-CN' && CHINA_MARKET_PROVIDERS.includes(p.id)) {
       return false
     }
@@ -140,18 +140,18 @@ const canSave = computed(() => {
   if (props.mode === 'add') {
     switch (configType.value) {
       case 'preset':
-        // 预设服务：需要提供商、API Key（名称选填）
+        // English engineering note.
         return provider && apiKey.trim()
       case 'local':
-        // 本地服务：需要端点、模型名（名称选填）
+        // English engineering note.
         return baseUrl.trim() && model.trim()
       case 'openai-compatible':
-        // OpenAI 兼容：需要端点、API Key、模型名（名称选填）
+        // English engineering note.
         return baseUrl.trim() && apiKey.trim() && model.trim()
     }
   }
 
-  // 编辑模式
+  // English engineering note.
   if (formData.value.provider === 'openai-compatible') {
     if (configType.value === 'local') {
       return baseUrl.trim() && model.trim()
@@ -165,7 +165,7 @@ const modalTitle = computed(() =>
   props.mode === 'add' ? t('settings.aiConfig.modal.addConfig') : t('settings.aiConfig.modal.editConfig')
 )
 
-// ============ 方法 ============
+// English engineering note.
 
 function resetForm() {
   configType.value = 'preset'
@@ -176,17 +176,17 @@ function resetForm() {
     apiKey: '',
     model: presetProviders.value[0]?.models[0]?.id || '',
     baseUrl: '',
-    disableThinking: true, // 默认禁用思考模式
-    isReasoningModel: false, // 是否为推理模型
+    disableThinking: true, // English engineering note.
+    isReasoningModel: false, // English engineering note.
   }
   validationResult.value = 'idle'
   validationMessage.value = ''
 }
 
 function initFromConfig(config: AIServiceConfig) {
-  // 判断配置类型
+  // English engineering note.
   if (config.provider === 'openai-compatible') {
-    // 根据是否有 API Key 和 baseUrl 判断是本地还是 OpenAI 兼容
+    // English engineering note.
     const isLocal = !config.apiKeySet || (config.baseUrl?.includes('localhost') ?? false)
     configType.value = isLocal ? 'local' : 'openai-compatible'
     showAdvanced.value = isLocal && !!config.apiKeySet
@@ -198,11 +198,11 @@ function initFromConfig(config: AIServiceConfig) {
   formData.value = {
     name: config.name,
     provider: config.provider,
-    apiKey: config.apiKey || '', // 编辑时填充已有的 API Key
+    apiKey: config.apiKey || '', // English engineering note.
     model: config.model || '',
     baseUrl: config.baseUrl || '',
-    disableThinking: config.disableThinking ?? true, // 默认禁用
-    isReasoningModel: config.isReasoningModel ?? false, // 是否为推理模型
+    disableThinking: config.disableThinking ?? true, // English engineering note.
+    isReasoningModel: config.isReasoningModel ?? false, // English engineering note.
   }
   validationResult.value = 'idle'
   validationMessage.value = ''
@@ -239,7 +239,7 @@ function switchConfigType(type: ConfigType) {
 async function validateKey() {
   const { provider, apiKey, baseUrl } = formData.value
 
-  // 本地服务可以不需要 API Key
+  // English engineering note.
   if (configType.value === 'local') {
     if (!baseUrl) return
   } else {
@@ -265,7 +265,7 @@ async function validateKey() {
     if (result.success) {
       validationMessage.value = t('settings.aiConfig.modal.validationSuccess')
     } else {
-      // 显示详细的错误信息
+      // English engineering note.
       validationMessage.value = result.error || t('settings.aiConfig.modal.validationFailed')
     }
   } catch (error) {
@@ -277,18 +277,18 @@ async function validateKey() {
 }
 
 /**
- * 生成默认配置名称
+ * English note.
  */
 function getDefaultName(): string {
   switch (configType.value) {
     case 'preset': {
-      // 使用服务商名称
+      // English engineering note.
       const provider = props.providers.find((p) => p.id === formData.value.provider)
       return provider?.name || formData.value.provider
     }
     case 'local':
     case 'openai-compatible': {
-      // 使用 API 端点（简化显示）
+      // English engineering note.
       try {
         const url = new URL(formData.value.baseUrl)
         return url.hostname
@@ -306,16 +306,16 @@ async function saveConfig() {
 
   isSaving.value = true
   try {
-    // 确定最终的 provider
+    // English engineering note.
     const finalProvider = configType.value === 'preset' ? formData.value.provider : 'openai-compatible'
 
-    // 确定 API Key
+    // English engineering note.
     let finalApiKey = formData.value.apiKey.trim()
     if (!finalApiKey && configType.value === 'local') {
       finalApiKey = 'sk-no-key-required'
     }
 
-    // 确定名称（如果未填写则自动生成）
+    // English engineering note.
     const finalName = formData.value.name.trim() || getDefaultName()
 
     if (props.mode === 'add') {
@@ -325,7 +325,7 @@ async function saveConfig() {
         apiKey: finalApiKey,
         model: formData.value.model.trim() || undefined,
         baseUrl: formData.value.baseUrl.trim() || undefined,
-        // 仅本地服务才传递这些选项
+        // English engineering note.
         disableThinking: configType.value === 'local' ? formData.value.disableThinking : undefined,
         isReasoningModel: configType.value === 'local' ? formData.value.isReasoningModel : undefined,
       })
@@ -342,7 +342,7 @@ async function saveConfig() {
         provider: finalProvider,
         model: formData.value.model.trim() || undefined,
         baseUrl: formData.value.baseUrl.trim() || undefined,
-        // 仅本地服务才传递这些选项
+        // English engineering note.
         disableThinking: configType.value === 'local' ? formData.value.disableThinking : undefined,
         isReasoningModel: configType.value === 'local' ? formData.value.isReasoningModel : undefined,
       }
@@ -371,7 +371,7 @@ function closeModal() {
   emit('update:open', false)
 }
 
-// ============ 监听器 ============
+// English engineering note.
 
 watch(
   () => props.open,
@@ -413,10 +413,10 @@ watch(
       <div class="p-6">
         <h3 class="mb-4 text-lg font-semibold text-gray-900 dark:text-white">{{ modalTitle }}</h3>
 
-        <!-- 配置类型选择（仅新增时显示）-->
+        <!-- English UI note -->
         <div v-if="mode === 'add'" class="mb-6">
           <div class="grid grid-cols-3 gap-2">
-            <!-- 预设服务商 -->
+            <!-- English UI note -->
             <button
               class="flex flex-col items-center gap-2 rounded-lg border-2 p-3 transition-colors"
               :class="[
@@ -446,7 +446,7 @@ watch(
               </div>
             </button>
 
-            <!-- 本地服务 -->
+            <!-- English UI note -->
             <button
               class="flex flex-col items-center gap-2 rounded-lg border-2 p-3 transition-colors"
               :class="[
@@ -476,7 +476,7 @@ watch(
               </div>
             </button>
 
-            <!-- OpenAI 兼容 -->
+            <!-- English UI note -->
             <button
               class="flex flex-col items-center gap-2 rounded-lg border-2 p-3 transition-colors"
               :class="[
@@ -509,7 +509,7 @@ watch(
         </div>
 
         <div class="space-y-4">
-          <!-- 配置名称（选填） -->
+          <!-- English UI note -->
           <div>
             <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
               {{ t('settings.aiConfig.modal.configName') }}
@@ -526,9 +526,9 @@ watch(
             />
           </div>
 
-          <!-- ========== 预设服务商配置 ========== -->
+          <!-- English UI note -->
           <template v-if="configType === 'preset'">
-            <!-- 模型指南提示 -->
+            <!-- English UI note -->
             <AlertTips
               v-if="aiTips.modelGuide?.show"
               icon="i-heroicons-information-circle"
@@ -536,7 +536,7 @@ watch(
               class="mb-4"
             />
 
-            <!-- 服务商选择 -->
+            <!-- English UI note -->
             <div>
               <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                 {{ t('settings.aiConfig.modal.aiProvider') }}
@@ -563,13 +563,13 @@ watch(
               @validate="validateKey"
             />
 
-            <!-- 模型选择 -->
+            <!-- English UI note -->
             <div>
               <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                 {{ t('settings.aiConfig.modal.model') }}
               </label>
               <Tabs v-model="formData.model" :items="modelOptions" />
-              <!-- 模型详情 -->
+              <!-- English UI note -->
               <div v-if="selectedModel && currentProvider" class="mt-3 rounded-md p-3 text-xs text-gray-500">
                 <p class="mb-1 text-gray-700 dark:text-gray-300">
                   {{ selectedModel.id }}：{{
@@ -580,9 +580,9 @@ watch(
             </div>
           </template>
 
-          <!-- ========== 本地服务配置 ========== -->
+          <!-- English UI note -->
           <template v-else-if="configType === 'local'">
-            <!-- API 端点 -->
+            <!-- English UI note -->
             <div>
               <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                 {{ t('settings.aiConfig.modal.apiEndpoint') }}
@@ -595,7 +595,7 @@ watch(
               </div>
             </div>
 
-            <!-- 模型名称 -->
+            <!-- English UI note -->
             <div>
               <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                 {{ t('settings.aiConfig.modal.modelName') }}
@@ -608,7 +608,7 @@ watch(
               <p class="mt-1 text-xs text-gray-500">{{ t('settings.aiConfig.modal.modelNameHintLocal') }}</p>
             </div>
 
-            <!-- 禁用思考模式 -->
+            <!-- English UI note -->
             <div class="flex items-center justify-between rounded-lg bg-gray-50 p-3 dark:bg-gray-800">
               <div>
                 <p class="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -621,7 +621,7 @@ watch(
               <USwitch v-model="formData.disableThinking" />
             </div>
 
-            <!-- 推理模型 -->
+            <!-- English UI note -->
             <div class="flex items-center justify-between rounded-lg bg-gray-50 p-3 dark:bg-gray-800">
               <div>
                 <p class="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -634,7 +634,7 @@ watch(
               <USwitch v-model="formData.isReasoningModel" />
             </div>
 
-            <!-- 验证结果 -->
+            <!-- English UI note -->
             <div v-if="validationMessage">
               <div
                 v-if="validationResult === 'valid'"
@@ -652,7 +652,7 @@ watch(
               </div>
             </div>
 
-            <!-- 高级选项（API Key） -->
+            <!-- English UI note -->
             <div>
               <button
                 class="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
@@ -677,16 +677,16 @@ watch(
             </div>
           </template>
 
-          <!-- ========== OpenAI 兼容配置 ========== -->
+          <!-- English UI note -->
           <template v-else>
-            <!-- 风险提示 -->
+            <!-- English UI note -->
             <AlertTips
               v-if="aiTips.thirdPartyApi?.show"
               icon="i-heroicons-exclamation-triangle"
               :content="aiTips.thirdPartyApi?.content"
             />
 
-            <!-- API 端点 -->
+            <!-- English UI note -->
             <div>
               <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                 {{ t('settings.aiConfig.modal.apiEndpoint') }}
@@ -707,7 +707,7 @@ watch(
               @validate="validateKey"
             />
 
-            <!-- 模型名称 -->
+            <!-- English UI note -->
             <div>
               <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                 {{ t('settings.aiConfig.modal.modelName') }}
@@ -722,7 +722,7 @@ watch(
           </template>
         </div>
 
-        <!-- 底部按钮 -->
+        <!-- English UI note -->
         <div class="mt-6 flex justify-end gap-2">
           <UButton variant="soft" @click="closeModal">{{ t('common.cancel') }}</UButton>
           <UButton color="primary" :disabled="!canSave" :loading="isSaving" @click="saveConfig">

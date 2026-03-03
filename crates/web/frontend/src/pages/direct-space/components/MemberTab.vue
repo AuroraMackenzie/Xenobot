@@ -11,36 +11,36 @@ const props = defineProps<{
   sessionId: string
 }>()
 
-// 成员列表
+// English engineering note.
 const members = ref<MemberWithStats[]>([])
 const isLoading = ref(false)
 
-// 正在保存别名的成员ID
+// English engineering note.
 const savingAliasesId = ref<number | null>(null)
 
-// 获取成员显示名称
+// English engineering note.
 function getDisplayName(member: MemberWithStats): string {
   return member.groupNickname || member.accountName || member.platformId
 }
 
-// 获取成员首字符（用于头像）
+// English engineering note.
 function getFirstChar(member: MemberWithStats): string {
   const name = getDisplayName(member)
   return name.slice(0, 1)
 }
 
-// 计算消息总数
+// English engineering note.
 const totalMessageCount = computed(() => {
   return members.value.reduce((sum, m) => sum + m.messageCount, 0)
 })
 
-// 计算每个成员的消息占比
+// English engineering note.
 function getPercentage(count: number): number {
   if (totalMessageCount.value === 0) return 0
   return Math.round((count / totalMessageCount.value) * 100)
 }
 
-// 加载成员列表
+// English engineering note.
 async function loadMembers() {
   if (!props.sessionId) return
   isLoading.value = true
@@ -53,7 +53,7 @@ async function loadMembers() {
   }
 }
 
-// 更新别名
+// English engineering note.
 async function updateAliases(member: MemberWithStats, newAliases: string[]) {
   const aliasesToSave = JSON.parse(JSON.stringify(newAliases)) as string[]
 
@@ -80,7 +80,7 @@ async function updateAliases(member: MemberWithStats, newAliases: string[]) {
   }
 }
 
-// 监听 sessionId 变化
+// English engineering note.
 watch(
   () => props.sessionId,
   () => {
@@ -96,7 +96,7 @@ onMounted(() => {
 
 <template>
   <div class="main-content max-w-4xl p-6">
-    <!-- 页面标题 -->
+    <!-- English UI note -->
     <div class="mb-6">
       <div class="flex items-center gap-3">
         <div>
@@ -108,7 +108,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Owner配置 -->
+    <!-- English UI note -->
     <OwnerSelector
       class="mb-6"
       :session-id="sessionId"
@@ -117,21 +117,21 @@ onMounted(() => {
       chat-type="private"
     />
 
-    <!-- 加载状态 -->
+    <!-- English UI note -->
     <div v-if="isLoading" class="flex h-60 items-center justify-center">
       <UIcon name="i-heroicons-arrow-path" class="h-8 w-8 animate-spin text-pink-500" />
     </div>
 
-    <!-- 成员卡片列表 -->
+    <!-- English UI note -->
     <div v-else class="grid gap-4 md:grid-cols-2">
       <div
         v-for="member in members"
         :key="member.id"
         class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-900"
       >
-        <!-- 成员头部信息 -->
+        <!-- English UI note -->
         <div class="flex items-start gap-4">
-          <!-- 头像：优先显示真实头像，否则显示首字母 -->
+          <!-- English UI note -->
           <img
             v-if="member.avatar"
             :src="member.avatar"
@@ -145,7 +145,7 @@ onMounted(() => {
             {{ getFirstChar(member) }}
           </div>
 
-          <!-- 名称和ID -->
+          <!-- English UI note -->
           <div class="flex-1 min-w-0">
             <h3 class="text-lg font-semibold text-gray-900 dark:text-white truncate">
               {{ getDisplayName(member) }}
@@ -154,7 +154,7 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- 消息统计 -->
+        <!-- English UI note -->
         <div class="mt-4 flex items-center gap-4">
           <div class="flex-1">
             <div class="flex items-baseline justify-between">
@@ -163,7 +163,7 @@ onMounted(() => {
                 {{ member.messageCount.toLocaleString() }}
               </span>
             </div>
-            <!-- 进度条 -->
+            <!-- English UI note -->
             <div class="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
               <div
                 class="h-full rounded-full bg-gradient-to-r from-pink-400 to-pink-600 transition-all duration-500"
@@ -176,7 +176,7 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- 别名编辑 -->
+        <!-- English UI note -->
         <div class="mt-4 border-t border-gray-100 pt-4 dark:border-gray-800">
           <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
             {{ t('members.private.customAlias') }}
@@ -188,7 +188,7 @@ onMounted(() => {
               class="w-full"
               @update:model-value="(val) => updateAliases(member, val)"
             />
-            <!-- 保存中指示器 -->
+            <!-- English UI note -->
             <div v-if="savingAliasesId === member.id" class="absolute right-3 top-1/2 -translate-y-1/2">
               <UIcon name="i-heroicons-arrow-path" class="h-4 w-4 animate-spin text-pink-500" />
             </div>
@@ -197,13 +197,13 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- 空状态 -->
+    <!-- English UI note -->
     <div v-if="!isLoading && members.length === 0" class="flex h-60 flex-col items-center justify-center">
       <UIcon name="i-heroicons-user-group" class="mb-3 h-12 w-12 text-gray-300 dark:text-gray-600" />
       <p class="text-gray-500 dark:text-gray-400">{{ t('members.private.empty') }}</p>
     </div>
 
-    <!-- 提示信息 -->
+    <!-- English UI note -->
     <div v-if="members.length > 0" class="mt-6 flex items-start gap-3 rounded-xl bg-blue-50 p-4 dark:bg-blue-900/20">
       <UIcon name="i-heroicons-information-circle" class="mt-0.5 h-5 w-5 shrink-0 text-blue-500" />
       <div>

@@ -101,6 +101,9 @@ impl App {
             _ => {
                 // Delegate to UI components
                 self.ui.handle_key(key);
+                if self.ui.should_quit() {
+                    self.running = false;
+                }
             }
         }
         Ok(())

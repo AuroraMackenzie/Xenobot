@@ -57,7 +57,7 @@ watch(
 
 <template>
   <div class="space-y-6">
-    <!-- 语言设置 -->
+    <!-- English UI note -->
     <div>
       <h3 class="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
         <UIcon name="i-heroicons-language" class="h-4 w-4 text-green-500" />
@@ -77,7 +77,7 @@ watch(
       </div>
     </div>
 
-    <!-- 外观设置 -->
+    <!-- English UI note -->
     <div>
       <h3 class="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
         <UIcon name="i-heroicons-paint-brush" class="h-4 w-4 text-pink-500" />
@@ -97,7 +97,7 @@ watch(
       </div>
     </div>
 
-    <!-- 截图设置 -->
+    <!-- English UI note -->
     <div>
       <h3 class="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
         <UIcon name="i-heroicons-camera" class="h-4 w-4 text-blue-500" />
@@ -116,7 +116,7 @@ watch(
       </div>
     </div>
 
-    <!-- 网络设置 -->
+    <!-- English UI note -->
     <NetworkSettingsSection />
   </div>
 </template>

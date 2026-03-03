@@ -9,7 +9,7 @@ import FilterTab from './Filter/FilterTab.vue'
 
 const { t, locale } = useI18n()
 
-// 关注链接配置
+// English engineering note.
 const followLink = computed(() => {
   if (locale.value === 'zh-CN') {
     return {
@@ -33,13 +33,13 @@ const props = defineProps<{
 
 const route = useRoute()
 
-// 判断是否为群聊（通过路由名称判断）
+// English engineering note.
 const isGroupChat = computed(() => route.name === 'circle-room')
 
-// 仅群聊显示的功能 ID
+// English engineering note.
 const groupOnlyTabs = ['mbti', 'cyber-friend', 'campus']
 
-// 所有子 Tab 配置
+// English engineering note.
 const allSubTabs = computed(() => [
   { id: 'chat-explorer', label: t('ai.tab.chatExplorer'), icon: 'i-heroicons-chat-bubble-left-ellipsis' },
   {
@@ -51,27 +51,27 @@ const allSubTabs = computed(() => [
   { id: 'sql-lab', label: t('ai.tab.sqlLab'), icon: 'i-heroicons-command-line' },
 ])
 
-// 根据聊天类型过滤显示的子 Tab
+// English engineering note.
 const subTabs = computed(() => {
   if (isGroupChat.value) {
-    // 群聊显示所有 Tab
+    // English engineering note.
     return allSubTabs.value
   }
-  // 私聊过滤掉群聊专属功能
+  // English engineering note.
   return allSubTabs.value.filter((tab) => !groupOnlyTabs.includes(tab.id))
 })
 
 const activeSubTab = ref('chat-explorer')
 
-// ChatExplorer 组件引用
+// English engineering note.
 const chatExplorerRef = ref<InstanceType<typeof ChatExplorer> | null>(null)
 
-// 刷新 AI 配置（供父组件调用）
+// English engineering note.
 function refreshAIConfig() {
   chatExplorerRef.value?.refreshConfig()
 }
 
-// 暴露方法供父组件调用
+// English engineering note.
 defineExpose({
   refreshAIConfig,
 })
@@ -79,13 +79,13 @@ defineExpose({
 
 <template>
   <div class="flex h-full flex-col">
-    <!-- 子 Tab 导航 -->
+    <!-- English UI note -->
     <SubTabs v-model="activeSubTab" :items="subTabs" persist-key="aiTab" />
 
-    <!-- 子 Tab 内容 -->
+    <!-- English UI note -->
     <div class="flex-1 min-h-0 overflow-hidden">
       <Transition name="fade" mode="out-in">
-        <!-- 对话式探索 -->
+        <!-- English UI note -->
         <ChatExplorer
           v-if="activeSubTab === 'chat-explorer'"
           ref="chatExplorerRef"
@@ -95,12 +95,12 @@ defineExpose({
           :time-filter="timeFilter"
           :chat-type="chatType"
         />
-        <!-- 自定义筛选 -->
+        <!-- English UI note -->
         <FilterTab v-else-if="activeSubTab === 'manual'" class="h-full" />
-        <!-- SQL 实验室 -->
+        <!-- English UI note -->
         <SQLLabTab v-else-if="activeSubTab === 'sql-lab'" class="h-full" :session-id="props.sessionId" />
 
-        <!-- 暂未实现的功能 -->
+        <!-- English UI note -->
         <div
           v-else-if="['mbti', 'cyber-friend', 'campus'].includes(activeSubTab)"
           class="main-content flex h-full items-center justify-center p-6"

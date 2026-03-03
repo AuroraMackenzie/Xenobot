@@ -13,7 +13,7 @@ const props = defineProps<{
   timeRange: { start: number; end: number } | null
 }>()
 
-// 聊天记录起止时间（完整范围）
+// English engineering note.
 const fullTimeRangeText = computed(() => {
   if (!props.timeRange) return ''
   return formatDateRange(props.timeRange.start, props.timeRange.end, 'YYYY/MM/DD')
@@ -43,7 +43,7 @@ const fullTimeRangeText = computed(() => {
           ·
           <span class="opacity-80">{{ t('analysis.overview.identity.analysisReport') }}</span>
         </p>
-        <!-- 聊天记录起止时间 -->
+        <!-- English UI note -->
         <p v-if="fullTimeRangeText" class="mt-2 text-sm font-medium text-pink-100/90 dark:text-gray-400">
           {{ fullTimeRangeText }}
         </p>

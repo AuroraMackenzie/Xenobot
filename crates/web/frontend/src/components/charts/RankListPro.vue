@@ -8,15 +8,15 @@ import CaptureButton from '@/components/common/CaptureButton.vue'
 const { t } = useI18n()
 
 interface Props {
-  /** 完整的排行数据 */
+  /** English note.
   members: RankItem[]
-  /** 标题 */
+  /** English note.
   title: string
-  /** 描述（可选） */
+  /** English note.
   description?: string
-  /** 默认显示数量，默认 10 */
+  /** English note.
   topN?: number
-  /** 单位名称 */
+  /** English note.
   unit?: string
 }
 
@@ -24,19 +24,19 @@ const props = withDefaults(defineProps<Props>(), {
   topN: 10,
 })
 
-// 控制弹窗
+// English engineering note.
 const isOpen = ref(false)
 
-// 截屏相关 ref
+// English engineering note.
 const cardRef = ref<HTMLElement | null>(null)
 const modalBodyRef = ref<HTMLElement | null>(null)
 
-// Top N 数据
+// English engineering note.
 const topNData = computed(() => {
   return props.members.slice(0, props.topN)
 })
 
-// 是否显示"查看完整"按钮
+// English engineering note.
 const showViewAll = computed(() => {
   return props.members.length > props.topN
 })
@@ -51,10 +51,10 @@ const showViewAll = computed(() => {
       </div>
 
       <div class="no-capture flex items-center gap-1">
-        <!-- 卡片截屏按钮 -->
+        <!-- English UI note -->
         <CaptureButton size="xs" type="element" :target-element="cardRef" />
 
-        <!-- 完整排行榜 Dialog -->
+        <!-- English UI note -->
         <UModal v-model:open="isOpen" :ui="{ content: 'md:w-full max-w-3xl' }">
           <UButton v-if="showViewAll" icon="i-heroicons-list-bullet" variant="ghost">
             {{ t('views.charts.rankListPro.fullRanking') }}

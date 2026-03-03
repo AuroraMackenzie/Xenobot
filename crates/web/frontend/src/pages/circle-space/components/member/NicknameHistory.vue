@@ -12,10 +12,10 @@ const props = defineProps<{
   sessionId: string
 }>()
 
-// 成员列表（用于获取历史记录）
+// English engineering note.
 const members = ref<MemberWithStats[]>([])
 
-// ==================== 昵称变更记录 ====================
+// English engineering note.
 interface MemberWithHistory {
   memberId: number
   name: string
@@ -25,12 +25,12 @@ interface MemberWithHistory {
 const membersWithNicknameChanges = ref<MemberWithHistory[]>([])
 const isLoadingHistory = ref(false)
 
-// 获取成员显示名称
+// English engineering note.
 function getDisplayName(member: MemberWithStats): string {
   return member.groupNickname || member.accountName || member.platformId
 }
 
-// 加载成员列表
+// English engineering note.
 async function loadMembers() {
   if (!props.sessionId) return
   try {
@@ -72,7 +72,7 @@ async function loadMembersWithNicknameChanges() {
   }
 }
 
-// 监听 sessionId 变化
+// English engineering note.
 watch(
   () => props.sessionId,
   async () => {
@@ -81,7 +81,7 @@ watch(
   { immediate: true }
 )
 
-// 成员加载完成后加载昵称变更记录
+// English engineering note.
 watch(
   () => members.value.length,
   () => {
@@ -103,7 +103,7 @@ onMounted(async () => {
     <p class="mb-4 text-sm text-gray-500 dark:text-gray-400 no-capture">
       {{ t('members.nicknameHistory.note') }}
     </p>
-    <!-- 昵称变更记录 -->
+    <!-- English UI note -->
     <SectionCard
       :title="t('members.nicknameHistory.title')"
       :description="

@@ -1,10 +1,10 @@
 /**
- * Markdown 渲染通用样式
- * 用于 AI 消息、总结等需要渲染 Markdown 的地方
- * 使用方式：在组件的 <style> 中 @import 此文件，或在全局样式中引入
+ * English note.
+ * English note.
+ * English note.
  */
 
-/* 段落（全局样式不使用 :deep） */
+/* English note.
 .prose p {
   margin: 0.5em 0;
   line-height: 1.6;
@@ -18,7 +18,7 @@
   margin-bottom: 0;
 }
 
-/* 标题 */
+/* English note.
 .prose h1 {
   font-size: 1.25rem;
   font-weight: 700;
@@ -46,7 +46,7 @@
   margin-top: 0;
 }
 
-/* 列表 */
+/* English note.
 .prose ul,
 .prose ol {
   margin: 0.5em 0;
@@ -70,7 +70,7 @@
   margin: 0.25em 0;
 }
 
-/* 嵌套列表 */
+/* English note.
 .prose ul ul,
 .prose ol ol,
 .prose ul ol,
@@ -78,7 +78,7 @@
   margin: 0.25em 0;
 }
 
-/* 代码 */
+/* English note.
 .prose code {
   font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace;
   font-size: 0.875em;
@@ -91,7 +91,7 @@
   background-color: rgba(255, 255, 255, 0.1);
 }
 
-/* 代码块 */
+/* English note.
 .prose pre {
   margin: 0.75em 0;
   padding: 0.875em 1em;
@@ -99,13 +99,13 @@
   background-color: #f3f4f6;
   color: #111827;
   overflow-x: auto;
-  /* 处理长行代码不换行导致的水平溢出 */
+  /* English note.
   white-space: pre-wrap;
   word-break: break-word;
   overflow-wrap: anywhere;
 }
 
-/* 暗色模式下的代码块样式 */
+/* English note.
 .dark .prose pre {
   background-color: #1e293b;
   color: #e2e8f0;
@@ -119,7 +119,7 @@
   line-height: 1.6;
 }
 
-/* 引用块 - 使用项目主题粉色 */
+/* English note.
 .prose blockquote {
   margin: 0.75em 0;
   padding: 0.5em 0 0.5em 1em;
@@ -137,7 +137,7 @@
   color: #9ca3af;
 }
 
-/* 链接 - 使用项目主题粉色 */
+/* English note.
 .prose a {
   color: var(--color-pink-500, #ee4567);
   text-decoration: underline;
@@ -148,7 +148,7 @@
   color: var(--color-pink-600, #de335e);
 }
 
-/* 分割线 */
+/* English note.
 .prose hr {
   margin: 1em 0;
   border: none;
@@ -159,7 +159,7 @@
   border-top-color: #374151;
 }
 
-/* 加粗和斜体 */
+/* English note.
 .prose strong {
   font-weight: 600;
 }
@@ -168,7 +168,7 @@
   font-style: italic;
 }
 
-/* 表格 */
+/* English note.
 .prose table {
   width: 100%;
   margin: 0.75em 0;
@@ -197,7 +197,7 @@
   background-color: #1f2937;
 }
 
-/* 用户消息中的样式调整（白色文字背景） */
+/* English note.
 .prose-invert code {
   background-color: rgba(255, 255, 255, 0.2);
 }

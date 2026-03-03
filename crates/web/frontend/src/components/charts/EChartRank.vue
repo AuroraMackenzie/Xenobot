@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * ECharts 排名图表组件
- * 使用横向柱状图展示排名数据，前三名显示奖牌 emoji
+ * English note.
+ * English note.
  */
 import { computed } from 'vue'
 import type { EChartsOption, BarSeriesOption } from 'echarts'
@@ -10,21 +10,21 @@ import type { RankItem } from './RankList.vue'
 import { SectionCard, ScrollableChart } from '@/components/UI'
 
 interface Props {
-  /** 排名数据 */
+  /** English note.
   members: RankItem[]
-  /** 标题 */
+  /** English note.
   title: string
-  /** 描述（可选） */
+  /** English note.
   description?: string
-  /** 最大显示数量，默认 10 */
+  /** English note.
   topN?: number
-  /** 单位名称 */
+  /** English note.
   unit?: string
-  /** 图表高度策略：'auto' 根据数据量计算，或固定像素值 */
+  /** English note.
   height?: 'auto' | number
-  /** 容器最大高度（vh 单位），默认 60vh，超出则滚动 */
+  /** English note.
   maxHeightVh?: number
-  /** 是否为裸图表模式（不包含 SectionCard 容器） */
+  /** English note.
   bare?: boolean
 }
 
@@ -36,23 +36,23 @@ const props = withDefaults(defineProps<Props>(), {
   bare: false,
 })
 
-// 限制显示数量
+// English engineering note.
 const displayData = computed(() => {
   return props.members.slice(0, props.topN)
 })
 
-// 计算图表高度
+// English engineering note.
 const chartHeight = computed(() => {
   if (props.height !== 'auto') {
     return props.height
   }
-  // 每条数据 36px（更紧凑）
+  // English engineering note.
   const dataHeight = displayData.value.length * 36
-  // 增加上下边距
+  // English engineering note.
   return Math.max(dataHeight + 30, 180)
 })
 
-// 统一使用项目主题粉色
+// English engineering note.
 const barColor = {
   type: 'linear' as const,
   x: 0,
@@ -60,26 +60,26 @@ const barColor = {
   x2: 1,
   y2: 0,
   colorStops: [
-    { offset: 0, color: '#0ea5c9' }, // 项目主题 pink-500
-    { offset: 1, color: '#44b9d4' }, // 项目主题 pink-400
+    { offset: 0, color: '#0ea5c9' }, // English engineering note.
+    { offset: 1, color: '#44b9d4' }, // English engineering note.
   ],
 }
 
-// 截断名字（最多8个字符）
+// English engineering note.
 function truncateName(name: string, maxLength = 8): string {
   if (name.length <= maxLength) return name
   return name.slice(0, maxLength) + '…'
 }
 
-// 生成 ECharts 配置
+// English engineering note.
 const option = computed<EChartsOption>(() => {
-  // 数据需要反转，因为柱状图 Y 轴从下到上
+  // English engineering note.
   const reversedData = [...displayData.value].reverse()
   const names = reversedData.map((item) => truncateName(item.name))
   const values = reversedData.map((item) => item.value)
   const maxValue = Math.max(...values, 1)
 
-  // 柱子数据（统一颜色）
+  // English engineering note.
   const dataWithStyle = reversedData.map((item) => ({
     value: item.value,
     itemStyle: {
@@ -121,7 +121,7 @@ const option = computed<EChartsOption>(() => {
     },
     xAxis: {
       type: 'value',
-      max: maxValue * 1.1, // 留出标签空间
+      max: maxValue * 1.1, // English engineering note.
       axisLine: { show: false },
       axisTick: { show: false },
       axisLabel: { show: false },
@@ -139,7 +139,7 @@ const option = computed<EChartsOption>(() => {
         formatter: (value: string, index: number) => {
           const originalIndex = displayData.value.length - 1 - index
           const rank = originalIndex + 1
-          // 前三名添加奖牌 emoji，其他用数字
+          // English engineering note.
           const prefix = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `${rank}.`
           return `${prefix} ${value}`
         },
@@ -177,11 +177,11 @@ const option = computed<EChartsOption>(() => {
 </script>
 
 <template>
-  <!-- 裸图表模式：只显示图表 -->
+  <!-- English UI note -->
   <ScrollableChart v-if="bare" :content-height="chartHeight" :max-height-vh="maxHeightVh">
     <EChart :option="option" :height="chartHeight" />
   </ScrollableChart>
-  <!-- 完整模式：带 SectionCard 容器 -->
+  <!-- English UI note -->
   <SectionCard v-else :title="title" :description="description" scrollable :max-height-vh="maxHeightVh">
     <div class="px-3 py-2">
       <EChart :option="option" :height="chartHeight" />

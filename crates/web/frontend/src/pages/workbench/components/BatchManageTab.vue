@@ -16,10 +16,10 @@ const { t, locale } = useI18n()
 const sessionStore = useSessionStore()
 const { sessions } = storeToRefs(sessionStore)
 
-// 搜索关键词
+// English engineering note.
 const searchQuery = ref('')
 
-// 过滤后的会话列表
+// English engineering note.
 const filteredSessions = computed(() => {
   if (!searchQuery.value.trim()) {
     return sessions.value
@@ -28,22 +28,22 @@ const filteredSessions = computed(() => {
   return sessions.value.filter((s) => s.name.toLowerCase().includes(query) || s.platform.toLowerCase().includes(query))
 })
 
-// 选中的会话 ID 集合
+// English engineering note.
 const selectedIds = ref<Set<string>>(new Set())
 
-// 删除确认弹窗
+// English engineering note.
 const showDeleteModal = ref(false)
 
-// 删除中状态
+// English engineering note.
 const isDeleting = ref(false)
 
-// 正在编辑的会话 ID
+// English engineering note.
 const editingId = ref<string | null>(null)
 
-// 编辑中的名称
+// English engineering note.
 const editingName = ref('')
 
-// 是否可以合并（选中 2 个以上同平台会话）
+// English engineering note.
 const canMerge = computed(() => {
   if (selectedIds.value.size < 2) return false
   const selectedSessions = sessions.value.filter((s) => selectedIds.value.has(s.id))
@@ -51,32 +51,32 @@ const canMerge = computed(() => {
   return platforms.size === 1
 })
 
-// 选中会话的平台
+// English engineering note.
 const selectedPlatform = computed(() => {
   if (selectedIds.value.size === 0) return null
   const selectedSessions = sessions.value.filter((s) => selectedIds.value.has(s.id))
   return selectedSessions[0]?.platform || null
 })
 
-// 全选状态（基于过滤后的列表）
+// English engineering note.
 const isAllSelected = computed(() => {
   return filteredSessions.value.length > 0 && filteredSessions.value.every((s) => selectedIds.value.has(s.id))
 })
 
-// 部分选中状态（用于 indeterminate）
+// English engineering note.
 const isPartialSelected = computed(() => {
   const selectedInFiltered = filteredSessions.value.filter((s) => selectedIds.value.has(s.id)).length
   return selectedInFiltered > 0 && selectedInFiltered < filteredSessions.value.length
 })
 
-// 切换全选（只影响过滤后的列表）
+// English engineering note.
 function toggleSelectAll() {
   if (isAllSelected.value) {
-    // 取消选中过滤列表中的所有项
+    // English engineering note.
     const filteredIds = new Set(filteredSessions.value.map((s) => s.id))
     selectedIds.value = new Set([...selectedIds.value].filter((id) => !filteredIds.has(id)))
   } else {
-    // 选中过滤列表中的所有项
+    // English engineering note.
     const newSet = new Set(selectedIds.value)
     for (const s of filteredSessions.value) {
       newSet.add(s.id)
@@ -85,10 +85,10 @@ function toggleSelectAll() {
   }
 }
 
-// 上次点击的索引（基于 filteredSessions），用于 Shift+Click 范围选择
+// English engineering note.
 const lastClickedIndex = ref<number | null>(null)
 
-// 切换单个选择
+// English engineering note.
 function toggleSelect(id: string) {
   const newSet = new Set(selectedIds.value)
   if (newSet.has(id)) {
@@ -99,10 +99,10 @@ function toggleSelect(id: string) {
   selectedIds.value = newSet
 }
 
-// 处理行点击（支持 Shift+Click 范围多选）
+// English engineering note.
 function handleRowClick(index: number, id: string, event: MouseEvent) {
   if (event.shiftKey && lastClickedIndex.value !== null) {
-    // Shift+Click：选中 lastClickedIndex 到 index 之间的所有项
+    // English engineering note.
     const start = Math.min(lastClickedIndex.value, index)
     const end = Math.max(lastClickedIndex.value, index)
     const newSet = new Set(selectedIds.value)
@@ -114,19 +114,19 @@ function handleRowClick(index: number, id: string, event: MouseEvent) {
     }
     selectedIds.value = newSet
   } else {
-    // 普通点击：切换选中状态
+    // English engineering note.
     toggleSelect(id)
   }
-  // 始终更新 lastClickedIndex
+  // English engineering note.
   lastClickedIndex.value = index
 }
 
-// 判断是否选中
+// English engineering note.
 function isSelected(id: string): boolean {
   return selectedIds.value.has(id)
 }
 
-// 格式化时间
+// English engineering note.
 function formatTime(timestamp: number): string {
   return dayjs
     .unix(timestamp)
@@ -134,12 +134,12 @@ function formatTime(timestamp: number): string {
     .fromNow()
 }
 
-// 判断是否是私聊
+// English engineering note.
 function isPrivateChat(session: AnalysisSession): boolean {
   return session.type === 'private'
 }
 
-// 获取会话头像
+// English engineering note.
 function getSessionAvatar(session: AnalysisSession): string | null {
   if (isPrivateChat(session)) {
     return session.memberAvatar || null
@@ -147,7 +147,7 @@ function getSessionAvatar(session: AnalysisSession): string | null {
   return session.groupAvatar || null
 }
 
-// 获取会话头像文字
+// English engineering note.
 function getSessionAvatarText(session: AnalysisSession): string {
   const name = session.name || ''
   if (!name) return '?'
@@ -158,7 +158,7 @@ function getSessionAvatarText(session: AnalysisSession): string {
   }
 }
 
-// 平台显示配置
+// English engineering note.
 const PLATFORM_CONFIG: Record<string, { label: string; class: string }> = {
   qq: { label: 'QQ', class: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
   weixin: { label: '微信', class: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' },
@@ -172,24 +172,24 @@ const PLATFORM_CONFIG: Record<string, { label: string; class: string }> = {
   unknown: { label: '未知', class: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300' },
 }
 
-// 获取平台标签
+// English engineering note.
 function getPlatformLabel(platform: string): string {
   return PLATFORM_CONFIG[platform]?.label || platform
 }
 
-// 获取平台样式类
+// English engineering note.
 function getPlatformClass(platform: string): string {
   return PLATFORM_CONFIG[platform]?.class || PLATFORM_CONFIG.unknown.class
 }
 
-// 开始编辑名称
+// English engineering note.
 function startEdit(session: AnalysisSession, event: Event) {
   event.stopPropagation()
   editingId.value = session.id
   editingName.value = session.name
 }
 
-// 保存编辑的名称
+// English engineering note.
 async function saveEdit() {
   if (!editingId.value || !editingName.value.trim()) {
     editingId.value = null
@@ -200,7 +200,7 @@ async function saveEdit() {
   const newName = editingName.value.trim()
   const session = sessions.value.find((s) => s.id === editingId.value)
 
-  // 如果名称没变，不保存
+  // English engineering note.
   if (session && session.name !== newName) {
     await sessionStore.renameSession(editingId.value, newName)
   }
@@ -209,30 +209,30 @@ async function saveEdit() {
   editingName.value = ''
 }
 
-// 取消编辑
+// English engineering note.
 function cancelEdit() {
   editingId.value = null
   editingName.value = ''
 }
 
-// 打开删除确认弹窗
+// English engineering note.
 function openDeleteModal() {
   if (selectedIds.value.size === 0) return
   showDeleteModal.value = true
 }
 
-// 合并弹窗相关状态
+// English engineering note.
 const showMergeModal = ref(false)
 const isMerging = ref(false)
 const mergeProgress = ref('')
 
-// 合并选中的会话
+// English engineering note.
 async function handleMerge() {
   if (!canMerge.value) return
   showMergeModal.value = true
 }
 
-// 执行合并
+// English engineering note.
 async function executeMerge() {
   if (!canMerge.value) return
 
@@ -243,30 +243,30 @@ async function executeMerge() {
   let tempFiles: string[] = []
 
   try {
-    // 1. 导出选中的会话为临时文件
+    // English engineering note.
     const exportResult = await window.chatApi.exportSessionsToTempFiles(selectedSessionIds)
     if (!exportResult.success) {
       throw new Error(exportResult.error || '导出失败')
     }
     tempFiles = exportResult.tempFiles
 
-    // 2. 解析临时文件获取信息
+    // English engineering note.
     mergeProgress.value = t('tools.batchManage.mergeSteps.parsing')
     for (const filePath of tempFiles) {
       await window.mergeApi.parseFileInfo(filePath)
     }
 
-    // 3. 检测冲突
+    // English engineering note.
     mergeProgress.value = t('tools.batchManage.mergeSteps.checking')
     const conflictResult = await window.mergeApi.checkConflicts(tempFiles)
 
     if (conflictResult.conflicts.length > 0) {
-      // 有冲突，暂时跳过（后续可以添加冲突解决 UI）
-      // 默认使用第一个文件的版本
+      // English engineering note.
+      // English engineering note.
       console.log(`[BatchDelete] 检测到 ${conflictResult.conflicts.length} 个冲突，使用默认解决方案`)
     }
 
-    // 4. 执行合并
+    // English engineering note.
     mergeProgress.value = t('tools.batchManage.mergeSteps.merging')
     const firstSession = sessions.value.find((s) => selectedIds.value.has(s.id))
     const baseName = firstSession?.name || '聊天记录'
@@ -279,30 +279,30 @@ async function executeMerge() {
         id: c.id,
         resolution: 'keep1' as const,
       })),
-      andAnalyze: true, // 直接导入分析
+      andAnalyze: true, // English engineering note.
     })
 
     if (!mergeResult.success) {
       throw new Error(mergeResult.error || '合并失败')
     }
 
-    // 5. 删除原会话
+    // English engineering note.
     mergeProgress.value = t('tools.batchManage.mergeSteps.cleaning')
     for (const sessionId of selectedSessionIds) {
       await sessionStore.deleteSession(sessionId)
     }
 
-    // 6. 清理临时文件
+    // English engineering note.
     await window.chatApi.cleanupTempExportFiles(tempFiles)
 
-    // 7. 刷新会话列表
+    // English engineering note.
     await sessionStore.loadSessions()
 
-    // 清空选择
+    // English engineering note.
     selectedIds.value = new Set()
     showMergeModal.value = false
 
-    // 提示成功
+    // English engineering note.
     toast.add({
       title: t('tools.batchManage.mergeSuccess', { count: selectedSessionIds.length }),
       icon: 'i-heroicons-check-circle',
@@ -316,7 +316,7 @@ async function executeMerge() {
       color: 'error',
     })
 
-    // 清理临时文件
+    // English engineering note.
     if (tempFiles.length > 0) {
       await window.chatApi.cleanupTempExportFiles(tempFiles)
     }
@@ -326,7 +326,7 @@ async function executeMerge() {
   }
 }
 
-// 确认批量删除
+// English engineering note.
 async function confirmBatchDelete() {
   if (selectedIds.value.size === 0) return
 
@@ -334,12 +334,12 @@ async function confirmBatchDelete() {
   try {
     const idsToDelete = Array.from(selectedIds.value)
 
-    // 逐个删除
+    // English engineering note.
     for (const id of idsToDelete) {
       await sessionStore.deleteSession(id)
     }
 
-    // 清空选择
+    // English engineering note.
     selectedIds.value = new Set()
     showDeleteModal.value = false
   } catch (error) {
@@ -349,12 +349,12 @@ async function confirmBatchDelete() {
   }
 }
 
-// 关闭删除确认弹窗
+// English engineering note.
 function closeDeleteModal() {
   showDeleteModal.value = false
 }
 
-// 加载会话列表
+// English engineering note.
 onMounted(() => {
   sessionStore.loadSessions()
 })
@@ -362,7 +362,7 @@ onMounted(() => {
 
 <template>
   <div class="flex h-full flex-col">
-    <!-- 搜索栏 -->
+    <!-- English UI note -->
     <div class="mb-4">
       <UInput
         v-model="searchQuery"
@@ -373,10 +373,10 @@ onMounted(() => {
       />
     </div>
 
-    <!-- 工具栏 -->
+    <!-- English UI note -->
     <div class="mb-4 flex items-center justify-between">
       <div class="flex items-center gap-4">
-        <!-- 全选复选框 -->
+        <!-- English UI note -->
         <UCheckbox
           :model-value="isAllSelected"
           :indeterminate="isPartialSelected"
@@ -384,17 +384,17 @@ onMounted(() => {
           @update:model-value="toggleSelectAll"
         />
 
-        <!-- Shift 多选提示 -->
+        <!-- English UI note -->
         <span class="text-xs text-gray-400 dark:text-gray-500">
           {{ t('tools.batchManage.shiftClickHint') }}
         </span>
 
-        <!-- 已选数量 -->
+        <!-- English UI note -->
         <span v-if="selectedIds.size > 0" class="text-sm text-gray-500 dark:text-gray-400">
           {{ t('tools.batchManage.selected', { count: selectedIds.size }) }}
         </span>
 
-        <!-- 搜索结果数量 -->
+        <!-- English UI note -->
         <span
           v-if="searchQuery.trim() && filteredSessions.length !== sessions.length"
           class="text-sm text-gray-500 dark:text-gray-400"
@@ -404,21 +404,21 @@ onMounted(() => {
       </div>
 
       <div class="flex gap-2">
-        <!-- 合并按钮 -->
+        <!-- English UI note -->
         <UTooltip :text="canMerge ? '' : t('tools.batchManage.mergeHint')">
           <UButton color="primary" :disabled="!canMerge" icon="i-heroicons-document-duplicate" @click="handleMerge">
             {{ t('tools.batchManage.merge') }}
           </UButton>
         </UTooltip>
 
-        <!-- 删除按钮 -->
+        <!-- English UI note -->
         <UButton color="primary" :disabled="selectedIds.size === 0" icon="i-heroicons-trash" @click="openDeleteModal">
           {{ t('tools.batchManage.delete') }}
         </UButton>
       </div>
     </div>
 
-    <!-- 会话列表 -->
+    <!-- English UI note -->
     <div v-if="sessions.length === 0" class="flex flex-1 items-center justify-center">
       <div class="text-center text-gray-500 dark:text-gray-400">
         <UIcon name="i-heroicons-inbox" class="mb-2 h-12 w-12" />
@@ -434,7 +434,7 @@ onMounted(() => {
     </div>
 
     <div v-else class="flex-1 overflow-y-auto rounded-lg border border-gray-200/50 dark:border-gray-700/50">
-      <!-- 表头 -->
+      <!-- English UI note -->
       <div
         class="sticky top-0 z-[1] flex items-center gap-3 border-b border-gray-200 bg-gray-50 px-3 py-2 text-xs font-medium text-gray-500 dark:border-gray-700 dark:bg-gray-800/80 dark:text-gray-400"
       >
@@ -448,7 +448,7 @@ onMounted(() => {
         <div class="w-28 text-right">{{ t('tools.batchManage.columns.importedAt') }}</div>
       </div>
 
-      <!-- 列表内容 -->
+      <!-- English UI note -->
       <div
         v-for="(session, index) in filteredSessions"
         :key="session.id"
@@ -459,12 +459,12 @@ onMounted(() => {
         ]"
         @click="handleRowClick(index, session.id, $event)"
       >
-        <!-- 复选框 -->
+        <!-- English UI note -->
         <div class="w-6">
           <UCheckbox :model-value="isSelected(session.id)" @click.stop="handleRowClick(index, session.id, $event)" />
         </div>
 
-        <!-- 头像 -->
+        <!-- English UI note -->
         <div class="w-8">
           <img
             v-if="getSessionAvatar(session)"
@@ -481,14 +481,14 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- 名称 -->
+        <!-- English UI note -->
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-1.5">
             <UIcon
               :name="isPrivateChat(session) ? 'i-heroicons-user' : 'i-heroicons-user-group'"
               class="h-3.5 w-3.5 shrink-0 text-gray-400"
             />
-            <!-- 编辑模式 -->
+            <!-- English UI note -->
             <input
               v-if="editingId === session.id"
               v-model="editingName"
@@ -500,7 +500,7 @@ onMounted(() => {
               @keydown.escape="cancelEdit"
               @click.stop
             />
-            <!-- 显示模式 -->
+            <!-- English UI note -->
             <p
               v-else
               class="cursor-text truncate rounded px-1 text-sm font-medium text-gray-900 hover:bg-gray-200 dark:text-white dark:hover:bg-gray-700"
@@ -512,7 +512,7 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- 平台 -->
+        <!-- English UI note -->
         <div class="w-20 text-center">
           <span
             class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
@@ -522,29 +522,29 @@ onMounted(() => {
           </span>
         </div>
 
-        <!-- 消息数 -->
+        <!-- English UI note -->
         <div class="w-24 text-right text-sm text-gray-600 dark:text-gray-300">
           {{ session.messageCount.toLocaleString() }}
         </div>
 
-        <!-- 摘要数 -->
+        <!-- English UI note -->
         <div class="w-16 text-right text-sm text-gray-600 dark:text-gray-300">
           {{ session.summaryCount || 0 }}
         </div>
 
-        <!-- AI 对话数 -->
+        <!-- English UI note -->
         <div class="w-16 text-right text-sm text-gray-600 dark:text-gray-300">
           {{ session.aiConversationCount || 0 }}
         </div>
 
-        <!-- 导入时间 -->
+        <!-- English UI note -->
         <div class="w-28 text-right text-xs text-gray-500 dark:text-gray-400">
           {{ formatTime(session.importedAt) }}
         </div>
       </div>
     </div>
 
-    <!-- 合并确认弹窗 -->
+    <!-- English UI note -->
     <UModal v-model:open="showMergeModal">
       <template #content>
         <div class="p-4">
@@ -561,7 +561,7 @@ onMounted(() => {
             {{ t('tools.batchManage.mergeConfirmMessage', { count: selectedIds.size }) }}
           </p>
 
-          <!-- 选中的会话预览 -->
+          <!-- English UI note -->
           <div class="mb-4 max-h-40 overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-700">
             <div
               v-for="session in sessions.filter((s) => selectedIds.has(s.id))"
@@ -577,7 +577,7 @@ onMounted(() => {
             </div>
           </div>
 
-          <!-- 进度显示 -->
+          <!-- English UI note -->
           <div v-if="isMerging" class="mb-4 rounded-lg bg-blue-50 px-4 py-3 dark:bg-blue-900/20">
             <div class="flex items-center gap-2">
               <UIcon name="i-heroicons-arrow-path" class="h-4 w-4 animate-spin text-blue-600 dark:text-blue-400" />
@@ -597,7 +597,7 @@ onMounted(() => {
       </template>
     </UModal>
 
-    <!-- 删除确认弹窗 -->
+    <!-- English UI note -->
     <UModal v-model:open="showDeleteModal">
       <template #content>
         <div class="p-4">

@@ -6,39 +6,39 @@ export interface AnchorItem {
 }
 
 /**
- * 页面锚点导航 Composable
- * @param anchors 锚点配置数组
- * @param options 配置选项
+ * English note.
+ * English note.
+ * English note.
  */
 export function usePageAnchors(
   anchors: AnchorItem[],
   options: {
-    /** 判断线位置（距离视口顶部的距离），默认 300 */
+    /** English note.
     threshold?: number
-    /** 滚动容器选择器，默认 '.overflow-y-auto' */
+    /** English note.
     containerSelector?: string
-    /** 滚动锁定时间（毫秒），默认 800 */
+    /** English note.
     scrollLockDuration?: number
   } = {}
 ) {
   const { threshold = 300, containerSelector = '.overflow-y-auto', scrollLockDuration = 800 } = options
 
-  // 当前激活的锚点
+  // English engineering note.
   const activeAnchor = ref(anchors[0]?.id || '')
-  // 是否正在滚动（用于防止自动检测覆盖手动点击）
+  // English engineering note.
   let isScrolling = false
-  // 内容容器 ref
+  // English engineering note.
   const contentRef = ref<HTMLElement | null>(null)
-  // 滚动容器
+  // English engineering note.
   let scrollContainer: Element | null = null
 
   /**
-   * 更新激活的锚点（基于滚动位置）
+   * English note.
    */
   function updateActiveAnchor() {
     if (isScrolling) return
 
-    // 收集所有锚点的位置信息
+    // English engineering note.
     const positions: { id: string; top: number }[] = []
     anchors.forEach((anchor) => {
       const element = document.getElementById(anchor.id)
@@ -48,7 +48,7 @@ export function usePageAnchors(
       }
     })
 
-    // 找到第一个 rect.top > threshold 的元素的前一个
+    // English engineering note.
     let activeIndex = 0
     for (let i = 0; i < positions.length; i++) {
       if (positions[i].top > threshold) {
@@ -62,17 +62,17 @@ export function usePageAnchors(
   }
 
   /**
-   * 滚动到指定锚点
+   * English note.
    */
   function scrollToAnchor(id: string) {
     const element = document.getElementById(id)
     if (element) {
-      // 立即设置激活状态
+      // English engineering note.
       activeAnchor.value = id
-      // 禁用自动检测
+      // English engineering note.
       isScrolling = true
       element.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      // 滚动完成后重新启用自动检测
+      // English engineering note.
       setTimeout(() => {
         isScrolling = false
         updateActiveAnchor()
@@ -81,7 +81,7 @@ export function usePageAnchors(
   }
 
   onMounted(() => {
-    // 向上查找滚动容器
+    // English engineering note.
     scrollContainer = contentRef.value?.closest(containerSelector) || null
     if (scrollContainer) {
       scrollContainer.addEventListener('scroll', updateActiveAnchor, { passive: true })
@@ -96,13 +96,13 @@ export function usePageAnchors(
   })
 
   return {
-    /** 内容容器 ref，需要绑定到包含锚点的容器上 */
+    /** English note.
     contentRef,
-    /** 当前激活的锚点 ID */
+    /** English note.
     activeAnchor,
-    /** 滚动到指定锚点 */
+    /** English note.
     scrollToAnchor,
-    /** 手动更新激活状态 */
+    /** English note.
     updateActiveAnchor,
   }
 }

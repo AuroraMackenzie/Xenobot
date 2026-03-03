@@ -1,0 +1,12 @@
+[package]
+name = "xenobot-skype"
+version = "0.1.0"
+edition = "2021"
+description = "Legal-safe Skype source discovery and authorized export adapter for Xenobot"
+license = "AGPL-3.0-only"
+repository = "https://github.com/AuroraMackenzie/Xenobot.git"
+
+[dependencies]
+thiserror = { workspace = true }
+xenobot-core = { path = "../core", version = "0.1.0" }
+xenobot-analysis = { path = "../analysis", version = "0.1.0" }

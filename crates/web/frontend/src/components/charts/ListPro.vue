@@ -7,15 +7,15 @@ const { t } = useI18n()
 
 const props = withDefaults(
   defineProps<{
-    /** 完整数据列表 */
+    /** English note.
     items: any[]
-    /** 标题 */
+    /** English note.
     title: string
-    /** 描述（可选） */
+    /** English note.
     description?: string
-    /** 默认显示数量，默认 10 */
+    /** English note.
     topN?: number
-    /** 弹窗中的总数描述模板，如 "共 {count} 位成员" */
+    /** English note.
     countTemplate?: string
   }>(),
   {
@@ -23,20 +23,20 @@ const props = withDefaults(
   }
 )
 
-// 控制弹窗
+// English engineering note.
 const isOpen = ref(false)
 
-// 截屏相关 ref
+// English engineering note.
 const cardRef = ref<HTMLElement | null>(null)
 const modalBodyRef = ref<HTMLElement | null>(null)
 
-// Top N 数据
+// English engineering note.
 const topNData = computed(() => props.items.slice(0, props.topN))
 
-// 是否显示"查看完整"按钮
+// English engineering note.
 const showViewAll = computed(() => props.items.length > props.topN)
 
-// 格式化总数描述
+// English engineering note.
 const formattedCount = computed(() => {
   const template = props.countTemplate || t('views.charts.listPro.countTemplate')
   return template.replace('{count}', String(props.items.length))
@@ -52,13 +52,13 @@ const formattedCount = computed(() => {
       </div>
 
       <div class="no-capture flex items-center gap-2">
-        <!-- 自定义头部右侧内容 -->
+        <!-- English UI note -->
         <slot name="headerRight" />
 
-        <!-- 卡片截屏按钮 -->
+        <!-- English UI note -->
         <CaptureButton size="xs" type="element" :target-element="cardRef" />
 
-        <!-- 完整列表弹窗 -->
+        <!-- English UI note -->
         <UModal v-model:open="isOpen" :ui="{ content: 'md:w-full max-w-3xl' }">
           <UButton v-if="showViewAll" icon="i-heroicons-list-bullet" variant="ghost">
             {{ t('views.charts.listPro.fullRanking') }}
@@ -87,17 +87,17 @@ const formattedCount = computed(() => {
       </div>
     </div>
 
-    <!-- 配置区（可选） -->
+    <!-- English UI note -->
     <slot name="config" />
 
-    <!-- 默认显示 Top N -->
+    <!-- English UI note -->
     <div class="divide-y divide-gray-100 dark:divide-gray-800">
       <div v-for="(item, index) in topNData" :key="index" class="px-5 py-3">
         <slot name="item" :item="item" :index="index" />
       </div>
     </div>
 
-    <!-- 空状态 -->
+    <!-- English UI note -->
     <div v-if="items.length === 0">
       <slot name="empty">
         <div class="px-5 py-8 text-center text-sm text-gray-400">{{ t('views.charts.listPro.empty') }}</div>

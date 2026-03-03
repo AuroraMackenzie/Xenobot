@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * ECharts 基础封装组件
- * 提供自动响应式、主题适配、加载状态等通用功能
+ * English note.
+ * English note.
  */
 import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import * as echarts from 'echarts/core'
@@ -16,7 +16,7 @@ import {
 } from 'echarts/components'
 import type { EChartsOption } from 'echarts'
 
-// 注册必要的组件
+// English engineering note.
 echarts.use([
   CanvasRenderer,
   PieChart,
@@ -46,7 +46,7 @@ const props = withDefaults(defineProps<Props>(), {
 const chartRef = ref<HTMLDivElement>()
 let chartInstance: echarts.ECharts | null = null
 
-// 计算高度样式
+// English engineering note.
 const heightStyle = computed(() => {
   if (typeof props.height === 'number') {
     return `${props.height}px`
@@ -54,7 +54,7 @@ const heightStyle = computed(() => {
   return props.height
 })
 
-// 检测暗色模式
+// English engineering note.
 const isDark = computed(() => {
   if (props.theme === 'auto') {
     return document.documentElement.classList.contains('dark')
@@ -62,21 +62,21 @@ const isDark = computed(() => {
   return props.theme === 'dark'
 })
 
-// 初始化图表
+// English engineering note.
 function initChart() {
   if (!chartRef.value) return
 
-  // 销毁旧实例
+  // English engineering note.
   if (chartInstance) {
     chartInstance.dispose()
   }
 
-  // 创建新实例
+  // English engineering note.
   chartInstance = echarts.init(chartRef.value, isDark.value ? 'dark' : undefined)
   chartInstance.setOption(props.option)
 }
 
-// 更新图表
+// English engineering note.
 function updateChart() {
   if (!chartInstance) {
     initChart()
@@ -85,31 +85,31 @@ function updateChart() {
   chartInstance.setOption(props.option, { notMerge: true })
 }
 
-// 调整大小
+// English engineering note.
 function handleResize() {
   chartInstance?.resize()
 }
 
-// 监听 option 变化
+// English engineering note.
 watch(() => props.option, updateChart, { deep: true })
 
-// 监听高度变化
+// English engineering note.
 watch(
   () => props.height,
   () => {
-    // 使用 nextTick 确保 DOM 更新后再调整大小
+    // English engineering note.
     setTimeout(() => {
       chartInstance?.resize()
     }, 0)
   }
 )
 
-// 监听主题变化
+// English engineering note.
 watch(isDark, () => {
   initChart()
 })
 
-// 监听加载状态
+// English engineering note.
 watch(
   () => props.loading,
   (loading) => {
@@ -125,14 +125,14 @@ watch(
   }
 )
 
-// 监听暗色模式变化
+// English engineering note.
 let observer: MutationObserver | null = null
 
 onMounted(() => {
   initChart()
   window.addEventListener('resize', handleResize)
 
-  // 监听 HTML 元素的 class 变化（用于检测暗色模式切换）
+  // English engineering note.
   observer = new MutationObserver(() => {
     if (props.theme === 'auto') {
       initChart()
@@ -151,7 +151,7 @@ onUnmounted(() => {
   chartInstance = null
 })
 
-// 暴露方法供父组件调用
+// English engineering note.
 defineExpose({
   getInstance: () => chartInstance,
   resize: handleResize,

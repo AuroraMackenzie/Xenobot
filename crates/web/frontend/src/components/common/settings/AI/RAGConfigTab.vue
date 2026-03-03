@@ -15,13 +15,13 @@ const emit = defineEmits<{
   'config-changed': []
 }>()
 
-// ============ 状态 ============
+// English engineering note.
 
 const showEditModal = ref(false)
 const editMode = ref<'add' | 'edit'>('add')
 const editingConfig = ref<EmbeddingServiceConfigDisplay | null>(null)
 
-// ============ 计算属性 ============
+// English engineering note.
 
 const isLoading = computed(() => embeddingStore.isLoading)
 const configs = computed(() => embeddingStore.configs)
@@ -31,7 +31,7 @@ const isMaxConfigs = computed(() => embeddingStore.isMaxConfigs)
 const vectorStoreStats = computed(() => embeddingStore.vectorStoreStats)
 const vectorStoreSizeFormatted = computed(() => embeddingStore.vectorStoreSizeFormatted)
 
-// ============ 方法 ============
+// English engineering note.
 
 function openAddModal() {
   editMode.value = 'add'
@@ -76,14 +76,14 @@ onMounted(() => {
 </script>
 
 <template>
-  <!-- 加载中 -->
+  <!-- English UI note -->
   <div v-if="isLoading && !embeddingStore.isInitialized" class="flex items-center justify-center py-12">
     <UIcon name="i-heroicons-arrow-path" class="h-6 w-6 animate-spin text-gray-400" />
   </div>
 
-  <!-- 配置内容 -->
+  <!-- English UI note -->
   <div v-else class="space-y-6">
-    <!-- 标题 -->
+    <!-- English UI note -->
     <h4 class="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
       <UIcon name="i-heroicons-magnifying-glass-circle" class="h-4 w-4 text-emerald-500" />
       {{ t('settings.embedding.title') }}
@@ -93,7 +93,7 @@ onMounted(() => {
       {{ t('settings.embedding.description') }}
     </p>
 
-    <!-- Embedding 配置列表 -->
+    <!-- English UI note -->
     <div class="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50">
       <div class="flex items-center justify-between">
         <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -111,7 +111,7 @@ onMounted(() => {
         </UButton>
       </div>
 
-      <!-- 配置列表 -->
+      <!-- English UI note -->
       <div v-if="configs.length > 0" class="space-y-2">
         <div
           v-for="config in configs"
@@ -124,7 +124,7 @@ onMounted(() => {
           ]"
         >
           <div class="flex items-center gap-3">
-            <!-- 选中指示器 -->
+            <!-- English UI note -->
             <div
               :class="[
                 'h-2 w-2 rounded-full',
@@ -158,7 +158,7 @@ onMounted(() => {
           </div>
 
           <div class="flex items-center gap-1">
-            <!-- 设为激活 -->
+            <!-- English UI note -->
             <UButton
               v-if="config.id !== activeConfigId"
               size="xs"
@@ -168,7 +168,7 @@ onMounted(() => {
               :title="t('settings.embedding.setActive')"
               @click="handleSetActive(config.id)"
             />
-            <!-- 编辑 -->
+            <!-- English UI note -->
             <UButton
               size="xs"
               color="neutral"
@@ -177,7 +177,7 @@ onMounted(() => {
               :title="t('common.edit')"
               @click="openEditModal(config)"
             />
-            <!-- 删除 -->
+            <!-- English UI note -->
             <UButton
               size="xs"
               color="error"
@@ -190,13 +190,13 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- 空状态 -->
+      <!-- English UI note -->
       <div v-else class="py-6 text-center text-sm text-gray-500 dark:text-gray-400">
         {{ t('settings.embedding.noConfigs') }}
       </div>
     </div>
 
-    <!-- 向量缓存配置 -->
+    <!-- English UI note -->
     <div class="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50">
       <div class="flex items-center justify-between">
         <div>
@@ -209,7 +209,7 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- 向量存储统计 -->
+      <!-- English UI note -->
       <div
         v-if="vectorStoreStats.enabled"
         class="flex items-center justify-between border-t border-gray-200 pt-4 dark:border-gray-700"
@@ -231,7 +231,7 @@ onMounted(() => {
     </div>
   </div>
 
-  <!-- 编辑弹窗 -->
+  <!-- English UI note -->
   <EmbeddingConfigEditModal
     v-model:open="showEditModal"
     :mode="editMode"

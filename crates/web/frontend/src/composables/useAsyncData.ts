@@ -1,8 +1,8 @@
 import { ref, watch, type Ref, type ComputedRef } from 'vue'
 
 /**
- * 异步数据加载 Composable
- * 统一处理数据加载、状态管理和错误处理
+ * English note.
+ * English note.
  */
 
 interface TimeFilter {
@@ -11,33 +11,33 @@ interface TimeFilter {
 }
 
 interface UseAsyncDataOptions<T> {
-  /** 是否立即加载数据（默认 true） */
+  /** English note.
   immediate?: boolean
-  /** 是否深度监听 timeFilter（默认 true） */
+  /** English note.
   deep?: boolean
-  /** 加载失败时的错误处理 */
+  /** English note.
   onError?: (error: Error) => void
-  /** 默认值 */
+  /** English note.
   defaultValue?: T
 }
 
 interface UseAsyncDataReturn<T> {
-  /** 数据 */
+  /** English note.
   data: Ref<T | null>
-  /** 是否正在加载 */
+  /** English note.
   isLoading: Ref<boolean>
-  /** 错误信息 */
+  /** English note.
   error: Ref<Error | null>
-  /** 重新加载 */
+  /** English note.
   reload: () => Promise<void>
 }
 
 /**
- * 通用异步数据加载 composable
- * @param fetchFn 数据获取函数
- * @param sessionId 会话 ID（响应式）
- * @param timeFilter 时间筛选条件（可选，响应式）
- * @param options 配置选项
+ * English note.
+ * English note.
+ * English note.
+ * English note.
+ * English note.
  */
 export function useAsyncData<T>(
   fetchFn: (sessionId: string, timeFilter?: TimeFilter) => Promise<T>,
@@ -73,7 +73,7 @@ export function useAsyncData<T>(
     }
   }
 
-  // 监听 sessionId 和 timeFilter 变化
+  // English engineering note.
   watch(
     () => [sessionId.value, timeFilter?.value],
     () => {
@@ -93,8 +93,8 @@ export function useAsyncData<T>(
 }
 
 /**
- * 批量加载多个异步数据
- * @param loaders 加载函数数组
+ * English note.
+ * English note.
  */
 export function useMultipleAsyncData(loaders: Array<() => Promise<void>>) {
   const isLoading = ref(false)

@@ -322,6 +322,36 @@ pub enum ApiCommand {
         #[arg(long)]
         path: Option<String>,
     },
+
+    /// Run MCP endpoint smoke checks against a running MCP server
+    McpSmoke {
+        /// MCP server base URL (without trailing slash)
+        #[arg(long, default_value = "http://127.0.0.1:5030")]
+        url: String,
+
+        /// Request timeout in milliseconds
+        #[arg(long, default_value_t = 5000)]
+        timeout_ms: u64,
+    },
+
+    /// Fetch a concrete MCP integration preset from a running MCP server
+    McpPreset {
+        /// MCP server base URL (without trailing slash)
+        #[arg(long, default_value = "http://127.0.0.1:5030")]
+        url: String,
+
+        /// Integration target id (e.g. claude-desktop, chatwise, opencode)
+        #[arg(long, default_value = "claude-desktop")]
+        target: String,
+
+        /// Output format
+        #[arg(short, long, default_value_t = OutputFormat::Json)]
+        format: OutputFormat,
+
+        /// Request timeout in milliseconds
+        #[arg(long, default_value_t = 5000)]
+        timeout_ms: u64,
+    },
 }
 
 /// Chat data analysis arguments.

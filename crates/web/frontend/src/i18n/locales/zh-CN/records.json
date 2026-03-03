@@ -18,7 +18,8 @@
     "startDate": "起始日期",
     "endDate": "结束日期",
     "reset": "重置",
-    "filter": "筛选"
+    "filter": "筛选",
+    "keywordsSemanticHint": "可使用 semantic: 你的问题 进行语义检索"
   },
   "timeline": {
     "timeline": "会话",

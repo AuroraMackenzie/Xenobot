@@ -4,14 +4,14 @@ import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 
-// 版本信息
+// English engineering note.
 const appVersion = ref(t('common.loading'))
 const isCheckingUpdate = ref(false)
 
-// 匿名统计开关
+// English engineering note.
 const analyticsEnabled = ref(true)
 
-// 获取应用版本
+// English engineering note.
 async function loadAppVersion() {
   try {
     appVersion.value = await window.api.app.getVersion()
@@ -21,7 +21,7 @@ async function loadAppVersion() {
   }
 }
 
-// 加载统计开关状态
+// English engineering note.
 async function loadAnalyticsEnabled() {
   try {
     analyticsEnabled.value = await window.api.app.getAnalyticsEnabled()
@@ -30,7 +30,7 @@ async function loadAnalyticsEnabled() {
   }
 }
 
-// 切换统计开关
+// English engineering note.
 async function toggleAnalytics(enabled: boolean) {
   try {
     await window.api.app.setAnalyticsEnabled(enabled)
@@ -40,17 +40,17 @@ async function toggleAnalytics(enabled: boolean) {
   }
 }
 
-// 检查更新
+// English engineering note.
 function checkUpdate() {
   isCheckingUpdate.value = true
   window.api.app.checkUpdate()
-  // 3 秒后恢复按钮状态（实际检查结果由主进程 dialog 显示）
+  // English engineering note.
   setTimeout(() => {
     isCheckingUpdate.value = false
   }, 3000)
 }
 
-// 组件挂载时加载数据
+// English engineering note.
 onMounted(() => {
   loadAppVersion()
   loadAnalyticsEnabled()
@@ -59,7 +59,7 @@ onMounted(() => {
 
 <template>
   <div class="space-y-6 pr-1">
-    <!-- 关于 -->
+    <!-- English UI note -->
     <div>
       <h3 class="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
         <UIcon name="i-heroicons-information-circle" class="h-4 w-4 text-blue-500" />
@@ -87,7 +87,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- 隐私设置 -->
+    <!-- English UI note -->
     <div>
       <h3 class="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
         <UIcon name="i-heroicons-shield-check" class="h-4 w-4 text-purple-500" />

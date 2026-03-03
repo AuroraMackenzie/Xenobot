@@ -3,7 +3,7 @@
 @import '@nuxt/ui';
 @import './markdown.css';
 
-/* 自定义主题颜色 - 使用 @theme static 定义色板 */
+/* English note.
 @theme static {
   /* Keep semantic token names to avoid large class churn, but use Xenobot palette. */
   --color-pink-50: #edf9fb;
@@ -18,7 +18,7 @@
   --color-pink-900: #114d5f;
   --color-pink-950: #072b37;
 
-  /* 分析页面使用的更深背景 - 统一使用 zinc-900 */
+  /* English note.
   --color-page-dark: #18181b;
 }
 
@@ -71,7 +71,7 @@ body::before {
   opacity: 0.34;
 }
 
-/* 全局滚动条样式 */
+/* English note.
 ::-webkit-scrollbar {
   width: 3px;
   height: 3px;
@@ -102,19 +102,19 @@ body::before {
   background-color: var(--color-gray-600);
 }
 
-/* 标题栏安全区域高度 - 页面顶部 padding 需要避开此区域
- * macOS: 红绿灯在左侧由 Sidebar 处理，右侧内容区无遮挡，使用较小值
- * Windows/Linux: 窗口控制按钮在右上角占据 32px 高度，需要完整避开 */
+/* English note.
+ * English note.
+ * English note.
 :root {
   --titlebar-area-height: 1rem; /* 16px - macOS */
 }
 
 .platform-windows,
 .platform-linux {
-  --titlebar-area-height: 2rem; /* 32px - 匹配 titleBarOverlay height */
+  --titlebar-area-height: 2rem; /* 32px - matches titleBarOverlay height */
 }
 
-/* 禁用窗口拖拽区域 - 用于弹窗等需要正常交互的元素 */
+/* English note.
 .app-region-no-drag {
   -webkit-app-region: no-drag;
 }

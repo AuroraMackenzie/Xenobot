@@ -1,7 +1,7 @@
 //! Model Context Protocol (MCP) implementation for Xenobot.
 //!
 //! This module provides the core protocol definitions for MCP, supporting
-//! both Streamable HTTP and SSE (Server-Sent Events) protocols as used in chatlog.
+//! both Streamable HTTP and SSE (Server-Sent Events) transports.
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

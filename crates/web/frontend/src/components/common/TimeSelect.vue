@@ -6,30 +6,30 @@ import { formatDateRange } from '@/utils'
 import UITabs from '@/components/UI/Tabs.vue'
 import DatePicker from '@/components/UI/DatePicker.vue'
 
-// ==================== 类型定义（导出供父组件使用） ====================
+// English engineering note.
 
 export type TimeSelectMode = 'recent' | 'quarter' | 'year' | 'custom'
 
-/** 组件内部状态快照，用于父组件 URL 序列化 */
+/** English note.
 export interface TimeSelectState {
   mode: TimeSelectMode
-  recentDays?: number // 最近模式：天数 (180/365/730/1825/0=全部)
-  year?: number // 按年模式：年份
-  quarterYear?: number // 按季模式：年份
-  quarter?: number // 按季模式：季度 (1-4)
-  customStart?: string // 自定义模式：开始日期 YYYY-MM-DD
-  customEnd?: string // 自定义模式：结束日期 YYYY-MM-DD
+  recentDays?: number // English engineering note.
+  year?: number // English engineering note.
+  quarterYear?: number // English engineering note.
+  quarter?: number // English engineering note.
+  customStart?: string // English engineering note.
+  customEnd?: string // English engineering note.
 }
 
-/** v-model 绑定值 */
+/** English note.
 export interface TimeRangeValue {
   startTs: number
   endTs: number
-  /** 显示标签，用于父组件展示（如 "最近一年" / "2024年 第3季度"） */
+  /** English note.
   displayLabel: string
-  /** 是否选中「全部」范围（父组件据此决定使用 session 总数还是筛选数） */
+  /** English note.
   isFullRange: boolean
-  /** 内部状态快照，便于父组件 URL 序列化 */
+  /** English note.
   state: TimeSelectState
 }
 
@@ -39,7 +39,7 @@ interface Props {
   sessionId: string | undefined
   modelValue: TimeRangeValue | null
   visible?: boolean
-  /** 初始状态（通常从 URL query 构建） */
+  /** English note.
   initialState?: Partial<TimeSelectState>
 }
 
@@ -55,29 +55,29 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-// ==================== 内部数据 ====================
+// English engineering note.
 
 const isLoaded = ref(false)
 const availableYears = ref<number[]>([])
 const fullTimeRange = ref<{ start: number; end: number } | null>(null)
 
-// 模式
+// English engineering note.
 const mode = ref<TimeSelectMode>('recent')
-// 最近
+// English engineering note.
 const recentPeriod = ref<number>(365)
-// 按年
+// English engineering note.
 const selectedYear = ref<number>(0)
-// 按季
+// English engineering note.
 const selectedQuarterYear = ref<number>(0)
 const selectedQuarter = ref<number>(1)
-// 自定义
+// English engineering note.
 const customStartDate = ref<string>('')
 const customEndDate = ref<string>('')
 
-// 是否正在内部初始化（防止 watcher 重复 emit）
+// English engineering note.
 const isInitializing = ref(false)
 
-// ==================== 工具函数 ====================
+// English engineering note.
 
 function getQuarterFromTs(ts: number): { year: number; quarter: number } {
   const date = new Date(ts * 1000)
@@ -90,7 +90,7 @@ function getQuarterFromTs(ts: number): { year: number; quarter: number } {
 function getQuarterRange(year: number, quarter: number): { startTs: number; endTs: number } {
   const startMonth = (quarter - 1) * 3
   const startDate = new Date(year, startMonth, 1, 0, 0, 0)
-  const endDate = new Date(year, startMonth + 3, 0, 23, 59, 59) // 季度最后一天
+  const endDate = new Date(year, startMonth + 3, 0, 23, 59, 59) // English engineering note.
   return {
     startTs: Math.floor(startDate.getTime() / 1000),
     endTs: Math.floor(endDate.getTime() / 1000),
@@ -106,7 +106,7 @@ function getYearRange(year: number): { startTs: number; endTs: number } {
   }
 }
 
-// ==================== 选项配置 ====================
+// English engineering note.
 
 const modeOptions = computed(() => [
   { label: t('common.timeSelect.mode.recent'), value: 'recent' as const },
@@ -123,7 +123,7 @@ const recentOptions = computed(() => [
   { label: t('common.timeSelect.recent.all'), value: 0 },
 ])
 
-// ==================== 导航边界 ====================
+// English engineering note.
 
 const minQuarter = computed(() => {
   if (!fullTimeRange.value) return { year: 0, quarter: 1 }
@@ -154,16 +154,16 @@ const canNextQuarter = computed(() => {
 const canPrevYear = computed(() => {
   if (availableYears.value.length === 0) return false
   const currentIdx = availableYears.value.indexOf(selectedYear.value)
-  return currentIdx < availableYears.value.length - 1 // years 降序
+  return currentIdx < availableYears.value.length - 1 // English engineering note.
 })
 
 const canNextYear = computed(() => {
   if (availableYears.value.length === 0) return false
   const currentIdx = availableYears.value.indexOf(selectedYear.value)
-  return currentIdx > 0 // years 降序
+  return currentIdx > 0 // English engineering note.
 })
 
-// ==================== 显示标签 ====================
+// English engineering note.
 
 const quarterDisplayLabel = computed(() => {
   return t('common.timeSelect.quarter.label', {
@@ -176,9 +176,9 @@ const yearDisplayLabel = computed(() => {
   return t('common.timeSelect.year.label', { year: selectedYear.value })
 })
 
-// ==================== 核心：构建输出值 ====================
+// English engineering note.
 
-/** 最近模式 displayLabel 映射 */
+/** English note.
 function getRecentDisplayLabel(days: number): string {
   const map: Record<number, string> = {
     180: t('common.timeSelect.display.recent180'),
@@ -197,7 +197,7 @@ function buildValue(): TimeRangeValue | null {
     case 'recent': {
       stateBase.recentDays = recentPeriod.value
       if (recentPeriod.value === 0) {
-        // 全部
+        // English engineering note.
         return {
           startTs: fullTimeRange.value.start,
           endTs: fullTimeRange.value.end,
@@ -243,7 +243,7 @@ function buildValue(): TimeRangeValue | null {
       if (!customStartDate.value || !customEndDate.value) return null
       let startTs = dayjs(customStartDate.value).startOf('day').unix()
       let endTs = dayjs(customEndDate.value).endOf('day').unix()
-      // 如果开始 > 结束，交换
+      // English engineering note.
       if (startTs > endTs) [startTs, endTs] = [endTs, startTs]
       return {
         startTs,
@@ -261,7 +261,7 @@ function emitCurrentValue() {
   if (value) emit('update:modelValue', value)
 }
 
-// ==================== 导航方法 ====================
+// English engineering note.
 
 function navigateQuarter(direction: number) {
   let y = selectedQuarterYear.value
@@ -284,9 +284,9 @@ function navigateQuarter(direction: number) {
 }
 
 function navigateYear(direction: number) {
-  const years = availableYears.value // 降序
+  const years = availableYears.value // English engineering note.
   const currentIdx = years.indexOf(selectedYear.value)
-  // direction 1 = 向后（更新年份，idx 更小），-1 = 向前（更旧年份，idx 更大）
+  // English engineering note.
   const newIdx = currentIdx - direction
   if (newIdx >= 0 && newIdx < years.length) {
     selectedYear.value = years[newIdx]
@@ -294,7 +294,7 @@ function navigateYear(direction: number) {
   }
 }
 
-// ==================== 模式切换默认值 ====================
+// English engineering note.
 
 function initModeDefaults(newMode: TimeSelectMode) {
   if (!fullTimeRange.value) return
@@ -324,9 +324,9 @@ function initModeDefaults(newMode: TimeSelectMode) {
   }
 }
 
-// ==================== 双向绑定模型 ====================
+// English engineering note.
 
-/** 模式选择器（USelect v-model） */
+/** English note.
 const modeModel = computed({
   get: () => mode.value,
   set: (val: TimeSelectMode) => {
@@ -338,7 +338,7 @@ const modeModel = computed({
   },
 })
 
-/** 最近选项（UITabs v-model） */
+/** English note.
 const recentPeriodModel = computed({
   get: () => recentPeriod.value,
   set: (val: number) => {
@@ -347,7 +347,7 @@ const recentPeriodModel = computed({
   },
 })
 
-/** 自定义开始日期 */
+/** English note.
 const customStartModel = computed({
   get: () => customStartDate.value,
   set: (val: string) => {
@@ -356,7 +356,7 @@ const customStartModel = computed({
   },
 })
 
-/** 自定义结束日期 */
+/** English note.
 const customEndModel = computed({
   get: () => customEndDate.value,
   set: (val: string) => {
@@ -365,7 +365,7 @@ const customEndModel = computed({
   },
 })
 
-// ==================== 数据加载 ====================
+// English engineering note.
 
 async function loadData() {
   if (!props.sessionId) {
@@ -387,7 +387,7 @@ async function loadData() {
     emit('update:fullRange', range)
     emit('update:availableYears', years)
 
-    // 从 initialState 或默认值初始化
+    // English engineering note.
     const init = props.initialState
     const initMode = init?.mode ?? 'recent'
     mode.value = initMode
@@ -455,10 +455,10 @@ watch(
 
 <template>
   <div v-if="visible && isLoaded" class="flex items-center gap-2">
-    <!-- 模式选择器 -->
+    <!-- English UI note -->
     <USelect v-model="modeModel" :items="modeOptions" size="md" class="w-28 shrink-0" />
 
-    <!-- 最近模式：UITabs 选择时间段 -->
+    <!-- English UI note -->
     <UITabs
       v-if="mode === 'recent'"
       v-model="recentPeriodModel"
@@ -467,7 +467,7 @@ watch(
       class="min-w-0 shrink"
     />
 
-    <!-- 按季模式：箭头导航 -->
+    <!-- English UI note -->
     <div v-else-if="mode === 'quarter'" class="flex items-center">
       <UButton
         icon="i-heroicons-chevron-left"
@@ -490,7 +490,7 @@ watch(
       />
     </div>
 
-    <!-- 按年模式：箭头导航 -->
+    <!-- English UI note -->
     <div v-else-if="mode === 'year'" class="flex items-center">
       <UButton
         icon="i-heroicons-chevron-left"
@@ -513,7 +513,7 @@ watch(
       />
     </div>
 
-    <!-- 自定义模式：双日期选择器 -->
+    <!-- English UI note -->
     <div v-else-if="mode === 'custom'" class="flex items-center gap-1">
       <DatePicker v-model="customStartModel" width-class="w-28" :clearable="false" />
       <span class="text-xs text-gray-400">-</span>

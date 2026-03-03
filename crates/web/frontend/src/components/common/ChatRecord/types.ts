@@ -1,30 +1,30 @@
 /**
- * 聊天记录查看器类型定义
+ * English note.
  */
 
 import type { ChatRecordQuery, ChatRecordMessage } from '@/types/format'
 
-// 重新导出类型
+// English engineering note.
 export type { ChatRecordQuery, ChatRecordMessage }
 
 /**
- * 筛选表单数据
+ * English note.
  */
 export interface FilterFormData {
-  /** 消息 ID */
+  /** English note.
   messageId: string
-  /** 成员名称 */
+  /** English note.
   memberName: string
-  /** 关键词（逗号分隔） */
+  /** English note.
   keywords: string
-  /** 开始日期 */
+  /** English note.
   startDate: string
-  /** 结束日期 */
+  /** English note.
   endDate: string
 }
 
 /**
- * 筛选器更新事件
+ * English note.
  */
 export interface FilterUpdateEvent {
   query: ChatRecordQuery

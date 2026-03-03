@@ -3,7 +3,7 @@ import { useI18n } from 'vue-i18n'
 
 const { t, te } = useI18n()
 
-// 获取工具的本地化显示名称
+// English engineering note.
 function localizedToolName(name: string, fallback?: string): string {
   const key = `ai.chat.message.tools.${name}`
   return te(key) ? t(key) : fallback || name
@@ -11,29 +11,29 @@ function localizedToolName(name: string, fallback?: string): string {
 
 // Props
 defineProps<{
-  // 当前工具执行状态
+  // English engineering note.
   currentToolStatus: {
     name: string
     displayName: string
     status: 'running' | 'done' | 'error'
   } | null
-  // 当前轮次已使用的工具列表
+  // English engineering note.
   toolsUsed: string[]
 }>()
 </script>
 
 <template>
   <div class="flex items-start gap-3">
-    <!-- AI 头像 -->
+    <!-- English UI note -->
     <div
       class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-pink-500 to-pink-600"
     >
       <UIcon name="i-heroicons-sparkles" class="h-4 w-4 text-white" />
     </div>
 
-    <!-- 状态气泡 -->
+    <!-- English UI note -->
     <div class="rounded-2xl rounded-tl-sm bg-gray-100 px-4 py-3 dark:bg-gray-800">
-      <!-- 工具执行状态 -->
+      <!-- English UI note -->
       <div v-if="currentToolStatus" class="space-y-2">
         <div class="flex items-center gap-2">
           <span
@@ -60,14 +60,14 @@ defineProps<{
             {{ localizedToolName(currentToolStatus.name, currentToolStatus.displayName) }}
           </span>
 
-          <!-- 运行中的动画 -->
+          <!-- English UI note -->
           <span v-if="currentToolStatus.status === 'running'" class="flex gap-1">
             <span class="h-1.5 w-1.5 animate-bounce rounded-full bg-pink-500 [animation-delay:0ms]" />
             <span class="h-1.5 w-1.5 animate-bounce rounded-full bg-pink-500 [animation-delay:150ms]" />
             <span class="h-1.5 w-1.5 animate-bounce rounded-full bg-pink-500 [animation-delay:300ms]" />
           </span>
 
-          <!-- 完成后处理中状态 -->
+          <!-- English UI note -->
           <span
             v-else-if="currentToolStatus.status === 'done'"
             class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400"
@@ -81,7 +81,7 @@ defineProps<{
           </span>
         </div>
 
-        <!-- 已使用的工具列表 -->
+        <!-- English UI note -->
         <div v-if="toolsUsed.length > 1" class="flex flex-wrap gap-1">
           <span class="text-xs text-gray-400">{{ t('ai.chat.thinking.called') }}</span>
           <span
@@ -95,7 +95,7 @@ defineProps<{
         </div>
       </div>
 
-      <!-- 默认状态（无工具调用） -->
+      <!-- English UI note -->
       <div v-else class="flex items-center gap-2">
         <span class="text-sm text-gray-600 dark:text-gray-400">{{ t('ai.chat.thinking.analyzing') }}</span>
         <span class="flex gap-1">

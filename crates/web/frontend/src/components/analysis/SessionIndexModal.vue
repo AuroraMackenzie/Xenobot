@@ -1,48 +1,48 @@
 <script setup lang="ts">
 /**
- * 会话索引生成弹窗组件
- * 自动检测索引状态，未生成时通过 v-model 自动弹出
- * 使用 v-model 控制显示状态
+ * English note.
+ * English note.
+ * English note.
  */
 import { ref, watch, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{
   sessionId: string
-  /** 弹窗打开状态（v-model） */
+  /** English note.
   modelValue?: boolean
 }>()
 
 const emit = defineEmits<{
-  /** 更新 v-model */
+  /** English note.
   (e: 'update:modelValue', value: boolean): void
-  /** 生成完成 */
+  /** English note.
   (e: 'generated', sessionCount: number): void
 }>()
 
 const { t } = useI18n()
 
-// 状态
+// English engineering note.
 const hasIndex = ref(false)
 const sessionCount = ref(0)
 const isGenerating = ref(false)
 const isLoading = ref(true)
-// 是否是强制模式（未生成索引时自动弹出的情况）
+// English engineering note.
 const forceMode = ref(false)
 
-// 是否打开（双向绑定）
+// English engineering note.
 const isOpen = computed({
   get: () => props.modelValue ?? false,
   set: (value) => emit('update:modelValue', value),
 })
 
-// 是否可以关闭弹窗
+// English engineering note.
 const canClose = computed(() => {
-  // 强制模式下不允许关闭
+  // English engineering note.
   return !forceMode.value
 })
 
-// 检查会话索引状态并自动弹出
+// English engineering note.
 async function checkAndAutoOpen() {
   if (!props.sessionId) return
 
@@ -52,7 +52,7 @@ async function checkAndAutoOpen() {
     hasIndex.value = stats.hasIndex
     sessionCount.value = stats.sessionCount
 
-    // 如果未生成索引，自动弹出（强制模式）
+    // English engineering note.
     if (!hasIndex.value) {
       forceMode.value = true
       isOpen.value = true
@@ -64,7 +64,7 @@ async function checkAndAutoOpen() {
   }
 }
 
-// 刷新状态（不自动弹出，用于手动打开时）
+// English engineering note.
 async function refreshStatus() {
   if (!props.sessionId) return
 
@@ -80,22 +80,22 @@ async function refreshStatus() {
   }
 }
 
-// 生成会话索引
+// English engineering note.
 async function generateSessionIndex() {
   if (!props.sessionId) return
 
   isGenerating.value = true
   try {
-    // 从 localStorage 获取全局阈值配置
+    // English engineering note.
     const savedThreshold = localStorage.getItem('sessionGapThreshold')
-    const gapThreshold = savedThreshold ? parseInt(savedThreshold, 10) : 1800 // 默认30分钟
+    const gapThreshold = savedThreshold ? parseInt(savedThreshold, 10) : 1800 // English engineering note.
 
     const count = await window.sessionApi.generate(props.sessionId, gapThreshold)
     hasIndex.value = true
     sessionCount.value = count
     emit('generated', count)
 
-    // 生成完成后自动关闭
+    // English engineering note.
     forceMode.value = false
     isOpen.value = false
   } catch (error) {
@@ -105,28 +105,28 @@ async function generateSessionIndex() {
   }
 }
 
-// 关闭弹窗
+// English engineering note.
 function close() {
   if (!canClose.value) return
   isOpen.value = false
 }
 
-// 处理弹窗状态变化
+// English engineering note.
 function handleOpenChange(value: boolean) {
   if (!value && !canClose.value) {
-    // 强制模式下不允许关闭
+    // English engineering note.
     return
   }
 
   isOpen.value = value
 
-  // 手动打开时（非强制模式），刷新状态
+  // English engineering note.
   if (value && !forceMode.value) {
     refreshStatus()
   }
 }
 
-// sessionId 变化时重新检查并自动弹出
+// English engineering note.
 watch(
   () => props.sessionId,
   () => {
@@ -134,7 +134,7 @@ watch(
   }
 )
 
-// 组件挂载时检查
+// English engineering note.
 onMounted(() => {
   checkAndAutoOpen()
 })
@@ -144,7 +144,7 @@ onMounted(() => {
   <UModal :open="isOpen" :dismissible="canClose" @update:open="handleOpenChange">
     <template #content>
       <div class="p-6">
-        <!-- 头部 -->
+        <!-- English UI note -->
         <div class="mb-4 flex items-center justify-between">
           <div class="flex items-center gap-2">
             <div class="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30">
@@ -162,14 +162,14 @@ onMounted(() => {
           <UButton v-if="canClose" icon="i-heroicons-x-mark" color="neutral" variant="ghost" size="sm" @click="close" />
         </div>
 
-        <!-- 加载中 -->
+        <!-- English UI note -->
         <div v-if="isLoading" class="flex items-center justify-center py-8">
           <UIcon name="i-heroicons-arrow-path" class="h-6 w-6 animate-spin text-gray-400" />
         </div>
 
-        <!-- 内容 -->
+        <!-- English UI note -->
         <template v-else>
-          <!-- 未生成索引 -->
+          <!-- English UI note -->
           <div v-if="!hasIndex" class="space-y-4">
             <div
               class="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/50 dark:bg-amber-900/20"
@@ -208,7 +208,7 @@ onMounted(() => {
             </div>
           </div>
 
-          <!-- 已生成索引 -->
+          <!-- English UI note -->
           <div v-else class="space-y-4">
             <div
               class="rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800/50 dark:bg-green-900/20"
@@ -232,7 +232,7 @@ onMounted(() => {
           </div>
         </template>
 
-        <!-- 操作按钮 -->
+        <!-- English UI note -->
         <div class="mt-6 flex justify-end gap-2">
           <UButton v-if="canClose" variant="ghost" @click="close">
             {{ t('records.sessionIndex.cancel') }}

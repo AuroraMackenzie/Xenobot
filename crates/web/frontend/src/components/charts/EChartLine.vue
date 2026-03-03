@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * ECharts 折线图组件
+ * English note.
  */
 import { computed } from 'vue'
 import type { EChartsOption } from 'echarts'
@@ -14,9 +14,9 @@ export interface EChartLineData {
 interface Props {
   data: EChartLineData
   height?: number
-  /** 是否显示面积 */
+  /** English note.
   showArea?: boolean
-  /** 是否平滑曲线 */
+  /** English note.
   smooth?: boolean
 }
 
@@ -51,7 +51,7 @@ const option = computed<EChartsOption>(() => {
       axisLabel: {
         fontSize: 11,
         color: '#6b7280',
-        // 自动间隔显示标签
+        // English engineering note.
         interval: 'auto',
       },
     },
@@ -76,7 +76,7 @@ const option = computed<EChartsOption>(() => {
         showSymbol: false,
         lineStyle: {
           width: 2,
-          color: '#0ea5c9', // 项目主题 pink-500
+          color: '#0ea5c9', // English engineering note.
         },
         itemStyle: {
           color: '#0ea5c9',
@@ -90,7 +90,7 @@ const option = computed<EChartsOption>(() => {
                 x2: 0,
                 y2: 1,
                 colorStops: [
-                  { offset: 0, color: 'rgba(14, 165, 201, 0.32)' }, // 项目主题粉色
+                  { offset: 0, color: 'rgba(14, 165, 201, 0.32)' }, // English engineering note.
                   { offset: 1, color: 'rgba(14, 165, 201, 0.08)' },
                 ],
               },

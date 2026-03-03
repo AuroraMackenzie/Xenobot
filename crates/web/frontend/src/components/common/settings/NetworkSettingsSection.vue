@@ -4,10 +4,10 @@ import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 
-// 代理模式类型
+// English engineering note.
 type ProxyMode = 'off' | 'system' | 'manual'
 
-// 代理配置
+// English engineering note.
 const proxyMode = ref<ProxyMode>('system')
 const proxyUrl = ref('')
 const proxyUrlError = ref('')
@@ -15,14 +15,14 @@ const isSavingProxy = ref(false)
 const isTestingProxy = ref(false)
 const proxyTestResult = ref<{ success: boolean; message: string } | null>(null)
 
-// 代理模式选项
+// English engineering note.
 const proxyModeOptions = computed(() => [
   { label: t('settings.basic.network.modeOff'), value: 'off' },
   { label: t('settings.basic.network.modeSystem'), value: 'system' },
   { label: t('settings.basic.network.modeManual'), value: 'manual' },
 ])
 
-// 加载代理配置
+// English engineering note.
 async function loadProxyConfig() {
   try {
     const config = await window.networkApi.getProxyConfig()
@@ -33,7 +33,7 @@ async function loadProxyConfig() {
   }
 }
 
-// 验证代理 URL 格式
+// English engineering note.
 function validateProxyUrl(url: string): boolean {
   if (!url) {
     proxyUrlError.value = ''
@@ -54,18 +54,18 @@ function validateProxyUrl(url: string): boolean {
   }
 }
 
-// 保存代理配置
+// English engineering note.
 async function saveProxyConfig() {
-  // 清除测试结果
+  // English engineering note.
   proxyTestResult.value = null
 
-  // 如果是手动模式但没填地址
+  // English engineering note.
   if (proxyMode.value === 'manual' && !proxyUrl.value.trim()) {
     proxyUrlError.value = t('settings.basic.network.enterProxyFirst')
     return
   }
 
-  // 验证格式
+  // English engineering note.
   if (proxyMode.value === 'manual' && !validateProxyUrl(proxyUrl.value)) {
     return
   }
@@ -88,20 +88,20 @@ async function saveProxyConfig() {
   }
 }
 
-// 切换代理模式
+// English engineering note.
 async function handleProxyModeChange(mode: string | number) {
   const newMode = mode as ProxyMode
   proxyMode.value = newMode
   proxyTestResult.value = null
   proxyUrlError.value = ''
 
-  // 非手动模式时立即保存
+  // English engineering note.
   if (newMode !== 'manual') {
     await saveProxyConfig()
   }
 }
 
-// 代理地址输入处理
+// English engineering note.
 function handleProxyUrlInput() {
   proxyTestResult.value = null
   if (proxyUrl.value) {
@@ -111,14 +111,14 @@ function handleProxyUrlInput() {
   }
 }
 
-// 代理地址失去焦点时保存
+// English engineering note.
 async function handleProxyUrlBlur() {
   if (proxyMode.value === 'manual' && proxyUrl.value.trim()) {
     await saveProxyConfig()
   }
 }
 
-// 测试代理连接
+// English engineering note.
 async function testProxyConnection() {
   if (!proxyUrl.value.trim()) {
     proxyUrlError.value = t('settings.basic.network.enterProxyFirst')
@@ -151,7 +151,7 @@ async function testProxyConnection() {
   }
 }
 
-// 组件挂载时加载数据
+// English engineering note.
 onMounted(() => {
   loadProxyConfig()
 })
@@ -164,7 +164,7 @@ onMounted(() => {
       {{ t('settings.basic.network.title') }}
     </h3>
     <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50">
-      <!-- 代理模式选择 -->
+      <!-- English UI note -->
       <div class="flex items-center justify-between">
         <div class="flex-1 pr-4">
           <p class="text-sm font-medium text-gray-900 dark:text-white">{{ t('settings.basic.network.proxyMode') }}</p>
@@ -181,7 +181,7 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- 手动配置时显示代理地址输入 -->
+      <!-- English UI note -->
       <div v-if="proxyMode === 'manual'" class="mt-4 space-y-3">
         <div>
           <label class="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300">
@@ -202,7 +202,7 @@ onMounted(() => {
           <p v-else class="mt-1 text-xs text-gray-400">{{ t('settings.basic.network.proxyHelp') }}</p>
         </div>
 
-        <!-- 测试连接按钮和结果 -->
+        <!-- English UI note -->
         <div class="flex items-center gap-3">
           <UButton
             :loading="isTestingProxy"

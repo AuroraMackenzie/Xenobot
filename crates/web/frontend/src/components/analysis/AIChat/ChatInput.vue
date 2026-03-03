@@ -17,10 +17,10 @@ const emit = defineEmits<{
   stop: []
 }>()
 
-// 输入内容
+// English engineering note.
 const inputValue = ref('')
 
-// 计算 status
+// English engineering note.
 const chatStatus = computed(() => {
   if (props.disabled) {
     return props.status || 'submitted'
@@ -28,7 +28,7 @@ const chatStatus = computed(() => {
   return 'ready'
 })
 
-// 发送消息
+// English engineering note.
 function handleSubmit() {
   if (!inputValue.value.trim() || props.disabled) return
 
@@ -36,7 +36,7 @@ function handleSubmit() {
   inputValue.value = ''
 }
 
-// 停止生成
+// English engineering note.
 function handleStop() {
   emit('stop')
 }

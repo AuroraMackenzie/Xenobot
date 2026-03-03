@@ -24,27 +24,27 @@ const { toggleSidebar } = layoutStore
 const router = useRouter()
 const route = useRoute()
 
-// 是否在首页
+// English engineering note.
 const isHomePage = computed(() => route.path === '/')
 
-// 重命名相关状态
+// English engineering note.
 const showRenameModal = ref(false)
 const renameTarget = ref<AnalysisSession | null>(null)
 const newName = ref('')
 const renameInputRef = ref<HTMLInputElement | null>(null)
 
-// 删除确认相关状态
+// English engineering note.
 const showDeleteModal = ref(false)
 const deleteTarget = ref<AnalysisSession | null>(null)
 
-// 版本号
+// English engineering note.
 const version = ref('')
 
-// 搜索相关状态
+// English engineering note.
 const showSearch = ref(false)
 const searchQuery = ref('')
 
-// 过滤后的会话列表
+// English engineering note.
 const filteredSortedSessions = computed(() => {
   if (!searchQuery.value.trim()) {
     return sortedSessions.value
@@ -53,7 +53,7 @@ const filteredSortedSessions = computed(() => {
   return sortedSessions.value.filter((s) => s.name.toLowerCase().includes(query))
 })
 
-// 切换搜索框显示
+// English engineering note.
 function toggleSearch() {
   showSearch.value = !showSearch.value
   if (!showSearch.value) {
@@ -61,7 +61,7 @@ function toggleSearch() {
   }
 }
 
-// 加载会话列表和版本号
+// English engineering note.
 onMounted(async () => {
   sessionStore.loadSessions()
   try {
@@ -80,19 +80,19 @@ function formatTime(timestamp: number): string {
   return dayjs.unix(timestamp).fromNow()
 }
 
-// 打开重命名弹窗
+// English engineering note.
 function openRenameModal(session: AnalysisSession) {
   renameTarget.value = session
   newName.value = session.name
   showRenameModal.value = true
-  // 等待 DOM 更新后聚焦输入框
+  // English engineering note.
   nextTick(() => {
     renameInputRef.value?.focus()
     renameInputRef.value?.select()
   })
 }
 
-// 执行重命名
+// English engineering note.
 async function handleRename() {
   if (!renameTarget.value || !newName.value.trim()) return
 
@@ -104,20 +104,20 @@ async function handleRename() {
   }
 }
 
-// 关闭重命名弹窗
+// English engineering note.
 function closeRenameModal() {
   showRenameModal.value = false
   renameTarget.value = null
   newName.value = ''
 }
 
-// 打开删除确认弹窗
+// English engineering note.
 function openDeleteModal(session: AnalysisSession) {
   deleteTarget.value = session
   showDeleteModal.value = true
 }
 
-// 确认删除会话
+// English engineering note.
 async function confirmDelete() {
   if (!deleteTarget.value) return
 
@@ -126,13 +126,13 @@ async function confirmDelete() {
   deleteTarget.value = null
 }
 
-// 关闭删除确认弹窗
+// English engineering note.
 function closeDeleteModal() {
   showDeleteModal.value = false
   deleteTarget.value = null
 }
 
-// 生成右键菜单项
+// English engineering note.
 function getContextMenuItems(session: AnalysisSession) {
   const isPinned = sessionStore.isPinned(session.id)
   return [
@@ -157,30 +157,30 @@ function getContextMenuItems(session: AnalysisSession) {
   ]
 }
 
-// 根据会话类型获取路由名称
+// English engineering note.
 function getSessionRouteName(session: AnalysisSession): string {
   return session.type === 'private' ? 'direct-room' : 'circle-room'
 }
 
-// 判断是否是私聊
+// English engineering note.
 function isPrivateChat(session: AnalysisSession): boolean {
   return session.type === 'private'
 }
 
-// 获取会话头像显示文字：私聊取最后两字，群聊取前两字
+// English engineering note.
 function getSessionAvatarText(session: AnalysisSession): string {
   const name = session.name || ''
   if (!name) return '?'
   if (isPrivateChat(session)) {
-    // 私聊：取最后两个字
+    // English engineering note.
     return name.length <= 2 ? name : name.slice(-2)
   } else {
-    // 群聊：取前两个字
+    // English engineering note.
     return name.length <= 2 ? name : name.slice(0, 2)
   }
 }
 
-// 获取会话头像 URL（群聊用 groupAvatar，私聊用 memberAvatar）
+// English engineering note.
 function getSessionAvatar(session: AnalysisSession): string | null {
   if (isPrivateChat(session)) {
     return session.memberAvatar || null
@@ -223,13 +223,13 @@ function getSessionAvatar(session: AnalysisSession): string | null {
         </UTooltip>
       </div>
 
-      <!-- 新建分析 -->
+      <!-- English UI note -->
       <SidebarButton icon="i-heroicons-plus" :title="t('layout.newAnalysis')" @click="handleImport" />
     </div>
 
     <!-- Session List -->
     <div class="flex-1 relative min-h-0 flex flex-col">
-      <!-- 聊天记录标题 - 固定在顶部，不随列表滚动 -->
+      <!-- English UI note -->
       <div v-if="!isCollapsed && sessions.length > 0" class="px-4 mb-2">
         <div class="flex items-center justify-between">
           <UTooltip :text="t('layout.tooltip.hint')" :popper="{ placement: 'right' }">
@@ -248,7 +248,7 @@ function getSessionAvatar(session: AnalysisSession): string | null {
             />
           </UTooltip>
         </div>
-        <!-- 搜索框 -->
+        <!-- English UI note -->
         <div v-if="showSearch" class="mt-2">
           <UInput
             v-model="searchQuery"
@@ -260,13 +260,13 @@ function getSessionAvatar(session: AnalysisSession): string | null {
         </div>
       </div>
 
-      <!-- 聊天记录列表 - 可滚动区域，滚动条贴边 -->
+      <!-- English UI note -->
       <div class="flex-1 overflow-y-auto">
         <div v-if="sessions.length === 0 && !isCollapsed" class="py-8 text-center text-sm text-gray-500">
           {{ t('layout.noRecords') }}
         </div>
 
-        <!-- 搜索无结果 -->
+        <!-- English UI note -->
         <div
           v-else-if="filteredSortedSessions.length === 0 && searchQuery.trim() && !isCollapsed"
           class="py-8 text-center text-sm text-gray-500"
@@ -280,7 +280,7 @@ function getSessionAvatar(session: AnalysisSession): string | null {
             :key="session.id"
             :items="getContextMenuItems(session)"
           >
-            <!-- 侧边栏折叠时，hover 显示完整会话名称（Tooltip 需绑定到真实 DOM） -->
+            <!-- English UI note -->
             <UTooltip :text="session.name" :disabled="!isCollapsed || !session.name" :popper="{ placement: 'right' }">
               <div
                 class="group relative flex items-center p-2 text-left transition-colors"
@@ -294,8 +294,8 @@ function getSessionAvatar(session: AnalysisSession): string | null {
                 ]"
                 @click="router.push({ name: getSessionRouteName(session), params: { id: session.id } })"
               >
-                <!-- 会话头像 -->
-                <!-- 有头像图片时显示图片 -->
+                <!-- English UI note -->
+                <!-- English UI note -->
                 <img
                   v-if="getSessionAvatar(session)"
                   :src="getSessionAvatar(session)!"
@@ -303,7 +303,7 @@ function getSessionAvatar(session: AnalysisSession): string | null {
                   class="h-9 w-9 min-w-9 shrink-0 rounded-full object-cover"
                   :class="[isCollapsed ? '' : 'mr-3']"
                 />
-                <!-- 无头像时显示图标/文字 -->
+                <!-- English UI note -->
                 <div
                   v-else
                   class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[10px] font-bold"
@@ -316,7 +316,7 @@ function getSessionAvatar(session: AnalysisSession): string | null {
                     isCollapsed ? '' : 'mr-3',
                   ]"
                 >
-                  <!-- 折叠时显示缩略名字，不折叠时显示图标 -->
+                  <!-- English UI note -->
                   <template v-if="isCollapsed">
                     {{ getSessionAvatarText(session) }}
                   </template>
@@ -349,7 +349,7 @@ function getSessionAvatar(session: AnalysisSession): string | null {
           </UContextMenu>
         </div>
       </div>
-      <!-- 底部渐变蒙层 - 让列表消失更自然（固定在外层容器底部） -->
+      <!-- English UI note -->
       <div
         class="pointer-events-none absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-gray-50 to-transparent dark:from-gray-900"
       />
