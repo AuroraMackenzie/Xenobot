@@ -49,7 +49,7 @@ cargo run -p xenobot-cli --features "api,analysis" -- \
 
 ### Quick Start
 ```bash
-git clone https://github.com/AuroraMackenzie/Xenobot.git
+git clone --recursive https://github.com/AuroraMackenzie/Xenobot.git
 cd Xenobot
 export DATABASE_URL="sqlite://$(pwd)/test.db"
 cargo test -p xenobot-api -p xenobot-cli --features "api,analysis" --offline
