@@ -14,6 +14,10 @@ static DB_POOL: Lazy<Mutex<Option<SqlitePool>>> = Lazy::new(|| Mutex::new(None))
 static DB_PATH: Lazy<RwLock<Option<PathBuf>>> = Lazy::new(|| RwLock::new(None));
 // Migrator is created dynamically in run_migrations()
 
+fn migrations_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("migrations")
+}
+
 pub fn get_db_path() -> PathBuf {
     if let Some(path) = DB_PATH
         .read()
@@ -120,20 +124,21 @@ where
 
 pub async fn run_migrations(pool: &SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
     info!("Running SQLx database migrations...");
-    let migrator = Migrator::new(Path::new("crates/api/migrations")).await?;
+    let migrations_dir = migrations_dir();
+    let migrator = Migrator::new(Path::new(&migrations_dir)).await?;
     migrator.run(pool).await?;
     info!("Database migrations completed");
     Ok(())
 }
 
 pub fn ensure_migrations_dir() -> Result<(), std::io::Error> {
-    let migrations_dir = Path::new("crates/api/migrations");
+    let migrations_dir = migrations_dir();
     if !migrations_dir.exists() {
         info!(
             "Migrations directory does not exist, creating: {:?}",
             migrations_dir
         );
-        fs::create_dir_all(migrations_dir)?;
+        fs::create_dir_all(&migrations_dir)?;
     }
     Ok(())
 }

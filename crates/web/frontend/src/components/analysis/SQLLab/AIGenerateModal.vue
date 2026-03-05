@@ -1,15 +1,13 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { TableSchema } from './types'
-import { getTableLabel, getColumnLabel } from './types'
 
 const { t } = useI18n()
 
 // Props
 const props = defineProps<{
   open: boolean
-  schema: TableSchema[]
+  sessionId: string
 }>()
 
 // Emits
@@ -30,71 +28,6 @@ const streamingContent = ref('')
 const showStreamingContent = ref(false)
 
 // English engineering note.
-function buildSchemaDescription(): string {
-  const lines: string[] = []
-
-  for (const table of props.schema) {
-    const tableLabel = getTableLabel(table.name)
-    lines.push(`### ${table.name} (${tableLabel})`)
-    lines.push('| 列名 | 说明 | 类型 |')
-    lines.push('|------|------|------|')
-
-    for (const col of table.columns) {
-      const colLabel = getColumnLabel(table.name, col.name)
-      const pkMark = col.pk ? ' (主键)' : ''
-      lines.push(`| ${col.name} | ${colLabel}${pkMark} | ${col.type} |`)
-    }
-    lines.push('')
-  }
-
-  return lines.join('\n')
-}
-
-// English engineering note.
-function buildAIPrompt(userRequest: string): string {
-  const schemaDesc = buildSchemaDescription()
-
-  return `你是一个 SQLite 数据库专家。用户需要查询聊天记录数据库。
-
-## 数据库结构
-
-${schemaDesc}
-
-## 重要说明
-
-1. message 表的 ts 字段是 Unix 时间戳（秒），查询日期需要使用 datetime(ts, 'unixepoch') 转换
-2. message.type 字段：0=文本, 1=图片, 2=语音, 3=视频, 4=文件, 5=表情包, 6=系统消息, 99=其他
-3. member 和 message 表通过 message.sender_id = member.id 关联
-4. **人名查询**：当识别到人名/昵称查询时，必须同时在 member 表的 account_name、group_nickname 和 aliases 三个字段中模糊搜索，使用 OR 连接：
-   \`\`\`
-   WHERE m.account_name LIKE '%人名%'
-      OR m.group_nickname LIKE '%人名%'
-      OR m.aliases LIKE '%人名%'
-   \`\`\`
-5. 显示成员名称时，使用 COALESCE(m.group_nickname, m.account_name, m.platform_id) 来获取最佳显示名
-6. **查询具体消息时包含消息 ID**：当用户需要查看具体的聊天记录时，SELECT 应包含 msg.id 作为第一个字段，这样用户可以点击查看完整上下文。注意是 msg.id（消息 ID），不是 m.id（成员 ID）。
-7. **统计查询不需要消息 ID**：当用户需要统计分析（如"统计发言数量"、"分析活跃度"）时，不需要返回 msg.id
-
-## 用户需求
-
-${userRequest}
-
-## 要求
-
-请以 JSON 格式输出，包含两个字段：
-- sql: SQLite 查询语句（不要用代码块包裹）
-- explanation: 用简洁的中文解释这条 SQL 做了什么
-
-示例格式：
-{"sql": "SELECT ...", "explanation": "这条SQL查询了..."}
-
-注意：
-1. 仅输出 JSON，不要有任何其他文字
-2. SQL 中的查询结果限制在合理范围内（建议 LIMIT 100）
-3. 确保 SQL 语法正确`
-}
-
-// English engineering note.
 function closeModal() {
   emit('update:open', false)
   // English engineering note.
@@ -113,13 +46,6 @@ async function generateSQL() {
     return
   }
 
-  // English engineering note.
-  const hasConfig = await window.llmApi.hasConfig()
-  if (!hasConfig) {
-    aiError.value = t('common.errorNoAIConfig')
-    return
-  }
-
   isGenerating.value = true
   aiError.value = null
   generatedSQL.value = ''
@@ -128,49 +54,22 @@ async function generateSQL() {
   showStreamingContent.value = true
 
   try {
-    const prompt = buildAIPrompt(aiPrompt.value)
+    const result = await window.chatApi.generateSQL(props.sessionId, aiPrompt.value, {
+      maxRows: 100,
+    })
 
-    const result = await window.llmApi.chatStream(
-      [
-        { role: 'system', content: '你是一个 SQLite 专家，请以 JSON 格式输出 sql 和 explanation 字段。' },
-        { role: 'user', content: prompt },
-      ],
-      { temperature: 0.1, maxTokens: 800 },
-      (chunk) => {
-        if (chunk.content) {
-          streamingContent.value += chunk.content
-        }
-      }
-    )
-
-    if (result.success) {
-      const rawContent = streamingContent.value
-
-      try {
-        let jsonStr = rawContent.trim()
-        jsonStr = jsonStr.replace(/^```json?\n?/i, '').replace(/\n?```$/i, '')
-
-        const parsed = JSON.parse(jsonStr)
-        generatedSQL.value = (parsed.sql || '').trim()
-        generatedExplanation.value = (parsed.explanation || '').trim()
-        showStreamingContent.value = false
-
-        // English engineering note.
-        if (generatedSQL.value) {
-          emit('generated', generatedSQL.value, generatedExplanation.value, aiPrompt.value)
-        }
-      } catch {
-        let sqlContent = rawContent.trim()
-        sqlContent = sqlContent.replace(/^```sql?\n?/i, '').replace(/\n?```$/i, '')
-        generatedSQL.value = sqlContent.trim()
-        generatedExplanation.value = ''
-
-        if (generatedSQL.value) {
-          emit('generated', generatedSQL.value, '', aiPrompt.value)
-        }
-      }
+    if (result?.success && result?.sql) {
+      generatedSQL.value = String(result.sql).trim()
+      generatedExplanation.value = String(result.explanation || '').trim()
+      const warnings = Array.isArray(result.warnings)
+        ? result.warnings.filter((item) => typeof item === 'string' && item.trim()).map((item) => String(item))
+        : []
+      streamingContent.value = warnings.join('\n')
+      showStreamingContent.value = warnings.length > 0
+      emit('generated', generatedSQL.value, generatedExplanation.value, aiPrompt.value)
     } else {
       aiError.value = result.error || t('ai.sqlLab.generate.errorGenerate')
+      showStreamingContent.value = false
     }
   } catch (err: any) {
     aiError.value = err.message || String(err)

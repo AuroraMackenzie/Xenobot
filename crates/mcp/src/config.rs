@@ -129,7 +129,7 @@ impl Default for McpServerConfig {
 impl Default for McpClientConfig {
     fn default() -> Self {
         Self {
-            server_url: String::from("http://localhost:5030"),
+            server_url: String::from("http://localhost:8081"),
             name: default_client_name(),
             version: default_client_version(),
             auth_token: None,
@@ -148,7 +148,7 @@ fn default_bind_address() -> String {
 }
 
 fn default_port() -> u16 {
-    5030
+    8081
 }
 
 fn default_server_name() -> String {

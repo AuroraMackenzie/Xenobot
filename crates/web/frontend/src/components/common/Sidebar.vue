@@ -191,8 +191,8 @@ function getSessionAvatar(session: AnalysisSession): string | null {
 
 <template>
   <div
-    class="flex h-full flex-col border-r border-gray-200/50 transition-all duration-300 ease-in-out dark:border-gray-800/50"
-    :class="[isCollapsed ? 'w-20' : 'w-72', isHomePage ? '' : 'bg-gray-50 dark:bg-gray-900']"
+    class="xeno-sidebar-shell flex h-full flex-col transition-all duration-300 ease-in-out"
+    :class="[isCollapsed ? 'w-20' : 'w-72', isHomePage ? 'xeno-sidebar-home' : 'xeno-sidebar-default']"
   >
     <div class="flex flex-col p-4 pt-5">
       <!-- Header -->
@@ -283,11 +283,11 @@ function getSessionAvatar(session: AnalysisSession): string | null {
             <!-- English UI note -->
             <UTooltip :text="session.name" :disabled="!isCollapsed || !session.name" :popper="{ placement: 'right' }">
               <div
-                class="group relative flex items-center p-2 text-left transition-colors"
+                class="xeno-session-item group relative flex items-center p-2 text-left transition-colors"
                 :class="[
                   route.params.id === session.id && !isCollapsed
-                    ? 'bg-primary-100 text-gray-900 dark:bg-primary-900/30 dark:text-primary-100'
-                    : 'text-gray-700 dark:text-gray-200 hover:bg-gray-200/60 dark:hover:bg-gray-800',
+                    ? 'xeno-session-item-active text-gray-900 dark:text-primary-100'
+                    : 'xeno-session-item-idle text-gray-700 dark:text-gray-200',
                   isCollapsed
                     ? 'justify-center cursor-pointer h-13 w-13 rounded-full ml-3.5'
                     : 'cursor-pointer w-full rounded-full',
@@ -350,9 +350,7 @@ function getSessionAvatar(session: AnalysisSession): string | null {
         </div>
       </div>
       <!-- English UI note -->
-      <div
-        class="pointer-events-none absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-gray-50 to-transparent dark:from-gray-900"
-      />
+      <div class="xeno-sidebar-fade pointer-events-none absolute bottom-0 left-0 right-0 h-12" />
     </div>
 
     <!-- Rename Modal -->
@@ -397,3 +395,37 @@ function getSessionAvatar(session: AnalysisSession): string | null {
     <SidebarFooter />
   </div>
 </template>
+
+<style scoped>
+.xeno-sidebar-shell {
+  border-right: 1px solid var(--xeno-border-strong);
+  background: var(--xeno-sidebar-bg);
+  backdrop-filter: blur(16px) saturate(130%);
+}
+
+.xeno-sidebar-home {
+  background: var(--xeno-surface-muted);
+}
+
+.xeno-sidebar-default {
+  background: var(--xeno-sidebar-bg);
+}
+
+.xeno-session-item {
+  border: 1px solid transparent;
+}
+
+.xeno-session-item-idle:hover {
+  border-color: var(--xeno-border-soft);
+  background: var(--xeno-hover-bg);
+}
+
+.xeno-session-item-active {
+  border-color: var(--xeno-active-border);
+  background: var(--xeno-active-bg);
+}
+
+.xeno-sidebar-fade {
+  background: linear-gradient(180deg, transparent, var(--xeno-sidebar-bg));
+}
+</style>

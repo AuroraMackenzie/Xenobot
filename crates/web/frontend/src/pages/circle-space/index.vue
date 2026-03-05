@@ -180,7 +180,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="flex h-full flex-col bg-white dark:bg-gray-900" style="padding-top: var(--titlebar-area-height)">
+  <div class="xeno-analysis-shell flex h-full flex-col" style="padding-top: var(--titlebar-area-height)">
     <!-- Loading State -->
     <LoadingState v-if="isInitialLoad" variant="page" :text="t('analysis.groupChat.loading')" />
 
@@ -334,6 +334,11 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.xeno-analysis-shell {
+  background: transparent;
+  color: var(--xeno-text-main);
+}
+
 .tab-slide-enter-active,
 .tab-slide-leave-active {
   transition:

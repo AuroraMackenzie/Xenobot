@@ -22,6 +22,7 @@ tungstenite = { workspace = true }
 reqwest = { workspace = true }
 rusqlite = { workspace = true }
 tower = { workspace = true, features = ["util"] }
+clap = { workspace = true, features = ["derive", "env"] }
 
 chrono = { workspace = true }
 dirs = { workspace = true }

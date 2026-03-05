@@ -39,7 +39,9 @@ impl DiscordAdapter {
     /// Parse a user-authorized export and ensure platform-level consistency.
     pub fn parse_authorized_export(&self, path: &Path) -> Result<ParsedChat, DiscordError> {
         let registry = ParserRegistry::new();
-        let parsed = registry.detect_and_parse(path).map_err(DiscordError::Parse)?;
+        let parsed = registry
+            .detect_and_parse(path)
+            .map_err(DiscordError::Parse)?;
 
         if parsed.platform.eq_ignore_ascii_case(PLATFORM_ID) {
             Ok(parsed)
@@ -89,6 +91,8 @@ mod tests {
         let adapter = DiscordAdapter::new();
         let sources = adapter.discover_sources();
         assert!(!sources.is_empty());
-        assert!(sources.iter().all(|candidate| candidate.platform_id == PLATFORM_ID));
+        assert!(sources
+            .iter()
+            .all(|candidate| candidate.platform_id == PLATFORM_ID));
     }
 }

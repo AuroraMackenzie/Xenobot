@@ -3,9 +3,8 @@
 @import '@nuxt/ui';
 @import './markdown.css';
 
-/* English note.
 @theme static {
-  /* Keep semantic token names to avoid large class churn, but use Xenobot palette. */
+  /* Keep semantic token names stable to reduce utility class churn. */
   --color-pink-50: #edf9fb;
   --color-pink-100: #d6f1f7;
   --color-pink-200: #b1e4ef;
@@ -18,32 +17,101 @@
   --color-pink-900: #114d5f;
   --color-pink-950: #072b37;
 
-  /* English note.
-  --color-page-dark: #18181b;
+  --color-page-dark: #0a0f1a;
 }
 
 :root {
-  --xeno-bg-start: #f4f9fb;
-  --xeno-bg-end: #eef3f8;
-  --xeno-grid-color: rgba(14, 165, 201, 0.08);
-}
-
-html,
-body {
-  font-family:
+  --xeno-font-sans:
+    'Sora',
     'Avenir Next',
     'Avenir',
     'PingFang SC',
     'SF Pro Text',
     'Segoe UI',
     sans-serif;
+
+  --xeno-bg-base: #f2f6fb;
+  --xeno-bg-overlay-a: rgba(6, 182, 212, 0.16);
+  --xeno-bg-overlay-b: rgba(14, 165, 233, 0.12);
+  --xeno-bg-overlay-c: rgba(251, 146, 60, 0.08);
+
+  --xeno-grid-color: rgba(8, 47, 73, 0.07);
+  --xeno-noise-color: rgba(2, 6, 23, 0.035);
+
+  --xeno-text-main: #0f172a;
+  --xeno-text-secondary: #334155;
+
+  --xeno-border-soft: rgba(148, 163, 184, 0.34);
+  --xeno-border-strong: rgba(148, 163, 184, 0.48);
+
+  --xeno-surface-main: rgba(255, 255, 255, 0.78);
+  --xeno-surface-muted: rgba(255, 255, 255, 0.62);
+  --xeno-surface-emphasis: rgba(255, 255, 255, 0.9);
+  --xeno-sidebar-bg: rgba(248, 251, 255, 0.82);
+
+  --xeno-hover-bg: rgba(15, 23, 42, 0.05);
+  --xeno-active-bg: rgba(8, 145, 178, 0.14);
+  --xeno-active-border: rgba(14, 165, 233, 0.34);
+
+  --xeno-shadow-soft: 0 18px 45px -34px rgba(15, 23, 42, 0.32);
+  --xeno-shadow-panel:
+    0 18px 40px -28px rgba(15, 23, 42, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.68);
+
+  --xeno-focus-ring: rgba(14, 165, 233, 0.45);
+
+  --titlebar-area-height: 1rem; /* 16px on macOS */
+}
+
+:root.dark,
+.dark {
+  --xeno-bg-base: #070b14;
+  --xeno-bg-overlay-a: rgba(6, 182, 212, 0.16);
+  --xeno-bg-overlay-b: rgba(14, 165, 233, 0.12);
+  --xeno-bg-overlay-c: rgba(148, 163, 184, 0.08);
+
+  --xeno-grid-color: rgba(56, 189, 248, 0.1);
+  --xeno-noise-color: rgba(148, 163, 184, 0.055);
+
+  --xeno-text-main: #e2e8f0;
+  --xeno-text-secondary: #94a3b8;
+
+  --xeno-border-soft: rgba(71, 85, 105, 0.48);
+  --xeno-border-strong: rgba(71, 85, 105, 0.72);
+
+  --xeno-surface-main: rgba(15, 23, 42, 0.72);
+  --xeno-surface-muted: rgba(15, 23, 42, 0.56);
+  --xeno-surface-emphasis: rgba(15, 23, 42, 0.86);
+  --xeno-sidebar-bg: rgba(8, 15, 28, 0.84);
+
+  --xeno-hover-bg: rgba(148, 163, 184, 0.1);
+  --xeno-active-bg: rgba(6, 182, 212, 0.2);
+  --xeno-active-border: rgba(56, 189, 248, 0.34);
+
+  --xeno-shadow-soft: 0 22px 58px -32px rgba(2, 6, 23, 0.8);
+  --xeno-shadow-panel:
+    0 24px 52px -34px rgba(2, 6, 23, 0.84),
+    inset 0 1px 0 rgba(148, 163, 184, 0.12);
+
+  --xeno-focus-ring: rgba(56, 189, 248, 0.42);
+}
+
+html,
+body {
+  min-height: 100%;
+  font-family: var(--xeno-font-sans);
+  color: var(--xeno-text-main);
 }
 
 body {
   background:
-    radial-gradient(circle at 14% 8%, rgba(14, 165, 201, 0.18), transparent 38%),
-    radial-gradient(circle at 88% 12%, rgba(245, 158, 11, 0.14), transparent 34%),
-    linear-gradient(180deg, var(--xeno-bg-start), var(--xeno-bg-end));
+    radial-gradient(circle at 14% 10%, var(--xeno-bg-overlay-a), transparent 36%),
+    radial-gradient(circle at 88% 12%, var(--xeno-bg-overlay-b), transparent 34%),
+    radial-gradient(circle at 72% 86%, var(--xeno-bg-overlay-c), transparent 28%),
+    linear-gradient(180deg, var(--xeno-bg-base), var(--xeno-bg-base));
+  transition:
+    background-color 220ms ease,
+    color 220ms ease;
 }
 
 body::before {
@@ -51,30 +119,68 @@ body::before {
   position: fixed;
   inset: 0;
   pointer-events: none;
+  z-index: -2;
   background-image:
     linear-gradient(var(--xeno-grid-color) 1px, transparent 1px),
     linear-gradient(90deg, var(--xeno-grid-color) 1px, transparent 1px);
   background-size: 28px 28px;
-  opacity: 0.45;
+  opacity: 0.4;
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
   z-index: -1;
+  opacity: 0.22;
+  background-image: radial-gradient(var(--xeno-noise-color) 1px, transparent 1px);
+  background-size: 3px 3px;
 }
 
-.dark body {
-  background:
-    radial-gradient(circle at 14% 8%, rgba(14, 165, 201, 0.18), transparent 32%),
-    radial-gradient(circle at 88% 12%, rgba(245, 158, 11, 0.12), transparent 28%),
-    linear-gradient(180deg, #0b1220, #101827);
+::selection {
+  background: rgba(14, 165, 233, 0.28);
+  color: inherit;
 }
 
-.dark body::before {
-  --xeno-grid-color: rgba(56, 189, 248, 0.1);
-  opacity: 0.34;
+/* Shared shell and panel surfaces for original Xenobot visual language. */
+.xeno-app-shell {
+  background: linear-gradient(180deg, var(--xeno-surface-muted), transparent 80%);
 }
 
-/* English note.
+.xeno-page-content {
+  background: transparent;
+}
+
+.xeno-panel {
+  border: 1px solid var(--xeno-border-soft);
+  background: var(--xeno-surface-main);
+  box-shadow: var(--xeno-shadow-panel);
+  backdrop-filter: blur(16px) saturate(130%);
+}
+
+.xeno-panel-muted {
+  border: 1px solid var(--xeno-border-soft);
+  background: var(--xeno-surface-muted);
+  backdrop-filter: blur(14px) saturate(122%);
+}
+
+.xeno-panel-emphasis {
+  border: 1px solid var(--xeno-border-strong);
+  background: var(--xeno-surface-emphasis);
+  box-shadow: var(--xeno-shadow-soft);
+  backdrop-filter: blur(18px) saturate(130%);
+}
+
+.xeno-focus-ring:focus-visible {
+  outline: 2px solid var(--xeno-focus-ring);
+  outline-offset: 2px;
+}
+
+/* Scrollbar uses hover-reveal style to keep dense UI clean. */
 ::-webkit-scrollbar {
-  width: 3px;
-  height: 3px;
+  width: 4px;
+  height: 4px;
 }
 
 ::-webkit-scrollbar-track {
@@ -83,38 +189,41 @@ body::before {
 
 ::-webkit-scrollbar-thumb {
   background-color: transparent;
-  border-radius: 3px;
+  border-radius: 4px;
 }
 
 :hover::-webkit-scrollbar-thumb {
-  background-color: var(--color-gray-300);
+  background-color: rgba(148, 163, 184, 0.6);
 }
 
 .dark :hover::-webkit-scrollbar-thumb {
-  background-color: var(--color-gray-700);
+  background-color: rgba(71, 85, 105, 0.76);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background-color: var(--color-gray-400);
+  background-color: rgba(100, 116, 139, 0.82);
 }
 
 .dark ::-webkit-scrollbar-thumb:hover {
-  background-color: var(--color-gray-600);
-}
-
-/* English note.
- * English note.
- * English note.
-:root {
-  --titlebar-area-height: 1rem; /* 16px - macOS */
+  background-color: rgba(100, 116, 139, 0.9);
 }
 
 .platform-windows,
 .platform-linux {
-  --titlebar-area-height: 2rem; /* 32px - matches titleBarOverlay height */
+  --titlebar-area-height: 2rem; /* 32px, matches titleBarOverlay height */
 }
 
-/* English note.
 .app-region-no-drag {
   -webkit-app-region: no-drag;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

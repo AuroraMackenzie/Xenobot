@@ -89,6 +89,8 @@ mod tests {
         let adapter = TeamsAdapter::new();
         let sources = adapter.discover_sources();
         assert!(!sources.is_empty());
-        assert!(sources.iter().all(|candidate| candidate.platform_id == PLATFORM_ID));
+        assert!(sources
+            .iter()
+            .all(|candidate| candidate.platform_id == PLATFORM_ID));
     }
 }

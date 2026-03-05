@@ -94,9 +94,7 @@ async fn test_semantic_search_endpoint_returns_ranked_messages_and_rewrite(
         })
         .await?;
 
-    let sender_id = repo
-        .get_or_create_member("u_alice", Some("Alice"))
-        .await?;
+    let sender_id = repo.get_or_create_member("u_alice", Some("Alice")).await?;
 
     let rows = [
         "database migration checkpoint incremental import finished",
@@ -144,10 +142,7 @@ async fn test_semantic_search_endpoint_returns_ranked_messages_and_rewrite(
     assert!(!messages.is_empty());
 
     let has_expected_hit = messages.iter().any(|m| {
-        let content = m["content"]
-            .as_str()
-            .unwrap_or_default()
-            .to_lowercase();
+        let content = m["content"].as_str().unwrap_or_default().to_lowercase();
         content.contains("incremental") || content.contains("checkpoint")
     });
     assert!(has_expected_hit);

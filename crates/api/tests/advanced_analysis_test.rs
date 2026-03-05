@@ -38,7 +38,10 @@ fn unique_test_root() -> PathBuf {
         .map(|d| d.as_nanos())
         .unwrap_or(0);
     let seq = TEST_COUNTER.fetch_add(1, Ordering::Relaxed);
-    std::env::temp_dir().join(format!("xenobot_api_advanced_analysis_{}_{}", epoch_nanos, seq))
+    std::env::temp_dir().join(format!(
+        "xenobot_api_advanced_analysis_{}_{}",
+        epoch_nanos, seq
+    ))
 }
 
 async fn get_json(
@@ -132,7 +135,10 @@ async fn test_advanced_analysis_endpoints_return_expected_shapes(
         get_json(&app, &format!("/sessions/{meta_id}/night-owl-analysis")).await?;
     assert_eq!(status, StatusCode::OK);
     assert!(night_resp["members"].is_array());
-    assert_eq!(night_resp["stats"]["totalMessages"].as_i64().unwrap_or(0), 12);
+    assert_eq!(
+        night_resp["stats"]["totalMessages"].as_i64().unwrap_or(0),
+        12
+    );
 
     let (status, dragon_resp) =
         get_json(&app, &format!("/sessions/{meta_id}/dragon-king-analysis")).await?;
@@ -159,7 +165,10 @@ async fn test_advanced_analysis_endpoints_return_expected_shapes(
     let (status, repeat_resp) =
         get_json(&app, &format!("/sessions/{meta_id}/repeat-analysis")).await?;
     assert_eq!(status, StatusCode::OK);
-    let phrases = repeat_resp["phrases"].as_array().cloned().unwrap_or_default();
+    let phrases = repeat_resp["phrases"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
     assert!(phrases.iter().any(|p| p["phrase"] == "echo phrase"));
     let runs = repeat_resp["runs"].as_array().cloned().unwrap_or_default();
     assert!(!runs.is_empty());
@@ -167,9 +176,7 @@ async fn test_advanced_analysis_endpoints_return_expected_shapes(
     let (status, mention_resp) =
         get_json(&app, &format!("/sessions/{meta_id}/mention-analysis")).await?;
     assert_eq!(status, StatusCode::OK);
-    assert!(
-        mention_resp["topMentioners"].is_array() || mention_resp["top_mentioners"].is_array()
-    );
+    assert!(mention_resp["topMentioners"].is_array() || mention_resp["top_mentioners"].is_array());
     assert!(mention_resp["topMentioned"].is_array() || mention_resp["top_mentioned"].is_array());
     let total_mentions = mention_resp["totalMentions"]
         .as_i64()
@@ -177,21 +184,24 @@ async fn test_advanced_analysis_endpoints_return_expected_shapes(
         .unwrap_or(0);
     assert!(total_mentions >= 3);
 
-    let (status, cluster_resp) = get_json(&app, &format!("/sessions/{meta_id}/cluster-graph")).await?;
+    let (status, cluster_resp) =
+        get_json(&app, &format!("/sessions/{meta_id}/cluster-graph")).await?;
     assert_eq!(status, StatusCode::OK);
-    let cluster_nodes = cluster_resp["nodes"].as_array().cloned().unwrap_or_default();
+    let cluster_nodes = cluster_resp["nodes"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
     assert!(!cluster_nodes.is_empty());
-    assert!(
-        cluster_nodes
-            .iter()
-            .all(|node| node.get("communityId").is_some())
-    );
+    assert!(cluster_nodes
+        .iter()
+        .all(|node| node.get("communityId").is_some()));
     assert_eq!(
         cluster_resp["stats"]["algorithm"].as_str().unwrap_or(""),
         "weighted_label_propagation"
     );
 
-    let (status, laugh_resp) = get_json(&app, &format!("/sessions/{meta_id}/laugh-analysis")).await?;
+    let (status, laugh_resp) =
+        get_json(&app, &format!("/sessions/{meta_id}/laugh-analysis")).await?;
     assert_eq!(status, StatusCode::OK);
     assert!(laugh_resp["rankByCount"].is_array());
     assert!(laugh_resp["typeDistribution"].is_array());

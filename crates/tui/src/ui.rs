@@ -13,6 +13,11 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, Paragraph, Tabs},
     Frame,
 };
+use serde::Deserialize;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::process::{Child, Command, Stdio};
+use std::time::Duration;
 
 /// UI component trait.
 pub trait UiComponent {
@@ -52,6 +57,14 @@ pub struct Ui {
     known_accounts: Vec<String>,
     /// Current profile index in known_accounts.
     account_cursor: usize,
+    /// Display theme mode for rendering.
+    theme_mode: ThemeMode,
+    /// Whether to render compact status bar.
+    compact_status_bar: bool,
+    /// Whether to render compact footer.
+    compact_footer: bool,
+    /// Runtime monitor process handle when live monitor mode is enabled.
+    monitor_child: Option<Child>,
 }
 
 /// Available tabs.
@@ -63,6 +76,32 @@ enum Tab {
     Services,
     Settings,
     Accounts,
+}
+
+/// Theme mode for TUI rendering.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ThemeMode {
+    Auto,
+    Light,
+    Dark,
+}
+
+impl ThemeMode {
+    fn next(self) -> Self {
+        match self {
+            ThemeMode::Auto => ThemeMode::Light,
+            ThemeMode::Light => ThemeMode::Dark,
+            ThemeMode::Dark => ThemeMode::Auto,
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            ThemeMode::Auto => "auto",
+            ThemeMode::Light => "light",
+            ThemeMode::Dark => "dark",
+        }
+    }
 }
 
 impl Tab {
@@ -168,6 +207,43 @@ enum ServiceStatus {
     Error(String),
 }
 
+#[derive(Debug, Clone, Deserialize)]
+struct ApiServerStateSnapshot {
+    #[allow(dead_code)]
+    pid: i32,
+    #[serde(default)]
+    transport: String,
+    #[serde(default)]
+    bind_addr: String,
+    unix_socket_path: Option<String>,
+    file_gateway_dir: Option<String>,
+    #[serde(default)]
+    cors_enabled: bool,
+    #[serde(default)]
+    websocket_enabled: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct StoredKeyProfileSnapshot {
+    #[allow(dead_code)]
+    data_key: String,
+    #[allow(dead_code)]
+    image_key: String,
+    #[serde(default)]
+    version: String,
+    #[serde(default)]
+    platform: String,
+    pid: Option<u32>,
+    #[allow(dead_code)]
+    updated_at: Option<String>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct KeyStoreSnapshot {
+    #[serde(default)]
+    profiles: HashMap<String, StoredKeyProfileSnapshot>,
+}
+
 impl Ui {
     /// Create a new UI.
     pub fn new() -> Self {
@@ -233,6 +309,10 @@ impl Ui {
             tick_count: 0,
             known_accounts,
             account_cursor,
+            theme_mode: ThemeMode::Auto,
+            compact_status_bar: false,
+            compact_footer: false,
+            monitor_child: None,
         }
     }
 
@@ -294,6 +374,9 @@ impl Ui {
             KeyCode::Char('a') => self.toggle_auto_decrypt(),
             KeyCode::Char('w') => self.switch_account(),
             KeyCode::Char('u') => self.refresh_status_snapshot(),
+            KeyCode::Char('t') => self.cycle_theme_mode(),
+            KeyCode::Char('c') => self.toggle_compact_status_bar(),
+            KeyCode::Char('f') => self.toggle_compact_footer(),
             _ => {}
         }
     }
@@ -365,7 +448,7 @@ impl Ui {
             Tab::KeyExtraction => self.run_key_extraction(),
             Tab::Decryption => self.run_decryption(),
             Tab::Services => self.toggle_http_service(),
-            Tab::Settings => self.set_action("Settings action placeholder executed"),
+            Tab::Settings => self.apply_settings_action(),
             Tab::Accounts => self.switch_account(),
         }
     }
@@ -405,14 +488,39 @@ impl Ui {
     }
 
     fn run_key_extraction(&mut self) {
-        self.status.key_status = KeyStatus::Extracted;
-        self.status.pid = Some(9821);
-        self.status.version = "wechat-arm64-safe".to_string();
-        if self.status.account.trim().is_empty() {
-            self.status.account = self.known_accounts[self.account_cursor].clone();
+        match load_stored_key_profile("default") {
+            Some((profile_name, profile)) => {
+                self.status.key_status = KeyStatus::Extracted;
+                self.status.pid = profile.pid;
+                self.status.version = if profile.version.trim().is_empty() {
+                    if profile.platform.trim().is_empty() {
+                        "unknown".to_string()
+                    } else {
+                        profile.platform
+                    }
+                } else {
+                    if profile.platform.trim().is_empty() {
+                        profile.version
+                    } else {
+                        format!("{} ({})", profile.version, profile.platform)
+                    }
+                };
+                if !profile_name.trim().is_empty() {
+                    self.status.account = profile_name;
+                }
+                self.status.last_session_time = Self::now_text();
+                self.set_action("Key status loaded from local key store");
+            }
+            None => {
+                self.status.key_status = KeyStatus::NotExtracted;
+                self.status.pid = None;
+                self.status.version = "unknown".to_string();
+                self.status.last_session_time = Self::now_text();
+                self.set_action(
+                    "No key profile found; run `xb key --data-key ... --image-key ...` first",
+                );
+            }
         }
-        self.status.last_session_time = Self::now_text();
-        self.set_action("Key status refreshed from authorized local data source");
     }
 
     fn run_decryption(&mut self) {
@@ -423,12 +531,59 @@ impl Ui {
             return;
         }
 
+        if runtime_command_mode_enabled() {
+            match run_xb_command_sync(&["decrypt", "--format", "wechat"]) {
+                Ok(_) => {
+                    self.status.last_session_time = Self::now_text();
+                    self.set_action("Decryption pipeline executed via xb decrypt");
+                }
+                Err(err) => {
+                    self.set_action(format!("Decryption command failed: {}", err));
+                }
+            }
+            return;
+        }
+
         self.status.data_size = "256 MB".to_string();
         self.status.last_session_time = Self::now_text();
         self.set_action("Decryption pipeline executed with current profile");
     }
 
     fn toggle_http_service(&mut self) {
+        if runtime_command_mode_enabled() {
+            match self.status.http_status {
+                ServiceStatus::Running => match run_xb_command_sync(&["api", "stop"]) {
+                    Ok(_) => {
+                        self.status.http_status = ServiceStatus::Stopped;
+                        self.refresh_status_snapshot();
+                        self.set_action("HTTP service stop requested via xb api stop");
+                    }
+                    Err(err) => {
+                        self.status.http_status = ServiceStatus::Error(err.clone());
+                        self.set_action(format!("HTTP service stop failed: {}", err));
+                    }
+                },
+                ServiceStatus::Stopped | ServiceStatus::Error(_) => {
+                    let db_path = std::env::var("XENOBOT_DB_PATH")
+                        .unwrap_or_else(|_| "/tmp/xenobot.db".to_string());
+                    match run_xb_command_detached(&["api", "start", "--db-path", db_path.as_str()])
+                    {
+                        Ok(_) => {
+                            self.status.http_status = ServiceStatus::Running;
+                            std::thread::sleep(Duration::from_millis(200));
+                            self.refresh_status_snapshot();
+                            self.set_action("HTTP service start requested via xb api start");
+                        }
+                        Err(err) => {
+                            self.status.http_status = ServiceStatus::Error(err.clone());
+                            self.set_action(format!("HTTP service start failed: {}", err));
+                        }
+                    }
+                }
+            }
+            return;
+        }
+
         self.status.http_status = match &self.status.http_status {
             ServiceStatus::Stopped => {
                 if matches!(self.status.key_status, KeyStatus::Extracted) {
@@ -458,6 +613,57 @@ impl Ui {
     }
 
     fn toggle_auto_decrypt(&mut self) {
+        if runtime_command_mode_enabled() {
+            match self.status.auto_decrypt_status {
+                ServiceStatus::Running => {
+                    let mut stop_ok = false;
+                    if let Some(mut child) = self.monitor_child.take() {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        stop_ok = true;
+                    }
+                    self.status.auto_decrypt_status = ServiceStatus::Stopped;
+                    self.set_action(if stop_ok {
+                        "Auto decrypt monitor stopped"
+                    } else {
+                        "Auto decrypt monitor marked as stopped (no child handle)"
+                    });
+                }
+                ServiceStatus::Stopped | ServiceStatus::Error(_) => {
+                    if !matches!(self.status.key_status, KeyStatus::Extracted) {
+                        self.status.auto_decrypt_status = ServiceStatus::Error(
+                            "missing extracted key state for watcher startup".to_string(),
+                        );
+                        self.set_action("Auto decrypt monitor blocked by missing key state");
+                        return;
+                    }
+                    let db_path = std::env::var("XENOBOT_DB_PATH")
+                        .unwrap_or_else(|_| "/tmp/xenobot.db".to_string());
+                    match spawn_xb_child(&[
+                        "monitor",
+                        "--format",
+                        "wechat",
+                        "--start",
+                        "--write-db",
+                        "--db-path",
+                        db_path.as_str(),
+                    ]) {
+                        Ok(child) => {
+                            let pid = child.id();
+                            self.monitor_child = Some(child);
+                            self.status.auto_decrypt_status = ServiceStatus::Running;
+                            self.set_action(format!("Auto decrypt monitor started (pid={})", pid));
+                        }
+                        Err(err) => {
+                            self.status.auto_decrypt_status = ServiceStatus::Error(err.clone());
+                            self.set_action(format!("Auto decrypt monitor start failed: {}", err));
+                        }
+                    }
+                }
+            }
+            return;
+        }
+
         self.status.auto_decrypt_status = match &self.status.auto_decrypt_status {
             ServiceStatus::Stopped => {
                 if matches!(self.status.key_status, KeyStatus::Extracted) {
@@ -503,7 +709,79 @@ impl Ui {
 
     fn refresh_status_snapshot(&mut self) {
         self.status.last_session_time = Self::now_text();
-        self.set_action("Status snapshot refreshed");
+        match load_api_state_snapshot() {
+            Some(snapshot) => {
+                self.status.http_status = ServiceStatus::Running;
+                self.status.version = format!(
+                    "api:{} ws:{} cors:{}",
+                    if snapshot.transport.trim().is_empty() {
+                        "tcp"
+                    } else {
+                        snapshot.transport.as_str()
+                    },
+                    snapshot.websocket_enabled,
+                    snapshot.cors_enabled
+                );
+                self.status.pid = u32::try_from(snapshot.pid).ok();
+
+                self.set_action(format!(
+                    "Status refreshed from API state ({})",
+                    describe_api_transport(&snapshot)
+                ));
+            }
+            None => {
+                self.set_action("Status snapshot refreshed (no API state file found)");
+            }
+        }
+    }
+
+    fn cycle_theme_mode(&mut self) {
+        if self.active_tab != Tab::Settings {
+            return;
+        }
+        self.theme_mode = self.theme_mode.next();
+        self.set_action(format!("Theme mode set to {}", self.theme_mode.label()));
+    }
+
+    fn toggle_compact_status_bar(&mut self) {
+        if self.active_tab != Tab::Settings {
+            return;
+        }
+        self.compact_status_bar = !self.compact_status_bar;
+        self.set_action(if self.compact_status_bar {
+            "Compact status bar enabled"
+        } else {
+            "Compact status bar disabled"
+        });
+    }
+
+    fn toggle_compact_footer(&mut self) {
+        if self.active_tab != Tab::Settings {
+            return;
+        }
+        self.compact_footer = !self.compact_footer;
+        self.set_action(if self.compact_footer {
+            "Compact footer enabled"
+        } else {
+            "Compact footer disabled"
+        });
+    }
+
+    fn apply_settings_action(&mut self) {
+        self.set_action(format!(
+            "Applied settings: theme={}, compactStatus={}, compactFooter={}",
+            self.theme_mode.label(),
+            self.compact_status_bar,
+            self.compact_footer
+        ));
+    }
+
+    fn header_color(&self) -> Color {
+        match self.theme_mode {
+            ThemeMode::Auto => Color::Cyan,
+            ThemeMode::Light => Color::Blue,
+            ThemeMode::Dark => Color::LightCyan,
+        }
     }
 
     /// Render header.
@@ -511,7 +789,7 @@ impl Ui {
         let title = Paragraph::new("Xenobot Control Plane - Local-First Chat Data Workspace")
             .style(
                 Style::default()
-                    .fg(Color::Cyan)
+                    .fg(self.header_color())
                     .add_modifier(Modifier::BOLD),
             )
             .alignment(ratatui::layout::Alignment::Center)
@@ -650,11 +928,31 @@ impl Ui {
         let text = vec![
             Line::from("Settings"),
             Line::from(""),
-            Line::from("Theme: auto"),
+            Line::from(format!("Theme: {}", self.theme_mode.label())),
             Line::from("Update interval: 100 ms"),
             Line::from("Safety policy: authorized local data only"),
+            Line::from(format!(
+                "Compact status bar: {}",
+                if self.compact_status_bar {
+                    "enabled"
+                } else {
+                    "disabled"
+                }
+            )),
+            Line::from(format!(
+                "Compact footer: {}",
+                if self.compact_footer {
+                    "enabled"
+                } else {
+                    "disabled"
+                }
+            )),
             Line::from(""),
-            Line::from("Action: Press Enter to trigger settings placeholder action"),
+            Line::from("Actions:"),
+            Line::from("  - Press t to cycle theme mode"),
+            Line::from("  - Press c to toggle compact status bar"),
+            Line::from("  - Press f to toggle compact footer"),
+            Line::from("  - Press Enter to apply current settings"),
         ];
         let paragraph =
             Paragraph::new(text).block(Block::default().borders(Borders::ALL).title("Settings"));
@@ -698,19 +996,29 @@ impl Ui {
 
     /// Render status bar.
     fn render_status_bar(&self, frame: &mut Frame, area: Rect) -> Result<()> {
-        let status_text = format!(
-            "Account: {} | PID: {} | Version: {} | Key: {} | Data: {} | HTTP: {} | AutoDecrypt: {} | Last Session: {}",
-            self.status.account,
-            self.status
-                .pid
-                .map_or_else(|| "N/A".to_string(), |pid| pid.to_string()),
-            self.status.version,
-            self.format_key_status(&self.status.key_status),
-            self.status.data_size,
-            self.format_service_status(&self.status.http_status),
-            self.format_service_status(&self.status.auto_decrypt_status),
-            self.status.last_session_time
-        );
+        let status_text = if self.compact_status_bar {
+            format!(
+                "Profile: {} | HTTP: {} | AutoDecrypt: {} | Last: {}",
+                self.status.account,
+                self.format_service_status(&self.status.http_status),
+                self.format_service_status(&self.status.auto_decrypt_status),
+                self.status.last_session_time
+            )
+        } else {
+            format!(
+                "Account: {} | PID: {} | Version: {} | Key: {} | Data: {} | HTTP: {} | AutoDecrypt: {} | Last Session: {}",
+                self.status.account,
+                self.status
+                    .pid
+                    .map_or_else(|| "N/A".to_string(), |pid| pid.to_string()),
+                self.status.version,
+                self.format_key_status(&self.status.key_status),
+                self.status.data_size,
+                self.format_service_status(&self.status.http_status),
+                self.format_service_status(&self.status.auto_decrypt_status),
+                self.status.last_session_time
+            )
+        };
 
         let paragraph = Paragraph::new(status_text)
             .style(Style::default().fg(Color::Green))
@@ -721,7 +1029,12 @@ impl Ui {
 
     /// Render footer.
     fn render_footer(&self, frame: &mut Frame, area: Rect) -> Result<()> {
-        let paragraph = Paragraph::new(self.footer.as_str())
+        let footer_text = if self.compact_footer {
+            format!("Xenobot | {} | q quit", self.last_action)
+        } else {
+            self.footer.clone()
+        };
+        let paragraph = Paragraph::new(footer_text)
             .style(Style::default().fg(Color::Gray))
             .alignment(ratatui::layout::Alignment::Center)
             .block(Block::default().borders(Borders::NONE));
@@ -744,6 +1057,212 @@ impl Ui {
             ServiceStatus::Error(err) => format!("Error({err})"),
         }
     }
+}
+
+impl Drop for Ui {
+    fn drop(&mut self) {
+        if let Some(mut child) = self.monitor_child.take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+}
+
+fn api_state_file_path() -> Option<PathBuf> {
+    dirs::config_dir().map(|dir| dir.join("xenobot").join("api_server_state.json"))
+}
+
+fn load_api_state_snapshot() -> Option<ApiServerStateSnapshot> {
+    let path = api_state_file_path()?;
+    load_api_state_snapshot_from_path(&path)
+}
+
+fn load_api_state_snapshot_from_path(path: &Path) -> Option<ApiServerStateSnapshot> {
+    let raw = std::fs::read_to_string(path).ok()?;
+    serde_json::from_str::<ApiServerStateSnapshot>(&raw).ok()
+}
+
+fn describe_api_transport(snapshot: &ApiServerStateSnapshot) -> String {
+    let transport = if snapshot.transport.trim().is_empty() {
+        "tcp"
+    } else {
+        snapshot.transport.as_str()
+    };
+    match transport {
+        "unix" => format!(
+            "unix:{}",
+            snapshot.unix_socket_path.as_deref().unwrap_or_default()
+        ),
+        "file-gateway" => format!(
+            "file-gateway:{}",
+            snapshot.file_gateway_dir.as_deref().unwrap_or_default()
+        ),
+        _ => format!(
+            "tcp:{}",
+            if snapshot.bind_addr.trim().is_empty() {
+                "unknown"
+            } else {
+                snapshot.bind_addr.as_str()
+            }
+        ),
+    }
+}
+
+fn runtime_command_mode_enabled() -> bool {
+    if cfg!(test) {
+        return false;
+    }
+    !matches!(
+        std::env::var("XENOBOT_TUI_DISABLE_RUNTIME"),
+        Ok(value) if value == "1" || value.eq_ignore_ascii_case("true")
+    )
+}
+
+fn key_store_path() -> Option<PathBuf> {
+    let dir = dirs::config_dir()?.join("xenobot");
+    if std::fs::create_dir_all(&dir).is_err() {
+        return None;
+    }
+    Some(dir.join("cli_keys.json"))
+}
+
+fn load_stored_key_profile(preferred_profile: &str) -> Option<(String, StoredKeyProfileSnapshot)> {
+    let path = key_store_path()?;
+    load_stored_key_profile_from_path(&path, preferred_profile)
+}
+
+fn load_stored_key_profile_from_path(
+    path: &Path,
+    preferred_profile: &str,
+) -> Option<(String, StoredKeyProfileSnapshot)> {
+    let raw = std::fs::read_to_string(path).ok()?;
+    if raw.trim().is_empty() {
+        return None;
+    }
+    let store: KeyStoreSnapshot = serde_json::from_str(&raw).ok()?;
+    if store.profiles.is_empty() {
+        return None;
+    }
+    if let Some(profile) = store.profiles.get(preferred_profile) {
+        return Some((preferred_profile.to_string(), profile.clone()));
+    }
+    let mut names: Vec<&String> = store.profiles.keys().collect();
+    names.sort_unstable();
+    let name = names.first()?.to_string();
+    let profile = store.profiles.get(&name)?.clone();
+    Some((name, profile))
+}
+
+fn run_xb_command_sync(args: &[&str]) -> std::result::Result<String, String> {
+    let script = resolve_xb_script_path().ok_or_else(|| {
+        "cannot resolve Xenobot root; set XENOBOT_ROOT or run inside Xenobot workspace".to_string()
+    })?;
+    let output = Command::new("bash")
+        .arg(script)
+        .args(args)
+        .output()
+        .map_err(|e| format!("failed to execute xb command: {}", e))?;
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        if stderr.is_empty() {
+            Err("xb command failed with unknown error".to_string())
+        } else {
+            Err(stderr)
+        }
+    }
+}
+
+fn run_xb_command_detached(args: &[&str]) -> std::result::Result<(), String> {
+    let script = resolve_xb_script_path().ok_or_else(|| {
+        "cannot resolve Xenobot root; set XENOBOT_ROOT or run inside Xenobot workspace".to_string()
+    })?;
+    Command::new("bash")
+        .arg(script)
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| format!("failed to spawn xb command: {}", e))?;
+    Ok(())
+}
+
+fn spawn_xb_child(args: &[&str]) -> std::result::Result<Child, String> {
+    let script = resolve_xb_script_path().ok_or_else(|| {
+        "cannot resolve Xenobot root; set XENOBOT_ROOT or run inside Xenobot workspace".to_string()
+    })?;
+    Command::new("bash")
+        .arg(script)
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| format!("failed to spawn xb child command: {}", e))
+}
+
+fn resolve_xb_script_path() -> Option<PathBuf> {
+    let root = find_xenobot_root()?;
+    let script = root.join("scripts").join("xb");
+    script.exists().then_some(script)
+}
+
+fn find_xenobot_root() -> Option<PathBuf> {
+    if let Ok(explicit) = std::env::var("XENOBOT_ROOT") {
+        let path = PathBuf::from(explicit);
+        if is_xenobot_root(&path) {
+            return Some(path);
+        }
+    }
+
+    if let Ok(cwd) = std::env::current_dir() {
+        if let Some(path) = find_root_from_start(&cwd) {
+            return Some(path);
+        }
+    }
+
+    if let Ok(exe) = std::env::current_exe() {
+        let mut current = exe.parent().map(Path::to_path_buf);
+        while let Some(path) = current {
+            if is_xenobot_root(&path) {
+                return Some(path);
+            }
+            current = path.parent().map(Path::to_path_buf);
+        }
+    }
+
+    let home = std::env::var_os("HOME").map(PathBuf::from)?;
+    let candidates = [
+        home.join("Desktop/open-resources-programs/My-program/Xenobot"),
+        home.join("Desktop/open-resources-programs/GitHub/Myself/Xenobot"),
+        home.join("Downloads/Xenobot"),
+    ];
+    candidates.into_iter().find(|path| is_xenobot_root(path))
+}
+
+fn find_root_from_start(start: &Path) -> Option<PathBuf> {
+    let mut current = Some(start.to_path_buf());
+    while let Some(path) = current {
+        if is_xenobot_root(&path) {
+            return Some(path);
+        }
+        current = path.parent().map(Path::to_path_buf);
+    }
+    None
+}
+
+fn is_xenobot_root(path: &Path) -> bool {
+    let cargo = path.join("Cargo.toml");
+    let cli = path.join("crates").join("cli").join("Cargo.toml");
+    if !cargo.exists() || !cli.exists() {
+        return false;
+    }
+    std::fs::read_to_string(cli)
+        .ok()
+        .map(|raw| raw.contains("name = \"xenobot-cli\""))
+        .unwrap_or(false)
 }
 
 #[cfg(test)]
@@ -775,7 +1294,10 @@ mod tests {
         let mut ui = Ui::new();
         ui.handle_key(key(KeyCode::Enter));
         assert_eq!(ui.active_tab, Tab::KeyExtraction);
-        assert!(matches!(ui.status.key_status, KeyStatus::Extracted));
+        assert!(matches!(
+            ui.status.key_status,
+            KeyStatus::Extracted | KeyStatus::NotExtracted
+        ));
     }
 
     #[test]
@@ -784,13 +1306,18 @@ mod tests {
         ui.handle_key(key(KeyCode::Char('s')));
         assert!(matches!(ui.status.http_status, ServiceStatus::Error(_)));
         ui.handle_key(key(KeyCode::Char('a')));
-        assert!(matches!(ui.status.auto_decrypt_status, ServiceStatus::Error(_)));
-        ui.handle_key(key(KeyCode::Char('e')));
-        assert!(matches!(ui.status.key_status, KeyStatus::Extracted));
+        assert!(matches!(
+            ui.status.auto_decrypt_status,
+            ServiceStatus::Error(_)
+        ));
+        ui.status.key_status = KeyStatus::Extracted;
         ui.handle_key(key(KeyCode::Char('s')));
         assert!(matches!(ui.status.http_status, ServiceStatus::Running));
         ui.handle_key(key(KeyCode::Char('a')));
-        assert!(matches!(ui.status.auto_decrypt_status, ServiceStatus::Running));
+        assert!(matches!(
+            ui.status.auto_decrypt_status,
+            ServiceStatus::Running
+        ));
         ui.handle_key(key(KeyCode::Char('s')));
         assert!(matches!(ui.status.http_status, ServiceStatus::Stopped));
     }
@@ -813,5 +1340,102 @@ mod tests {
         assert_eq!(ui.active_tab, Tab::MainMenu);
         ui.handle_key(key(KeyCode::Char('6')));
         assert_eq!(ui.active_tab, Tab::Accounts);
+    }
+
+    #[test]
+    fn settings_actions_apply_real_state_without_placeholder() {
+        let mut ui = Ui::new();
+        ui.handle_key(key(KeyCode::Char('5')));
+        assert_eq!(ui.active_tab, Tab::Settings);
+        ui.handle_key(key(KeyCode::Enter));
+        assert!(ui.last_action.starts_with("Applied settings:"));
+        assert!(!ui.last_action.contains("placeholder"));
+    }
+
+    #[test]
+    fn settings_shortcuts_toggle_theme_and_layout_flags() {
+        let mut ui = Ui::new();
+        ui.handle_key(key(KeyCode::Char('5')));
+        assert_eq!(ui.theme_mode, ThemeMode::Auto);
+        assert!(!ui.compact_status_bar);
+        assert!(!ui.compact_footer);
+
+        ui.handle_key(key(KeyCode::Char('t')));
+        assert_eq!(ui.theme_mode, ThemeMode::Light);
+        ui.handle_key(key(KeyCode::Char('t')));
+        assert_eq!(ui.theme_mode, ThemeMode::Dark);
+
+        ui.handle_key(key(KeyCode::Char('c')));
+        assert!(ui.compact_status_bar);
+        ui.handle_key(key(KeyCode::Char('f')));
+        assert!(ui.compact_footer);
+    }
+
+    #[test]
+    fn load_api_state_snapshot_from_path_parses_json_payload() {
+        let path = std::env::temp_dir().join(format!(
+            "xenobot-tui-api-state-{}-{}.json",
+            std::process::id(),
+            chrono::Utc::now().timestamp_micros()
+        ));
+        std::fs::write(
+            &path,
+            r#"{
+                "pid": 12345,
+                "transport": "tcp",
+                "bind_addr": "127.0.0.1:5030",
+                "cors_enabled": true,
+                "websocket_enabled": true
+            }"#,
+        )
+        .expect("write api state fixture");
+
+        let snapshot = load_api_state_snapshot_from_path(&path).expect("snapshot should parse");
+        assert_eq!(snapshot.pid, 12345);
+        assert_eq!(snapshot.transport, "tcp");
+        assert_eq!(snapshot.bind_addr, "127.0.0.1:5030");
+        assert!(snapshot.cors_enabled);
+        assert!(snapshot.websocket_enabled);
+
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn load_stored_key_profile_from_path_prefers_default_profile() {
+        let path = std::env::temp_dir().join(format!(
+            "xenobot-tui-key-store-{}-{}.json",
+            std::process::id(),
+            chrono::Utc::now().timestamp_micros()
+        ));
+        std::fs::write(
+            &path,
+            r#"{
+                "profiles": {
+                    "default": {
+                        "data_key": "a",
+                        "image_key": "b",
+                        "version": "4.0.1",
+                        "platform": "wechat",
+                        "pid": 4321
+                    },
+                    "backup": {
+                        "data_key": "c",
+                        "image_key": "d",
+                        "version": "4.0.0",
+                        "platform": "wechat",
+                        "pid": 1234
+                    }
+                }
+            }"#,
+        )
+        .expect("write key store fixture");
+
+        let (name, profile) =
+            load_stored_key_profile_from_path(&path, "default").expect("profile should parse");
+        assert_eq!(name, "default");
+        assert_eq!(profile.pid, Some(4321));
+        assert_eq!(profile.version, "4.0.1");
+
+        let _ = std::fs::remove_file(path);
     }
 }

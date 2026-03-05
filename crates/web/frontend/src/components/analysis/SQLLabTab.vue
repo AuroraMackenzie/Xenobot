@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SchemaPanel, AIGenerateModal, AIHistoryModal, ResultTable } from './SQLLab'
-import type { AIHistory, SQLResult, TableSchema } from './SQLLab'
+import type { AIHistory, SQLResult } from './SQLLab'
 
 const { t } = useI18n()
 
@@ -28,6 +28,16 @@ const showHistoryModal = ref(false)
 
 // English engineering note.
 const aiHistory = ref<AIHistory[]>([])
+
+const resultViewKey = computed(() => {
+  if (isExecuting.value) return 'executing'
+  if (error.value) return `error:${error.value}`
+  if (result.value) {
+    const rowCount = result.value.rows?.length ?? 0
+    return `result:${rowCount}`
+  }
+  return 'idle'
+})
 
 // English engineering note.
 function loadHistory() {
@@ -133,37 +143,25 @@ async function executeFromHistory(record: AIHistory) {
   await executeSQL()
 }
 
-// English engineering note.
-const schema = ref<TableSchema[]>([])
-
-// English engineering note.
-function onSchemaLoaded() {
-  if (schemaPanelRef.value) {
-    schema.value = schemaPanelRef.value.schema
-  }
-}
-
 onMounted(() => {
   loadHistory()
-  // English engineering note.
-  setTimeout(onSchemaLoaded, 500)
 })
 </script>
 
 <template>
-  <div class="main-content flex h-full">
+  <div class="main-content xeno-sql-shell flex h-full">
     <!-- English UI note -->
     <SchemaPanel ref="schemaPanelRef" :session-id="sessionId" @insert-column="handleInsertColumn" />
 
     <!-- English UI note -->
-    <div class="flex flex-1 flex-col overflow-hidden">
+    <div class="xeno-sql-main flex flex-1 flex-col overflow-hidden">
       <!-- English UI note -->
-      <div class="flex flex-col border-b border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-950">
+      <div class="xeno-sql-editor-wrap flex flex-col p-4">
         <div class="mx-auto w-full max-w-3xl">
           <!-- English UI note -->
           <textarea
             v-model="sql"
-            class="h-32 w-full resize-none rounded-lg border border-gray-300 bg-white p-3 font-mono text-sm text-gray-800 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
+            class="xeno-sql-editor h-32 w-full resize-none rounded-lg p-3 font-mono text-sm"
             :placeholder="t('ai.sqlLab.editor.placeholder')"
             spellcheck="false"
             @keydown="handleKeyDown"
@@ -194,14 +192,17 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- English UI note -->
-      <ResultTable ref="resultTableRef" :result="result" :error="error" :sql="sql" :prompt="lastPrompt" />
+      <Transition name="xeno-sql-result" mode="out-in">
+        <div :key="resultViewKey" class="xeno-sql-result-host min-h-0 flex-1">
+          <ResultTable ref="resultTableRef" :result="result" :error="error" :sql="sql" :prompt="lastPrompt" />
+        </div>
+      </Transition>
     </div>
 
     <!-- English UI note -->
     <AIGenerateModal
       v-model:open="showAIModal"
-      :schema="schemaPanelRef?.schema || []"
+      :session-id="sessionId"
       @generated="handleAIGenerated"
       @use-s-q-l="handleUseSQL"
       @run-s-q-l="handleRunSQL"
@@ -216,3 +217,72 @@ onMounted(() => {
     />
   </div>
 </template>
+
+<style scoped>
+.xeno-sql-shell {
+  background: linear-gradient(180deg, transparent, var(--xeno-surface-muted));
+}
+
+.xeno-sql-main {
+  border-left: 1px solid var(--xeno-border-soft);
+}
+
+.xeno-sql-editor-wrap {
+  border-bottom: 1px solid var(--xeno-border-soft);
+  background: var(--xeno-surface-muted);
+  backdrop-filter: blur(14px) saturate(128%);
+}
+
+.xeno-sql-editor {
+  border: 1px solid var(--xeno-border-strong);
+  background: var(--xeno-surface-emphasis);
+  color: var(--xeno-text-main);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.xeno-sql-editor::placeholder {
+  color: var(--xeno-text-secondary);
+  opacity: 0.85;
+}
+
+.xeno-sql-editor:focus {
+  border-color: var(--xeno-active-border);
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--xeno-focus-ring),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.xeno-sql-result-host {
+  min-height: 0;
+}
+
+.xeno-sql-result-enter-active,
+.xeno-sql-result-leave-active {
+  transition:
+    opacity 0.26s cubic-bezier(0.22, 0.92, 0.3, 1),
+    transform 0.26s cubic-bezier(0.22, 0.92, 0.3, 1),
+    filter 0.26s cubic-bezier(0.22, 0.92, 0.3, 1);
+}
+
+.xeno-sql-result-enter-from,
+.xeno-sql-result-leave-to {
+  opacity: 0;
+  transform: translateY(10px) scale(0.994);
+  filter: blur(6px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xeno-sql-result-enter-active,
+  .xeno-sql-result-leave-active {
+    transition-duration: 0.01ms !important;
+  }
+
+  .xeno-sql-result-enter-from,
+  .xeno-sql-result-leave-to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+</style>

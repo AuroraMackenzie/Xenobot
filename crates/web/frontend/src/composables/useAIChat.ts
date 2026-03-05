@@ -14,7 +14,7 @@ export interface ToolCallRecord {
   displayName: string
   status: 'running' | 'done' | 'error'
   timestamp: number
-  /** English note.
+  // Serialized tool invocation parameters for replay and debugging.
   params?: Record<string, unknown>
 }
 
@@ -44,9 +44,9 @@ export interface ChatMessage {
     toolsUsed: string[]
     toolRounds: number
   }
-  /** English note.
+  // Ordered tool execution records attached to this message.
   toolCalls?: ToolCallRecord[]
-  /** English note.
+  // Rich content blocks rendered in chat explorer (text/think/tool).
   contentBlocks?: ContentBlock[]
   isStreaming?: boolean
 }
@@ -79,7 +79,7 @@ export interface TokenUsage {
 // English engineering note.
 // English engineering note.
 
-/** English note.
+// Session owner profile passed to agent context for better parameter inference.
 interface OwnerInfo {
   platformId: string
   displayName: string
@@ -91,22 +91,133 @@ export function useAIChat(
   chatType: 'group' | 'private' = 'group',
   locale: string = 'zh-CN'
 ) {
-  const AGENT_TOOL_ALIAS_TO_CANONICAL: Record<string, string> = {
-    get_member_stats: 'member_stats',
-    get_time_stats: 'time_stats',
-    get_group_members: 'member_list',
-    get_member_name_history: 'nickname_history',
-    get_conversation_between: 'conversation_between',
-    get_message_context: 'message_context',
-    get_session_summaries: 'get_session_summary',
-    semantic_search_messages: 'semantic_search',
+  const AGENT_TOOL_ALIAS_PAIRS: Array<[string, string]> = [
+    ['searchmessages', 'search_messages'],
+    ['searchMessages', 'search_messages'],
+    ['recent_messages', 'get_recent_messages'],
+    ['getrecentmessages', 'get_recent_messages'],
+    ['recentmessages', 'get_recent_messages'],
+    ['recentMessages', 'get_recent_messages'],
+    ['get_member_stats', 'member_stats'],
+    ['memberstats', 'member_stats'],
+    ['getmemberstats', 'member_stats'],
+    ['getMemberStats', 'member_stats'],
+    ['get_time_stats', 'time_stats'],
+    ['timestats', 'time_stats'],
+    ['gettimestats', 'time_stats'],
+    ['getTimeStats', 'time_stats'],
+    ['get_member_list', 'member_list'],
+    ['get_group_members', 'member_list'],
+    ['memberlist', 'member_list'],
+    ['getmemberlist', 'member_list'],
+    ['getgroupmembers', 'member_list'],
+    ['getMemberList', 'member_list'],
+    ['getGroupMembers', 'member_list'],
+    ['member_name_history', 'nickname_history'],
+    ['get_member_name_history', 'nickname_history'],
+    ['nicknamehistory', 'nickname_history'],
+    ['membernamehistory', 'nickname_history'],
+    ['getmembernamehistory', 'nickname_history'],
+    ['memberNameHistory', 'nickname_history'],
+    ['getMemberNameHistory', 'nickname_history'],
+    ['get_conversation_between', 'conversation_between'],
+    ['conversationbetween', 'conversation_between'],
+    ['getconversationbetween', 'conversation_between'],
+    ['getConversationBetween', 'conversation_between'],
+    ['get_message_context', 'message_context'],
+    ['messagecontext', 'message_context'],
+    ['getmessagecontext', 'message_context'],
+    ['getMessageContext', 'message_context'],
+    ['searchsessions', 'search_sessions'],
+    ['searchSessions', 'search_sessions'],
+    ['session_messages', 'get_session_messages'],
+    ['getsessionmessages', 'get_session_messages'],
+    ['sessionmessages', 'get_session_messages'],
+    ['sessionMessages', 'get_session_messages'],
+    ['getSessionMessages', 'get_session_messages'],
+    ['session_summary', 'get_session_summary'],
+    ['get_session_summaries', 'get_session_summary'],
+    ['sessionsummary', 'get_session_summary'],
+    ['getsessionsummary', 'get_session_summary'],
+    ['getsessionsummaries', 'get_session_summary'],
+    ['sessionSummary', 'get_session_summary'],
+    ['getSessionSummary', 'get_session_summary'],
+    ['getSessionSummaries', 'get_session_summary'],
+    ['semantic_search_messages', 'semantic_search'],
+    ['semanticsearch', 'semantic_search'],
+    ['semanticsearchmessages', 'semantic_search'],
+    ['semanticSearchMessages', 'semantic_search'],
+  ]
+
+  function normalizeAgentToolAliasInput(raw: string): string {
+    const trimmed = raw.trim()
+    if (!trimmed) return ''
+    let out = ''
+    let prevWasSep = false
+    for (const ch of trimmed) {
+      if (ch >= 'A' && ch <= 'Z') {
+        if (out && !prevWasSep) out += '_'
+        out += ch.toLowerCase()
+        prevWasSep = false
+        continue
+      }
+      if (ch === '-' || ch === ' ' || ch === '/' || ch === '_') {
+        if (out && !prevWasSep) out += '_'
+        prevWasSep = true
+        continue
+      }
+      out += ch.toLowerCase()
+      prevWasSep = false
+    }
+    return out
+  }
+
+  function registerAlias(map: Record<string, string>, alias: string, canonical: string) {
+    const normalizedAlias = normalizeAgentToolAliasInput(alias)
+    const normalizedCanonical = normalizeAgentToolAliasInput(canonical)
+    if (!normalizedAlias || !normalizedCanonical) return
+    map[normalizedAlias] = normalizedCanonical
+  }
+
+  function buildFallbackAliasMap(): Record<string, string> {
+    const out: Record<string, string> = {}
+    for (const [alias, canonical] of AGENT_TOOL_ALIAS_PAIRS) {
+      registerAlias(out, alias, canonical)
+    }
+    return out
+  }
+
+  const agentToolAliasToCanonical = ref<Record<string, string>>(buildFallbackAliasMap())
+
+  async function refreshAgentToolAliasMap() {
+    if (!window.agentApi?.listTools) return
+    try {
+      const tools = await window.agentApi.listTools()
+      if (!Array.isArray(tools) || tools.length === 0) return
+      const nextMap = buildFallbackAliasMap()
+      for (const item of tools) {
+        const canonical =
+          typeof item?.name === 'string' && item.name.trim().length > 0 ? item.name : ''
+        if (!canonical) continue
+        registerAlias(nextMap, canonical, canonical)
+        const aliases = Array.isArray(item?.aliases) ? item.aliases : []
+        for (const alias of aliases) {
+          if (typeof alias === 'string' && alias.trim().length > 0) {
+            registerAlias(nextMap, alias, canonical)
+          }
+        }
+      }
+      agentToolAliasToCanonical.value = nextMap
+    } catch (error) {
+      console.warn('[AI] Failed to refresh agent tool alias map:', error)
+    }
   }
 
   function normalizeAgentToolName(rawName?: string): string {
     if (!rawName) return ''
-    const normalized = rawName.trim()
+    const normalized = normalizeAgentToolAliasInput(rawName)
     if (!normalized) return ''
-    return AGENT_TOOL_ALIAS_TO_CANONICAL[normalized] || normalized
+    return agentToolAliasToCanonical.value[normalized] || normalized
   }
 
   // English engineering note.
@@ -167,6 +278,7 @@ export function useAIChat(
 
   // English engineering note.
   initOwnerInfo()
+  void refreshAgentToolAliasMap()
 
   // English engineering note.
   let isAborted = false
@@ -494,9 +606,10 @@ export function useAIChat(
               }
               if (!hasStreamError) {
                 hasStreamError = true
-                const errorMessage = chunk.error || '未知错误'
+                const errorCode = chunk.errorCode || 'error.agent_runtime'
+                const errorMessage = chunk.errorMessage || chunk.error || '未知错误'
                 // English engineering note.
-                appendTextToBlocks(`\n\n❌ 处理失败：${errorMessage}`)
+                appendTextToBlocks(`\n\n❌ 处理失败（${errorCode}）：${errorMessage}`)
                 updateAIMessage({ isStreaming: false })
               }
               break
@@ -543,8 +656,13 @@ export function useAIChat(
         console.log('[AI] 对话已保存')
       } else {
         // English engineering note.
-        const detail = (result as { error?: string; errorMessage?: string }).errorMessage || result.error || '未知错误'
-        const errorText = `❌ 处理失败：${detail}`
+        const detail =
+          (result as { error?: string; errorMessage?: string }).errorMessage ||
+          result.error ||
+          '未知错误'
+        const errorCode =
+          (result as { error?: string; errorMessage?: string }).error || 'error.agent_runtime'
+        const errorText = `❌ 处理失败（${errorCode}）：${detail}`
         if (!hasStreamError) {
           // English engineering note.
           appendTextToBlocks(`\n\n${errorText}`)

@@ -26,6 +26,8 @@ sqlx = { workspace = true }
 chrono = "0.4"
 dirs = "5.0"
 regex = "1.10"
+base64 = "0.22"
+hex = "0.4"
 # Legacy rusqlite/r2d2 stack was replaced by SQLx pool access.
 # rusqlite = { workspace = true }
 # r2d2 = "0.8"

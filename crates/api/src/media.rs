@@ -6,9 +6,10 @@ use axum::{
     extract::{Path, Query},
     http::{header, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
+use base64::Engine as _;
 use serde::Deserialize;
 use sqlx::Row;
 use std::path::{Path as FsPath, PathBuf};
@@ -21,6 +22,8 @@ pub fn router() -> Router {
         .route("/resolve", get(resolve_media_path))
         .route("/file", get(stream_media_file))
         .route("/messages/:message_id", get(stream_message_media))
+        .route("/decrypt/dat", post(decrypt_dat_image))
+        .route("/transcode/audio/mp3", post(transcode_audio_mp3))
 }
 
 #[derive(Debug, Deserialize)]
@@ -34,6 +37,35 @@ struct MediaPathRequest {
 #[serde(rename_all = "camelCase")]
 struct MessageMediaRequest {
     download: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BinaryMediaRequest {
+    path: Option<String>,
+    payload_base64: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DatDecryptRequest {
+    #[serde(flatten)]
+    source: BinaryMediaRequest,
+    xor_key_hex: Option<String>,
+    aes_key_hex: Option<String>,
+    aes_iv_hex: Option<String>,
+    auto_detect_xor: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AudioTranscodeRequest {
+    #[serde(flatten)]
+    source: BinaryMediaRequest,
+    input_format: Option<String>,
+    bitrate_kbps: Option<u32>,
+    sample_rate_hz: Option<u32>,
+    channels: Option<u8>,
 }
 
 async fn resolve_media_path(
@@ -105,6 +137,103 @@ async fn stream_message_media(
 
     let safe_path = resolve_allowed_path(path.to_string_lossy().as_ref())?;
     media_response_from_path(safe_path, req.download.unwrap_or(false)).await
+}
+
+async fn decrypt_dat_image(
+    Json(req): Json<DatDecryptRequest>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    #[cfg(feature = "wechat")]
+    {
+        let payload = load_binary_media_payload(&req.source).await?;
+        let params = xenobot_wechat::media::DatImageDecryptParams {
+            xor_key: decode_hex_optional(req.xor_key_hex.as_deref(), "xorKeyHex")?,
+            aes_key: decode_hex_optional(req.aes_key_hex.as_deref(), "aesKeyHex")?,
+            aes_iv: decode_hex_optional(req.aes_iv_hex.as_deref(), "aesIvHex")?,
+            auto_detect_xor: req.auto_detect_xor.unwrap_or(true),
+        };
+
+        let (decrypted, (format, xor_used)) =
+            xenobot_wechat::media::decrypt_dat_image_bytes(&payload, &params)?;
+        let bytes_base64 = base64::engine::general_purpose::STANDARD.encode(&decrypted);
+        let xor_key_used_hex = xor_used.map(hex::encode);
+
+        return Ok(Json(serde_json::json!({
+            "ok": true,
+            "format": format.extension(),
+            "contentType": wechat_image_content_type(format),
+            "bytes": bytes_base64,
+            "byteLength": decrypted.len(),
+            "xorKeyUsedHex": xor_key_used_hex,
+        })));
+    }
+
+    #[cfg(not(feature = "wechat"))]
+    {
+        let _ = req;
+        Err(ApiError::NotImplemented(
+            "media decrypt endpoint requires api feature 'wechat'".to_string(),
+        ))
+    }
+}
+
+async fn transcode_audio_mp3(
+    Json(req): Json<AudioTranscodeRequest>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    #[cfg(feature = "wechat")]
+    {
+        if !xenobot_wechat::audio::has_ffmpeg(None) {
+            return Err(ApiError::NotImplemented(
+                "ffmpeg is required for audio transcoding but is not available in PATH".to_string(),
+            ));
+        }
+
+        let input = load_binary_media_payload(&req.source).await?;
+        let input_format = req
+            .input_format
+            .as_deref()
+            .map(normalize_audio_format)
+            .or_else(|| {
+                req.source
+                    .path
+                    .as_deref()
+                    .and_then(infer_audio_format_from_path)
+                    .map(normalize_audio_format)
+            })
+            .unwrap_or("silk");
+
+        let options = xenobot_wechat::audio::AudioTranscodeOptions {
+            bitrate_kbps: req.bitrate_kbps.unwrap_or(128),
+            sample_rate_hz: req.sample_rate_hz.unwrap_or(24_000),
+            channels: req.channels.unwrap_or(1),
+            overwrite: true,
+            ffmpeg_binary: None,
+        };
+
+        let mp3 =
+            xenobot_wechat::audio::transcode_audio_bytes_to_mp3(&input, input_format, &options)?;
+        let bytes_base64 = base64::engine::general_purpose::STANDARD.encode(&mp3);
+
+        return Ok(Json(serde_json::json!({
+            "ok": true,
+            "inputFormat": input_format,
+            "contentType": "audio/mpeg",
+            "bytes": bytes_base64,
+            "byteLength": mp3.len(),
+            "options": {
+                "bitrateKbps": options.bitrate_kbps,
+                "sampleRateHz": options.sample_rate_hz,
+                "channels": options.channels
+            }
+        })));
+    }
+
+    #[cfg(not(feature = "wechat"))]
+    {
+        let _ = req;
+        Err(ApiError::NotImplemented(
+            "audio transcode endpoint requires api feature 'wechat'".to_string(),
+        ))
+    }
 }
 
 async fn media_response_from_path(path: PathBuf, as_download: bool) -> Result<Response, ApiError> {
@@ -307,6 +436,105 @@ fn sanitize_filename(input: &str) -> String {
         .collect::<String>()
 }
 
+async fn load_binary_media_payload(source: &BinaryMediaRequest) -> Result<Vec<u8>, ApiError> {
+    match (source.path.as_deref(), source.payload_base64.as_deref()) {
+        (Some(_), Some(_)) => Err(ApiError::InvalidRequest(
+            "provide either path or payloadBase64, not both".to_string(),
+        )),
+        (None, None) => Err(ApiError::InvalidRequest(
+            "either path or payloadBase64 must be provided".to_string(),
+        )),
+        (Some(path), None) => {
+            let safe_path = resolve_allowed_path(path)?;
+            let bytes = tokio::fs::read(safe_path).await?;
+            if bytes.is_empty() {
+                return Err(ApiError::InvalidRequest(
+                    "media payload is empty".to_string(),
+                ));
+            }
+            Ok(bytes)
+        }
+        (None, Some(payload_base64)) => decode_base64_payload(payload_base64),
+    }
+}
+
+fn decode_base64_payload(raw: &str) -> Result<Vec<u8>, ApiError> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err(ApiError::InvalidRequest(
+            "payloadBase64 cannot be empty".to_string(),
+        ));
+    }
+
+    let decoded = base64::engine::general_purpose::STANDARD
+        .decode(trimmed)
+        .map_err(|e| ApiError::InvalidRequest(format!("invalid payloadBase64: {}", e)))?;
+    if decoded.is_empty() {
+        return Err(ApiError::InvalidRequest(
+            "decoded payload is empty".to_string(),
+        ));
+    }
+    Ok(decoded)
+}
+
+fn decode_hex_optional(value: Option<&str>, field: &str) -> Result<Option<Vec<u8>>, ApiError> {
+    let Some(raw) = value else {
+        return Ok(None);
+    };
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err(ApiError::InvalidRequest(format!("{field} cannot be empty")));
+    }
+
+    let decoded = hex::decode(trimmed)
+        .map_err(|e| ApiError::InvalidRequest(format!("invalid {field} hex string: {e}")))?;
+    if decoded.is_empty() {
+        return Err(ApiError::InvalidRequest(format!(
+            "{field} cannot decode to empty bytes"
+        )));
+    }
+    Ok(Some(decoded))
+}
+
+fn infer_audio_format_from_path(path: &str) -> Option<&str> {
+    let ext = FsPath::new(path)
+        .extension()?
+        .to_str()?
+        .to_ascii_lowercase();
+    match ext.as_str() {
+        "silk" => Some("silk"),
+        "wav" => Some("wav"),
+        "ogg" => Some("ogg"),
+        "mp3" => Some("mp3"),
+        "m4a" | "mp4" => Some("m4a"),
+        "aac" => Some("aac"),
+        _ => None,
+    }
+}
+
+fn normalize_audio_format(input: &str) -> &str {
+    match input.trim().to_ascii_lowercase().as_str() {
+        "silk" => "silk",
+        "wav" => "wav",
+        "ogg" => "ogg",
+        "mp3" => "mp3",
+        "m4a" | "mp4" => "m4a",
+        "aac" => "aac",
+        _ => "silk",
+    }
+}
+
+#[cfg(feature = "wechat")]
+fn wechat_image_content_type(format: xenobot_wechat::media::ImageFormat) -> &'static str {
+    match format {
+        xenobot_wechat::media::ImageFormat::Jpeg => "image/jpeg",
+        xenobot_wechat::media::ImageFormat::Png => "image/png",
+        xenobot_wechat::media::ImageFormat::Gif => "image/gif",
+        xenobot_wechat::media::ImageFormat::Webp => "image/webp",
+        xenobot_wechat::media::ImageFormat::Bmp => "image/bmp",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -321,5 +549,17 @@ mod tests {
     #[test]
     fn test_guess_content_type_image() {
         assert_eq!(guess_content_type(FsPath::new("/tmp/x.png")), "image/png");
+    }
+
+    #[test]
+    fn test_decode_hex_optional_rejects_empty() {
+        let err = decode_hex_optional(Some(""), "xorKeyHex").expect_err("empty should fail");
+        assert!(matches!(err, ApiError::InvalidRequest(_)));
+    }
+
+    #[test]
+    fn test_infer_audio_format_from_path_silk() {
+        assert_eq!(infer_audio_format_from_path("/tmp/a.silk"), Some("silk"));
+        assert_eq!(infer_audio_format_from_path("/tmp/a.unknown"), None);
     }
 }

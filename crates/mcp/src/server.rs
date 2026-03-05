@@ -174,9 +174,85 @@ impl McpServer {
         Ok(())
     }
 
+    /// Register built-in MCP resources for baseline client integration.
+    async fn register_builtin_resources(&self) -> Result<()> {
+        let server_info_uri = "xenobot://server/info".to_string();
+        let capabilities_uri = "xenobot://server/capabilities".to_string();
+        let integrations_uri = "xenobot://server/integrations".to_string();
+
+        let server_info_text = serde_json::json!({
+            "name": self.config.name,
+            "version": self.config.version,
+            "bindAddress": self.config.bind_address,
+            "port": self.config.port,
+        })
+        .to_string();
+        let capabilities_text = serde_json::json!({
+            "transport": {
+                "sse": self.config.enable_sse,
+                "streamableHttp": self.config.enable_streamable_http,
+            },
+            "tools": {
+                "firstBatch": [
+                    "query_contacts",
+                    "query_groups",
+                    "recent_sessions",
+                    "chat_records",
+                    "get_current_time"
+                ]
+            },
+            "resources": {
+                "list": true,
+                "read": true,
+                "subscribe": true
+            }
+        })
+        .to_string();
+        let integrations_text = serde_json::json!({
+            "targets": ["claude-desktop", "chatwise", "opencode"],
+            "hint": "use /integrations/{target} to fetch a transport preset"
+        })
+        .to_string();
+
+        let mut resources = self.resources.write().await;
+        resources.insert(
+            server_info_uri.clone(),
+            Resource {
+                uri: server_info_uri,
+                content: vec![Content::Text {
+                    text: server_info_text,
+                }],
+                mime_type: Some("application/json".to_string()),
+            },
+        );
+        resources.insert(
+            capabilities_uri.clone(),
+            Resource {
+                uri: capabilities_uri,
+                content: vec![Content::Text {
+                    text: capabilities_text,
+                }],
+                mime_type: Some("application/json".to_string()),
+            },
+        );
+        resources.insert(
+            integrations_uri.clone(),
+            Resource {
+                uri: integrations_uri,
+                content: vec![Content::Text {
+                    text: integrations_text,
+                }],
+                mime_type: Some("application/json".to_string()),
+            },
+        );
+
+        Ok(())
+    }
+
     /// Start the MCP server.
     pub async fn start(self) -> Result<()> {
         self.register_builtin_tools().await?;
+        self.register_builtin_resources().await?;
         let app = self.create_router();
 
         let addr = format!("{}:{}", self.config.bind_address, self.config.port);
@@ -211,6 +287,8 @@ impl McpServer {
             .route("/tools/:tool_name", post(handle_http_tool_call))
             // HTTP endpoint for listing available tools
             .route("/tools", get(handle_http_tools_list))
+            // HTTP endpoint for listing resources
+            .route("/resources", get(handle_http_resources_list))
             // HTTP endpoint for resources
             .route("/resources/*uri", get(handle_http_resource))
             // Integration catalog for MCP desktop clients
@@ -1021,11 +1099,13 @@ async fn handle_http_tools_list(State(server): State<Arc<McpServer>>) -> impl In
     let tools = server.tools.read().await;
     let mut names: Vec<String> = tools.keys().cloned().collect();
     names.sort();
+    let tool_specs = build_tool_specs(&names);
     (
         StatusCode::OK,
         Json(serde_json::json!({
             "count": names.len(),
             "tools": names,
+            "toolSpecs": tool_specs,
         })),
     )
         .into_response()
@@ -1131,24 +1211,161 @@ fn json_rpc_err(
     })
 }
 
+fn extract_non_empty_string_from_keys(value: &serde_json::Value, keys: &[&str]) -> Option<String> {
+    for key in keys {
+        if let Some(text) = value.get(*key).and_then(|v| v.as_str()) {
+            let trimmed = text.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.to_string());
+            }
+        }
+    }
+    None
+}
+
 fn parse_streamable_tool_name(params: &serde_json::Value) -> Option<String> {
+    if let Some(name) =
+        extract_non_empty_string_from_keys(params, &["name", "tool", "tool_name", "toolName"])
+    {
+        return Some(name);
+    }
+
     params
-        .get("name")
-        .and_then(|v| v.as_str())
-        .or_else(|| params.get("tool").and_then(|v| v.as_str()))
-        .or_else(|| params.get("tool_name").and_then(|v| v.as_str()))
-        .or_else(|| params.get("toolName").and_then(|v| v.as_str()))
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(ToString::to_string)
+        .get("tool")
+        .filter(|value| value.is_object())
+        .and_then(|tool| {
+            extract_non_empty_string_from_keys(tool, &["name", "tool", "tool_name", "toolName"])
+        })
 }
 
 fn parse_streamable_tool_args(params: &serde_json::Value) -> serde_json::Value {
-    params
+    if let Some(direct_args) = params
         .get("arguments")
         .cloned()
         .or_else(|| params.get("args").cloned())
-        .unwrap_or_else(|| serde_json::json!({}))
+    {
+        return direct_args;
+    }
+
+    if let Some(tool_obj) = params.get("tool").filter(|value| value.is_object()) {
+        if let Some(nested_args) = tool_obj
+            .get("arguments")
+            .cloned()
+            .or_else(|| tool_obj.get("args").cloned())
+            .or_else(|| tool_obj.get("input").cloned())
+        {
+            return nested_args;
+        }
+    }
+
+    serde_json::json!({})
+}
+
+fn parse_streamable_resource_uri(params: &serde_json::Value) -> Option<String> {
+    if let Some(uri) = extract_non_empty_string_from_keys(
+        params,
+        &["uri", "resource", "path", "resource_uri", "resourceUri"],
+    ) {
+        return Some(uri);
+    }
+
+    params
+        .get("resource")
+        .filter(|value| value.is_object())
+        .and_then(|resource| {
+            extract_non_empty_string_from_keys(
+                resource,
+                &["uri", "path", "resource_uri", "resourceUri"],
+            )
+        })
+}
+
+fn tool_spec_for_name(name: &str) -> serde_json::Value {
+    let (description, input_schema) = match name {
+        "current_time" | "get_current_time" => (
+            "Get current UTC time.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+            }),
+        ),
+        "query_contacts" | "list_contacts" => (
+            "Query contacts with optional session scope and paging.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "sessionId": {"type": "integer"},
+                    "session_id": {"type": "integer"},
+                    "limit": {"type": "integer"},
+                    "offset": {"type": "integer"}
+                },
+                "additionalProperties": true
+            }),
+        ),
+        "query_groups" => (
+            "List available group chats.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer"},
+                    "offset": {"type": "integer"}
+                },
+                "additionalProperties": true
+            }),
+        ),
+        "recent_sessions" | "query_chats" | "list_sessions" => (
+            "List recent sessions.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer"},
+                    "offset": {"type": "integer"}
+                },
+                "additionalProperties": true
+            }),
+        ),
+        "chat_records" | "chat_history" | "recent_messages" | "search_messages" => (
+            "Query chat messages with optional keyword and time range filters.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "sessionId": {"type": "integer"},
+                    "session_id": {"type": "integer"},
+                    "keyword": {"type": "string"},
+                    "query": {"type": "string"},
+                    "startTs": {"type": "integer"},
+                    "start_ts": {"type": "integer"},
+                    "endTs": {"type": "integer"},
+                    "end_ts": {"type": "integer"},
+                    "limit": {"type": "integer"},
+                    "offset": {"type": "integer"}
+                },
+                "anyOf": [
+                    {"required": ["sessionId"]},
+                    {"required": ["session_id"]}
+                ],
+                "additionalProperties": true
+            }),
+        ),
+        _ => (
+            "Xenobot MCP tool.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {},
+                "additionalProperties": true
+            }),
+        ),
+    };
+    serde_json::json!({
+        "name": name,
+        "description": description,
+        "inputSchema": input_schema
+    })
+}
+
+fn build_tool_specs(names: &[String]) -> Vec<serde_json::Value> {
+    names.iter().map(|name| tool_spec_for_name(name)).collect()
 }
 
 async fn handle_streamable_http_rpc(
@@ -1212,15 +1429,7 @@ async fn handle_streamable_http_rpc(
             let tools = server.tools.read().await;
             let mut names: Vec<String> = tools.keys().cloned().collect();
             names.sort();
-            let tool_specs: Vec<serde_json::Value> = names
-                .iter()
-                .map(|name| {
-                    serde_json::json!({
-                        "name": name,
-                        "description": format!("Xenobot MCP tool: {name}"),
-                    })
-                })
-                .collect();
+            let tool_specs = build_tool_specs(&names);
             let result = serde_json::json!({
                 "count": names.len(),
                 "tools": tool_specs
@@ -1295,6 +1504,71 @@ async fn handle_streamable_http_rpc(
                     .into_response(),
             }
         }
+        "resources/list" | "resource/list" => {
+            let resources = server.resources.read().await;
+            let mut uris: Vec<String> = resources.keys().cloned().collect();
+            uris.sort();
+            let resource_specs: Vec<serde_json::Value> = uris
+                .iter()
+                .map(|uri| {
+                    let resource = resources.get(uri).expect("resource key must exist");
+                    serde_json::json!({
+                        "uri": resource.uri,
+                        "name": resource.uri.rsplit('/').next().unwrap_or("resource"),
+                        "description": format!("Xenobot MCP resource: {}", resource.uri),
+                        "mimeType": resource.mime_type
+                    })
+                })
+                .collect();
+            let result = serde_json::json!({
+                "count": resource_specs.len(),
+                "resources": resource_specs
+            });
+            (StatusCode::OK, Json(json_rpc_ok(id, result))).into_response()
+        }
+        "resources/read" | "resource/read" => {
+            let params = payload
+                .get("params")
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!({}));
+            let Some(uri) = parse_streamable_resource_uri(&params) else {
+                return (
+                    StatusCode::OK,
+                    Json(json_rpc_err(
+                        id,
+                        -32602,
+                        "invalid_params",
+                        Some(serde_json::json!({
+                            "reason": "missing resource URI in params.uri",
+                        })),
+                    )),
+                )
+                    .into_response();
+            };
+
+            let resources = server.resources.read().await;
+            let Some(resource) = resources.get(&uri) else {
+                return (
+                    StatusCode::OK,
+                    Json(json_rpc_err(
+                        id,
+                        -32003,
+                        "resource_not_found",
+                        Some(serde_json::json!({
+                            "uri": uri,
+                        })),
+                    )),
+                )
+                    .into_response();
+            };
+
+            let result = serde_json::json!({
+                "uri": resource.uri,
+                "mimeType": resource.mime_type,
+                "content": resource.content,
+            });
+            (StatusCode::OK, Json(json_rpc_ok(id, result))).into_response()
+        }
         _ => (
             StatusCode::OK,
             Json(json_rpc_err(
@@ -1350,6 +1624,33 @@ async fn handle_http_tool_call(
         )
             .into_response(),
     }
+}
+
+/// HTTP resource list handler.
+async fn handle_http_resources_list(State(server): State<Arc<McpServer>>) -> impl IntoResponse {
+    let resources = server.resources.read().await;
+    let mut uris: Vec<String> = resources.keys().cloned().collect();
+    uris.sort();
+    let items: Vec<serde_json::Value> = uris
+        .iter()
+        .filter_map(|uri| resources.get(uri))
+        .map(|resource| {
+            serde_json::json!({
+                "uri": resource.uri,
+                "mimeType": resource.mime_type,
+            })
+        })
+        .collect();
+
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "success": true,
+            "count": items.len(),
+            "resources": items,
+        })),
+    )
+        .into_response()
 }
 
 /// HTTP resource handler.
@@ -1520,6 +1821,27 @@ mod tests {
         (status, json)
     }
 
+    fn build_ws_request(with_upgrade_headers: bool) -> Request<Body> {
+        let connect_info = ConnectInfo(SocketAddr::from(([127, 0, 0, 1], 45_678)));
+        let mut builder = Request::builder()
+            .method(Method::GET)
+            .uri("/ws")
+            .extension(connect_info);
+        if with_upgrade_headers {
+            builder = builder
+                .header(axum::http::header::CONNECTION, "Upgrade")
+                .header(axum::http::header::UPGRADE, "websocket")
+                .header(axum::http::header::SEC_WEBSOCKET_VERSION, "13")
+                .header(
+                    axum::http::header::SEC_WEBSOCKET_KEY,
+                    "dGhlIHNhbXBsZSBub25jZQ==",
+                );
+        }
+        builder
+            .body(Body::empty())
+            .expect("build websocket request")
+    }
+
     #[tokio::test]
     async fn test_server_creation() {
         let config = McpServerConfig::default();
@@ -1618,6 +1940,47 @@ mod tests {
             .iter()
             .filter_map(|v| v.as_str())
             .collect::<std::collections::HashSet<_>>();
+        let specs = tools_json["toolSpecs"]
+            .as_array()
+            .expect("toolSpecs should be array");
+        assert!(
+            specs.iter().all(|item| {
+                item["name"].as_str().is_some()
+                    && item["description"].as_str().is_some()
+                    && item["inputSchema"].is_object()
+            }),
+            "every tool spec should expose name/description/inputSchema"
+        );
+        assert!(specs.iter().any(|item| {
+            item["name"] == "chat_records"
+                && item["inputSchema"]["properties"]["sessionId"].is_object()
+        }));
+        let query_contacts_spec = specs
+            .iter()
+            .find(|item| item["name"] == "query_contacts")
+            .expect("query_contacts spec should exist");
+        assert!(
+            query_contacts_spec["inputSchema"]["required"].is_null(),
+            "query_contacts should not require sessionId/session_id"
+        );
+
+        let chat_records_spec = specs
+            .iter()
+            .find(|item| item["name"] == "chat_records")
+            .expect("chat_records spec should exist");
+        let any_of = chat_records_spec["inputSchema"]["anyOf"]
+            .as_array()
+            .expect("chat_records anyOf should exist");
+        assert!(
+            any_of.iter().any(|rule| rule["required"][0] == "sessionId"),
+            "chat_records schema should accept sessionId"
+        );
+        assert!(
+            any_of
+                .iter()
+                .any(|rule| rule["required"][0] == "session_id"),
+            "chat_records schema should accept session_id"
+        );
         for required in [
             "current_time",
             "get_current_time",
@@ -1815,6 +2178,15 @@ mod tests {
             .iter()
             .filter_map(|tool| tool["name"].as_str())
             .collect::<std::collections::HashSet<_>>();
+        assert!(list_json["result"]["tools"]
+            .as_array()
+            .is_some_and(|arr| arr.iter().all(|tool| tool["inputSchema"].is_object())));
+        assert!(list_json["result"]["tools"]
+            .as_array()
+            .is_some_and(|arr| arr.iter().any(|tool| {
+                tool["name"] == "chat_records"
+                    && tool["inputSchema"]["properties"]["sessionId"].is_object()
+            })));
         for required in [
             "chat_records",
             "query_contacts",
@@ -1949,6 +2321,36 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_ws_endpoint_rejects_missing_upgrade_headers() {
+        let _guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        let config = McpServerConfig::default();
+        let server = McpServer::new(config);
+        let app = server.create_router();
+
+        let response = app
+            .oneshot(build_ws_request(false))
+            .await
+            .expect("ws oneshot should succeed");
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_ws_endpoint_returns_upgrade_required_in_oneshot_transport() {
+        let _guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        let config = McpServerConfig::default();
+        let server = McpServer::new(config);
+        let app = server.create_router();
+
+        let response = app
+            .oneshot(build_ws_request(true))
+            .await
+            .expect("ws oneshot should succeed");
+        // In unit tests we use `Router::oneshot`, which does not provide Hyper's
+        // on-upgrade extension required by `WebSocketUpgrade`, so 426 is expected.
+        assert_eq!(response.status(), StatusCode::UPGRADE_REQUIRED);
+    }
+
+    #[tokio::test]
     async fn test_http_integrations_catalog_and_preset_endpoints() {
         let _guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
         let config = McpServerConfig::default();
@@ -1972,6 +2374,37 @@ mod tests {
             .as_str()
             .is_some_and(|url| url.ends_with("/sse")));
         assert!(preset_json["configuration"]["mcpServers"]["xenobot"].is_object());
+        assert_eq!(
+            preset_json["configuration"]["mcpServers"]["xenobot"]["command"],
+            "pnpm"
+        );
+        assert!(
+            preset_json["configuration"]["mcpServers"]["xenobot"]["args"]
+                .as_array()
+                .is_some_and(|arr| arr.iter().any(|item| item == "mcp-remote"))
+        );
+
+        let (status, chatwise_json) =
+            request_json(&app, Method::GET, "/integrations/chatwise", None).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(chatwise_json["id"], "chatwise");
+        assert!(chatwise_json["configuration"]["servers"]
+            .as_array()
+            .is_some_and(|arr| arr.first().is_some_and(|item| item["name"] == "xenobot")));
+        assert!(chatwise_json["configuration"]["servers"]
+            .as_array()
+            .is_some_and(|arr| arr.first().is_some_and(|item| item["transport"] == "sse")));
+
+        let (status, opencode_json) =
+            request_json(&app, Method::GET, "/integrations/opencode", None).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(opencode_json["id"], "opencode");
+        assert!(opencode_json["configuration"]["mcpServers"]
+            .as_array()
+            .is_some_and(|arr| arr.first().is_some_and(|item| item["name"] == "xenobot")));
+        assert!(opencode_json["configuration"]["mcpServers"]
+            .as_array()
+            .is_some_and(|arr| arr.first().is_some_and(|item| item["transport"] == "sse")));
 
         let (status, unknown_json) = request_json(
             &app,
@@ -1984,6 +2417,288 @@ mod tests {
         assert!(unknown_json["supported"]
             .as_array()
             .is_some_and(|arr| arr.iter().any(|item| item == "claude-desktop")));
+    }
+
+    fn percent_encode_path(value: &str) -> String {
+        value
+            .replace('%', "%25")
+            .replace(':', "%3A")
+            .replace('/', "%2F")
+            .replace('?', "%3F")
+            .replace('#', "%23")
+            .replace(' ', "%20")
+    }
+
+    #[tokio::test]
+    async fn test_http_resources_contract_and_read() {
+        let _guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        let config = McpServerConfig::default();
+        let server = McpServer::new(config);
+        server
+            .register_builtin_resources()
+            .await
+            .expect("register builtin resources");
+        let app = server.create_router();
+
+        let (status, list_json) = request_json(&app, Method::GET, "/resources", None).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(list_json["success"], true);
+        assert!(list_json["count"].as_u64().unwrap_or(0) >= 1);
+        let first_uri = list_json["resources"]
+            .as_array()
+            .and_then(|arr| arr.first())
+            .and_then(|item| item["uri"].as_str())
+            .expect("resources list should contain at least one uri")
+            .to_string();
+
+        let read_path = format!("/resources/{}", percent_encode_path(&first_uri));
+        let (status, read_json) = request_json(&app, Method::GET, &read_path, None).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(read_json["uri"], first_uri);
+        assert!(read_json["content"].is_array());
+        assert!(read_json["mimeType"]
+            .as_str()
+            .is_some_and(|mime| mime.contains("json")));
+    }
+
+    #[tokio::test]
+    async fn test_streamable_http_resources_contract_and_error_semantics() {
+        let _guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        let config = McpServerConfig::default();
+        let server = McpServer::new(config);
+        server
+            .register_builtin_resources()
+            .await
+            .expect("register builtin resources");
+        let app = server.create_router();
+
+        let (status, list_json) = request_json(
+            &app,
+            Method::POST,
+            "/mcp",
+            Some(serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": "resources-list-1",
+                "method": "resources/list"
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(list_json["jsonrpc"], "2.0");
+        assert_eq!(list_json["id"], "resources-list-1");
+        assert!(list_json["result"]["count"].as_u64().unwrap_or(0) >= 1);
+        let resource_uri = list_json["result"]["resources"]
+            .as_array()
+            .and_then(|arr| arr.first())
+            .and_then(|item| item["uri"].as_str())
+            .expect("resources/list should return at least one resource")
+            .to_string();
+
+        let (status, read_json) = request_json(
+            &app,
+            Method::POST,
+            "/mcp",
+            Some(serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": "resources-read-1",
+                "method": "resources/read",
+                "params": {
+                    "uri": resource_uri
+                }
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(read_json["jsonrpc"], "2.0");
+        assert_eq!(read_json["id"], "resources-read-1");
+        assert!(read_json["result"]["content"].is_array());
+        assert!(read_json["result"]["mimeType"]
+            .as_str()
+            .is_some_and(|mime| mime.contains("json")));
+
+        let (status, missing_param_json) = request_json(
+            &app,
+            Method::POST,
+            "/mcp",
+            Some(serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": "resources-read-2",
+                "method": "resources/read",
+                "params": {}
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(missing_param_json["error"]["code"], -32602);
+        assert_eq!(missing_param_json["error"]["message"], "invalid_params");
+
+        let (status, missing_resource_json) = request_json(
+            &app,
+            Method::POST,
+            "/mcp",
+            Some(serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": "resources-read-3",
+                "method": "resources/read",
+                "params": {
+                    "uri": "xenobot://missing/resource"
+                }
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(missing_resource_json["error"]["code"], -32003);
+        assert_eq!(
+            missing_resource_json["error"]["message"],
+            "resource_not_found"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_streamable_http_alias_methods_for_tools_and_resources() {
+        let _guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        let db_path = unique_db_path("streamable_alias_methods");
+        let previous_db = std::env::var("XENOBOT_DB_PATH").ok();
+        std::env::set_var("XENOBOT_DB_PATH", &db_path);
+        seed_chat_records_fixture(&db_path);
+
+        let config = McpServerConfig::default();
+        let server = McpServer::new(config);
+        server
+            .register_builtin_tools()
+            .await
+            .expect("register builtin tools");
+        server
+            .register_builtin_resources()
+            .await
+            .expect("register builtin resources");
+        let app = server.create_router();
+
+        let (status, tool_list_json) = request_json(
+            &app,
+            Method::POST,
+            "/mcp",
+            Some(serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": "alias-tool-list",
+                "method": "tool/list"
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(tool_list_json["result"]["tools"]
+            .as_array()
+            .is_some_and(|arr| arr.iter().any(|item| item["name"] == "get_current_time")));
+
+        let (status, tool_call_json) = request_json(
+            &app,
+            Method::POST,
+            "/mcp",
+            Some(serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": "alias-tool-call",
+                "method": "tool/call",
+                "params": {
+                    "name": "get_current_time",
+                    "arguments": {}
+                }
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(tool_call_json["result"]["tool"], "get_current_time");
+        assert!(tool_call_json["result"]["structuredContent"]["unix"].is_number());
+
+        let (status, nested_tool_call_json) = request_json(
+            &app,
+            Method::POST,
+            "/mcp",
+            Some(serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": "alias-tool-call-nested",
+                "method": "tool/call",
+                "params": {
+                    "tool": {
+                        "name": "query_chats",
+                        "arguments": {
+                            "limit": 5
+                        }
+                    }
+                }
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(nested_tool_call_json["result"]["tool"], "query_chats");
+        assert!(nested_tool_call_json["result"]["structuredContent"]["count"].is_number());
+
+        let (status, resource_list_json) = request_json(
+            &app,
+            Method::POST,
+            "/mcp",
+            Some(serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": "alias-resource-list",
+                "method": "resource/list"
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        let resource_uri = resource_list_json["result"]["resources"]
+            .as_array()
+            .and_then(|arr| arr.first())
+            .and_then(|item| item["uri"].as_str())
+            .expect("resource/list alias should return at least one resource")
+            .to_string();
+
+        let (status, resource_read_json) = request_json(
+            &app,
+            Method::POST,
+            "/mcp",
+            Some(serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": "alias-resource-read",
+                "method": "resource/read",
+                "params": {
+                    "uri": resource_uri
+                }
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(resource_read_json["result"]["content"].is_array());
+        assert!(resource_read_json["result"]["mimeType"]
+            .as_str()
+            .is_some_and(|mime| mime.contains("json")));
+
+        let (status, nested_resource_read_json) = request_json(
+            &app,
+            Method::POST,
+            "/mcp",
+            Some(serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": "alias-resource-read-nested",
+                "method": "resource/read",
+                "params": {
+                    "resource": {
+                        "uri": resource_uri
+                    }
+                }
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(nested_resource_read_json["result"]["content"].is_array());
+        assert!(nested_resource_read_json["result"]["mimeType"]
+            .as_str()
+            .is_some_and(|mime| mime.contains("json")));
+
+        if let Some(previous) = previous_db {
+            std::env::set_var("XENOBOT_DB_PATH", previous);
+        } else {
+            std::env::remove_var("XENOBOT_DB_PATH");
+        }
+        let _ = std::fs::remove_file(&db_path);
     }
 
     #[test]

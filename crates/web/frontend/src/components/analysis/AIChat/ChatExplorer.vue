@@ -275,7 +275,7 @@ watch(
 </script>
 
 <template>
-  <div class="main-content flex h-full overflow-hidden">
+  <div class="main-content xeno-chat-shell flex h-full overflow-hidden">
     <!-- English UI note -->
     <ConversationList
       ref="conversationListRef"
@@ -289,7 +289,7 @@ watch(
 
     <!-- English UI note -->
     <div class="flex h-full flex-1">
-      <div class="relative flex min-w-[480px] flex-1 flex-col overflow-hidden">
+      <div class="xeno-chat-main relative flex min-w-[480px] flex-1 flex-col overflow-hidden">
         <!-- English UI note -->
         <div ref="messagesContainer" class="min-h-0 flex-1 overflow-y-auto p-4">
           <div ref="conversationContentRef" class="mx-auto max-w-3xl space-y-4">
@@ -346,10 +346,10 @@ watch(
         </div>
 
         <!-- English UI note -->
-        <Transition name="fade-up">
+        <Transition name="xeno-fade-chip">
           <button
             v-if="showScrollToBottom"
-            class="absolute bottom-20 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-gray-800/90 px-3 py-1.5 text-xs text-white shadow-lg backdrop-blur-sm transition-all hover:bg-gray-700 dark:bg-gray-700/90 dark:hover:bg-gray-600"
+            class="xeno-scroll-chip absolute bottom-20 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs text-white transition-all"
             @click="handleScrollToBottom"
           >
             <UIcon name="i-heroicons-arrow-down" class="h-3.5 w-3.5" />
@@ -380,10 +380,10 @@ watch(
     </div>
 
     <!-- English UI note -->
-    <Transition name="slide-fade">
+    <Transition name="xeno-side-panel">
       <div
         v-if="sourceMessages.length > 0 && !isSourcePanelCollapsed"
-        class="w-80 shrink-0 border-l border-gray-200 bg-gray-50/50 p-4 dark:border-gray-800 dark:bg-gray-900/50"
+        class="xeno-side-source-panel w-80 shrink-0 p-4"
       >
         <DataSourcePanel
           :messages="sourceMessages"
@@ -400,38 +400,78 @@ watch(
 </template>
 
 <style scoped>
-/* Transition styles for slide-fade */
-.slide-fade-enter-active,
-.slide-fade-leave-active {
-  transition: all 0.3s ease-out;
+.xeno-chat-shell {
+  background: linear-gradient(180deg, transparent, var(--xeno-surface-muted));
 }
 
-.slide-fade-enter-from,
-.slide-fade-leave-to {
-  transform: translateX(20px);
+.xeno-chat-main {
+  border-right: 1px solid color-mix(in srgb, var(--xeno-border-soft) 72%, transparent);
+}
+
+.xeno-scroll-chip {
+  background: color-mix(in srgb, var(--xeno-surface-emphasis) 78%, #020617 22%);
+  border: 1px solid var(--xeno-border-soft);
+  box-shadow: var(--xeno-shadow-soft);
+  backdrop-filter: blur(10px) saturate(130%);
+}
+
+.xeno-scroll-chip:hover {
+  transform: translateX(-50%) translateY(-1px);
+  border-color: var(--xeno-active-border);
+  background: color-mix(in srgb, var(--xeno-surface-emphasis) 82%, #020617 18%);
+}
+
+.xeno-side-source-panel {
+  border-left: 1px solid var(--xeno-border-soft);
+  background: var(--xeno-surface-muted);
+  backdrop-filter: blur(14px) saturate(125%);
+}
+
+.xeno-fade-chip-enter-active,
+.xeno-fade-chip-leave-active {
+  transition:
+    opacity 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
+    filter 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.xeno-fade-chip-enter-from,
+.xeno-fade-chip-leave-to {
   opacity: 0;
+  transform: translateX(-50%) translateY(8px) scale(0.985);
+  filter: blur(6px);
 }
 
-/* Transition styles for slide-up (status bar) */
-.slide-up-enter-active,
-.slide-up-leave-active {
-  transition: all 0.3s ease-out;
+.xeno-side-panel-enter-active,
+.xeno-side-panel-leave-active {
+  transition:
+    opacity 0.28s cubic-bezier(0.22, 0.92, 0.3, 1),
+    transform 0.28s cubic-bezier(0.22, 0.92, 0.3, 1),
+    filter 0.28s cubic-bezier(0.22, 0.92, 0.3, 1);
 }
 
-.slide-up-enter-from,
-.slide-up-leave-to {
-  transform: translateY(10px);
+.xeno-side-panel-enter-from,
+.xeno-side-panel-leave-to {
   opacity: 0;
+  transform: translateX(14px) scale(0.992);
+  filter: blur(8px);
 }
 
-/* Transition styles for fade-up (scroll to bottom button) */
-.fade-up-enter-active,
-.fade-up-leave-active {
-  transition: opacity 0.2s ease-out;
-}
+@media (prefers-reduced-motion: reduce) {
+  .xeno-fade-chip-enter-active,
+  .xeno-fade-chip-leave-active,
+  .xeno-side-panel-enter-active,
+  .xeno-side-panel-leave-active {
+    transition-duration: 0.01ms !important;
+  }
 
-.fade-up-enter-from,
-.fade-up-leave-to {
-  opacity: 0;
+  .xeno-fade-chip-enter-from,
+  .xeno-fade-chip-leave-to,
+  .xeno-side-panel-enter-from,
+  .xeno-side-panel-leave-to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
 }
 </style>

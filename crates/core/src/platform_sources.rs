@@ -453,4 +453,57 @@ mod tests {
         assert!(items.iter().all(|item| item.platform == Platform::WeChat));
         assert!(items.iter().any(|item| item.platform_id == "wechat"));
     }
+
+    #[test]
+    fn legal_safe_runtime_platforms_all_have_default_source_candidates() {
+        let home = PathBuf::from("/tmp/xeno-runtime-home");
+        for platform in legal_safe_runtime_platforms() {
+            let items = discover_sources_for_platform_with_home(&platform, &home);
+            assert!(
+                !items.is_empty(),
+                "platform {} should expose at least one source candidate",
+                platform_id(&platform)
+            );
+            assert!(
+                items
+                    .iter()
+                    .all(|item| item.platform_id == platform_id(&platform)),
+                "platform_id mismatch in discovered candidates for {}",
+                platform_id(&platform)
+            );
+        }
+    }
+
+    #[test]
+    fn legal_safe_runtime_platform_ids_cover_expected_global_set() {
+        let ids = legal_safe_runtime_platforms()
+            .into_iter()
+            .map(|platform| platform_id(&platform).to_string())
+            .collect::<std::collections::HashSet<_>>();
+        for required in [
+            "wechat",
+            "whatsapp",
+            "line",
+            "qq",
+            "discord",
+            "instagram",
+            "telegram",
+            "imessage",
+            "messenger",
+            "kakaotalk",
+            "slack",
+            "teams",
+            "signal",
+            "skype",
+            "googlechat",
+            "zoom",
+            "viber",
+        ] {
+            assert!(
+                ids.contains(required),
+                "runtime platform list missing {}",
+                required
+            );
+        }
+    }
 }

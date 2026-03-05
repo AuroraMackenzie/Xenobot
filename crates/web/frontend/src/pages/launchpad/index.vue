@@ -58,7 +58,7 @@ const features = computed(() => [
         <div class="absolute -top-32 left-0 right-0 h-32" style="-webkit-app-region: drag" />
 
         <div class="w-full max-w-6xl">
-          <div class="xeno-hero-panel">
+          <div class="xeno-hero-panel xeno-reveal xeno-reveal-1">
             <div class="mb-4 inline-flex items-center gap-2 rounded-full border border-cyan-200/70 bg-white/80 px-4 py-1.5 text-xs font-semibold text-cyan-700 backdrop-blur-sm dark:border-cyan-500/30 dark:bg-slate-900/50 dark:text-cyan-300">
               <UIcon name="i-heroicons-bolt" class="h-3.5 w-3.5" />
               <span>LOCAL-FIRST • AI READY • MULTI-PLATFORM</span>
@@ -73,9 +73,10 @@ const features = computed(() => [
 
             <div class="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-3">
               <article
-                v-for="feature in features"
+                v-for="(feature, idx) in features"
                 :key="feature.title"
-                class="group rounded-2xl border border-white/60 bg-white/70 p-4 shadow-sm backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:border-slate-700/60 dark:bg-slate-900/60"
+                class="group xeno-card-reveal rounded-2xl border border-white/60 bg-white/70 p-4 shadow-sm backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:border-slate-700/60 dark:bg-slate-900/60"
+                :style="{ '--xeno-card-delay': `${120 + idx * 80}ms` }"
               >
                 <div class="mb-3 inline-flex h-9 w-9 items-center justify-center rounded-xl bg-linear-to-br text-white" :class="feature.color">
                   <UIcon :name="feature.icon" class="h-4.5 w-4.5" />
@@ -87,7 +88,7 @@ const features = computed(() => [
           </div>
         </div>
 
-        <div class="mt-8 w-full max-w-6xl rounded-3xl border border-white/60 bg-white/72 px-4 py-6 shadow-lg backdrop-blur-sm dark:border-slate-700/60 dark:bg-slate-900/62 sm:px-6">
+        <div class="mt-8 xeno-reveal xeno-reveal-2 w-full max-w-6xl rounded-3xl border border-white/60 bg-white/72 px-4 py-6 shadow-lg backdrop-blur-sm dark:border-slate-700/60 dark:bg-slate-900/62 sm:px-6">
           <ImportArea />
         </div>
       </div>
@@ -112,6 +113,22 @@ const features = computed(() => [
   box-shadow:
     0 22px 60px -38px rgba(15, 23, 42, 0.45),
     inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  overflow: hidden;
+}
+
+.xeno-hero-panel::after {
+  content: '';
+  position: absolute;
+  inset: -130% -35%;
+  background: linear-gradient(
+    120deg,
+    transparent 28%,
+    rgba(255, 255, 255, 0.2) 45%,
+    transparent 62%
+  );
+  transform: translate3d(-14%, 0, 0);
+  pointer-events: none;
+  animation: xeno-sheen 10s linear infinite;
 }
 
 @media (min-width: 640px) {
@@ -142,6 +159,7 @@ const features = computed(() => [
   width: 12rem;
   height: 12rem;
   background: linear-gradient(135deg, #22d3ee, #0ea5e9);
+  animation: xeno-float-a 15s ease-in-out infinite alternate;
 }
 
 .xeno-orb-b {
@@ -150,6 +168,7 @@ const features = computed(() => [
   width: 9rem;
   height: 9rem;
   background: linear-gradient(135deg, #fb923c, #f59e0b);
+  animation: xeno-float-b 18s ease-in-out infinite alternate;
 }
 
 .xeno-orb-c {
@@ -158,5 +177,87 @@ const features = computed(() => [
   width: 8rem;
   height: 8rem;
   background: linear-gradient(135deg, #2dd4bf, #06b6d4);
+  animation: xeno-float-c 16s ease-in-out infinite alternate;
+}
+
+.xeno-reveal {
+  opacity: 0;
+  transform: translate3d(0, 12px, 0) scale(0.995);
+  animation: xeno-fade-up 560ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+.xeno-reveal-1 {
+  animation-delay: 40ms;
+}
+
+.xeno-reveal-2 {
+  animation-delay: 160ms;
+}
+
+.xeno-card-reveal {
+  opacity: 0;
+  transform: translate3d(0, 14px, 0) scale(0.994);
+  animation: xeno-fade-up 540ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  animation-delay: var(--xeno-card-delay, 120ms);
+}
+
+@keyframes xeno-fade-up {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0) scale(0.995);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes xeno-sheen {
+  0% {
+    transform: translate3d(-22%, 0, 0) rotate(0.0001deg);
+  }
+  100% {
+    transform: translate3d(24%, 0, 0) rotate(0.0001deg);
+  }
+}
+
+@keyframes xeno-float-a {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  100% {
+    transform: translate3d(16px, -12px, 0) scale(1.08);
+  }
+}
+
+@keyframes xeno-float-b {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  100% {
+    transform: translate3d(-18px, 14px, 0) scale(1.1);
+  }
+}
+
+@keyframes xeno-float-c {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  100% {
+    transform: translate3d(12px, -16px, 0) scale(1.09);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xeno-orb-a,
+  .xeno-orb-b,
+  .xeno-orb-c,
+  .xeno-hero-panel::after,
+  .xeno-reveal,
+  .xeno-card-reveal {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
 }
 </style>

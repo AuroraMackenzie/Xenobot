@@ -8,9 +8,13 @@ use axum::{
     routing::{delete, get, post},
     Json, Router,
 };
-use futures::stream;
+use futures::{stream, TryStreamExt};
 use serde::{Deserialize, Serialize};
-use sqlx::{Column, Row};
+use sqlx::{
+    migrate::Migrator,
+    sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions},
+    Column, Row,
+};
 use std::{
     collections::{HashMap, HashSet},
     convert::Infallible,
@@ -157,6 +161,10 @@ pub fn router() -> Router {
         .route("/sessions/:session_id/plugin-query", post(plugin_query))
         .route("/plugin-compute", post(plugin_compute))
         .route("/sessions/:session_id/execute-sql", post(execute_sql))
+        .route(
+            "/sessions/:session_id/generate-sql",
+            post(generate_sql_assist),
+        )
         .route("/sessions/:session_id/schema", get(get_schema))
         // Incremental import
         .route(
@@ -1367,9 +1375,7 @@ fn checkpoint_meta_json(source_fingerprint: &SourceCheckpointFingerprint) -> ser
     })
 }
 
-fn checkpoint_state_json(
-    checkpoint: Option<ImportSourceCheckpoint>,
-) -> serde_json::Value {
+fn checkpoint_state_json(checkpoint: Option<ImportSourceCheckpoint>) -> serde_json::Value {
     match checkpoint {
         Some(cp) => serde_json::json!({
             "status": cp.status,
@@ -1691,21 +1697,142 @@ async fn run_import_with_chat_index(
 
 // ==================== Handler Implementations ====================
 
+fn migrations_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("migrations")
+}
+
+fn migration_versions_from_disk() -> Result<Vec<i64>, ApiError> {
+    let dir = migrations_dir();
+    let entries = fs::read_dir(&dir).map_err(|e| {
+        ApiError::Internal(format!(
+            "failed to read migrations directory '{}': {}",
+            dir.display(),
+            e
+        ))
+    })?;
+
+    let mut versions: Vec<i64> = entries
+        .filter_map(|entry| entry.ok())
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .filter(|name| name.ends_with(".sql"))
+        .filter_map(|name| {
+            let prefix = name.split('_').next().unwrap_or_default();
+            prefix.parse::<i64>().ok()
+        })
+        .collect();
+
+    versions.sort_unstable();
+    versions.dedup();
+    Ok(versions)
+}
+
+async fn open_migration_pool(
+    db_path: &FsPath,
+    create_if_missing: bool,
+) -> Result<SqlitePool, ApiError> {
+    let opts = SqliteConnectOptions::new()
+        .filename(db_path)
+        .create_if_missing(create_if_missing)
+        .foreign_keys(true)
+        .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
+        .synchronous(sqlx::sqlite::SqliteSynchronous::Normal);
+
+    SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect_with(opts)
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))
+}
+
+async fn current_migration_version(pool: &SqlitePool) -> Result<i64, ApiError> {
+    let sqlx_table_exists = sqlx::query_scalar::<_, i64>(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?1 LIMIT 1",
+    )
+    .bind("_sqlx_migrations")
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| ApiError::Database(e.to_string()))?
+    .is_some();
+
+    if sqlx_table_exists {
+        return sqlx::query_scalar::<_, i64>(
+            "SELECT COALESCE(MAX(version), 0) FROM _sqlx_migrations WHERE success = 1",
+        )
+        .fetch_one(pool)
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()));
+    }
+
+    let legacy_table_exists = sqlx::query_scalar::<_, i64>(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?1 LIMIT 1",
+    )
+    .bind("schema_migrations")
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| ApiError::Database(e.to_string()))?
+    .is_some();
+
+    if legacy_table_exists {
+        return sqlx::query_scalar::<_, i64>(
+            "SELECT COALESCE(MAX(version), 0) FROM schema_migrations",
+        )
+        .fetch_one(pool)
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()));
+    }
+
+    Ok(0)
+}
+
 #[instrument]
 async fn check_migration() -> Result<Json<serde_json::Value>, ApiError> {
-    // For now, return that migrations are up to date
+    let available_versions = migration_versions_from_disk()?;
+    let target_version = available_versions.last().copied().unwrap_or(0);
+    let db_path = crate::database::get_db_path();
+    let current_version = if db_path.exists() {
+        let pool = open_migration_pool(&db_path, false).await?;
+        current_migration_version(&pool).await?
+    } else {
+        0
+    };
+    let needs_migration = current_version < target_version;
+
     Ok(Json(serde_json::json!({
-        "needsMigration": false,
-        "currentVersion": 3
+        "needsMigration": needs_migration,
+        "currentVersion": current_version,
+        "targetVersion": target_version,
+        "dbPath": db_path.to_string_lossy().to_string(),
+        "migrationCount": available_versions.len()
     })))
 }
 
 #[instrument]
 async fn run_migration() -> Result<Json<serde_json::Value>, ApiError> {
-    // Migrations are handled automatically on startup
+    let available_versions = migration_versions_from_disk()?;
+    let target_version = available_versions.last().copied().unwrap_or(0);
+    let db_path = crate::database::get_db_path();
+
+    if let Some(parent) = db_path.parent() {
+        fs::create_dir_all(parent).map_err(ApiError::Io)?;
+    }
+
+    let pool = open_migration_pool(&db_path, true).await?;
+    let migrations = Migrator::new(FsPath::new(&migrations_dir()))
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+    migrations
+        .run(&pool)
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?;
+    let current_version = current_migration_version(&pool).await?;
+    let needs_migration = current_version < target_version;
+
     Ok(Json(serde_json::json!({
-        "success": true,
-        "message": "Migrations already applied"
+        "success": !needs_migration,
+        "needsMigration": needs_migration,
+        "currentVersion": current_version,
+        "targetVersion": target_version,
+        "dbPath": db_path.to_string_lossy().to_string()
     })))
 }
 
@@ -3125,8 +3252,12 @@ async fn get_cluster_graph(
             continue;
         }
         let weight = link.value.max(1);
-        *weighted_adjacency[source_idx].entry(target_idx).or_insert(0) += weight;
-        *weighted_adjacency[target_idx].entry(source_idx).or_insert(0) += weight;
+        *weighted_adjacency[source_idx]
+            .entry(target_idx)
+            .or_insert(0) += weight;
+        *weighted_adjacency[target_idx]
+            .entry(source_idx)
+            .or_insert(0) += weight;
     }
 
     let mut labels: Vec<usize> = (0..sorted_names.len()).collect();
@@ -3183,18 +3314,16 @@ async fn get_cluster_graph(
     let mut community_groups: Vec<(usize, Vec<usize>)> = members_by_label.into_iter().collect();
     community_groups.sort_by(|a, b| {
         b.1.len().cmp(&a.1.len()).then_with(|| {
-            let a_first = a
-                .1
-                .iter()
-                .map(|idx| sorted_names[*idx].as_str())
-                .min()
-                .unwrap_or("");
-            let b_first = b
-                .1
-                .iter()
-                .map(|idx| sorted_names[*idx].as_str())
-                .min()
-                .unwrap_or("");
+            let a_first =
+                a.1.iter()
+                    .map(|idx| sorted_names[*idx].as_str())
+                    .min()
+                    .unwrap_or("");
+            let b_first =
+                b.1.iter()
+                    .map(|idx| sorted_names[*idx].as_str())
+                    .min()
+                    .unwrap_or("");
             a_first.cmp(b_first)
         })
     });
@@ -3738,7 +3867,10 @@ async fn get_dragon_king_analysis(
         })
         .collect::<Vec<_>>();
 
-    let dragon_king = leaderboard.first().cloned().unwrap_or(serde_json::Value::Null);
+    let dragon_king = leaderboard
+        .first()
+        .cloned()
+        .unwrap_or(serde_json::Value::Null);
     Ok(Json(serde_json::json!({
         "dragonKing": dragon_king,
         "leaderboard": leaderboard,
@@ -3856,13 +3988,11 @@ async fn get_lurker_analysis(
         let bc = b.get("messageCount").and_then(|v| v.as_i64()).unwrap_or(0);
         let ai = a.get("idleDays").and_then(|v| v.as_i64()).unwrap_or(0);
         let bi = b.get("idleDays").and_then(|v| v.as_i64()).unwrap_or(0);
-        ac.cmp(&bc)
-            .then_with(|| bi.cmp(&ai))
-            .then_with(|| {
-                let an = a.get("memberId").and_then(|v| v.as_i64()).unwrap_or(0);
-                let bn = b.get("memberId").and_then(|v| v.as_i64()).unwrap_or(0);
-                an.cmp(&bn)
-            })
+        ac.cmp(&bc).then_with(|| bi.cmp(&ai)).then_with(|| {
+            let an = a.get("memberId").and_then(|v| v.as_i64()).unwrap_or(0);
+            let bn = b.get("memberId").and_then(|v| v.as_i64()).unwrap_or(0);
+            an.cmp(&bn)
+        })
     });
 
     Ok(Json(serde_json::json!({
@@ -4116,31 +4246,32 @@ async fn get_repeat_analysis(
     let mut current_participants: HashSet<String> = HashSet::new();
     let mut current_names: HashSet<String> = HashSet::new();
 
-    let mut finalize_current = |phrase: &str,
-                                start_ts: i64,
-                                end_ts: i64,
-                                chain_len: i64,
-                                participants: &HashSet<String>,
-                                participant_names: &HashSet<String>| {
-        if phrase.is_empty() || chain_len < 2 || participants.len() < 2 {
-            return;
-        }
-        let entry = phrase_agg.entry(phrase.to_string()).or_default();
-        entry.occurrences += 1;
-        entry.total_messages_in_runs += chain_len;
-        entry.max_chain_len = entry.max_chain_len.max(chain_len);
-        for participant in participants {
-            entry.participants.insert(participant.clone());
-        }
-        runs.push(serde_json::json!({
-            "phrase": phrase,
-            "startTs": start_ts,
-            "endTs": end_ts,
-            "chainLength": chain_len,
-            "participantCount": participants.len() as i64,
-            "participants": participant_names.iter().cloned().collect::<Vec<_>>()
-        }));
-    };
+    let mut finalize_current =
+        |phrase: &str,
+         start_ts: i64,
+         end_ts: i64,
+         chain_len: i64,
+         participants: &HashSet<String>,
+         participant_names: &HashSet<String>| {
+            if phrase.is_empty() || chain_len < 2 || participants.len() < 2 {
+                return;
+            }
+            let entry = phrase_agg.entry(phrase.to_string()).or_default();
+            entry.occurrences += 1;
+            entry.total_messages_in_runs += chain_len;
+            entry.max_chain_len = entry.max_chain_len.max(chain_len);
+            for participant in participants {
+                entry.participants.insert(participant.clone());
+            }
+            runs.push(serde_json::json!({
+                "phrase": phrase,
+                "startTs": start_ts,
+                "endTs": end_ts,
+                "chainLength": chain_len,
+                "participantCount": participants.len() as i64,
+                "participants": participant_names.iter().cloned().collect::<Vec<_>>()
+            }));
+        };
 
     for row in rows.iter() {
         let raw_content = row.content.as_deref().unwrap_or_default();
@@ -4742,6 +4873,13 @@ struct ExecuteSqlRequest {
     sql: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GenerateSqlRequest {
+    prompt: String,
+    max_rows: Option<usize>,
+}
+
 fn strip_sql_literals_and_comments_for_validation(sql: &str) -> String {
     #[derive(Copy, Clone, Eq, PartialEq)]
     enum State {
@@ -4895,7 +5033,10 @@ fn validate_read_only_sql(sql: &str) -> Result<(), ApiError> {
         "RELEASE",
         "TRUNCATE",
     ];
-    if tokens.iter().any(|token| FORBIDDEN.contains(&token.as_str())) {
+    if tokens
+        .iter()
+        .any(|token| FORBIDDEN.contains(&token.as_str()))
+    {
         return Err(ApiError::InvalidRequest(
             "Only read-only SELECT queries are allowed".to_string(),
         ));
@@ -4903,11 +5044,308 @@ fn validate_read_only_sql(sql: &str) -> Result<(), ApiError> {
     Ok(())
 }
 
+fn sql_generation_limit(max_rows: Option<usize>) -> usize {
+    max_rows.unwrap_or(100).clamp(1, 500)
+}
+
+fn contains_any(haystack: &str, needles: &[&str]) -> bool {
+    needles.iter().any(|needle| haystack.contains(needle))
+}
+
+fn extract_first_quoted_segment(text: &str) -> Option<String> {
+    let quote_pairs = [
+        ('"', '"'),
+        ('\'', '\''),
+        ('`', '`'),
+        ('“', '”'),
+        ('‘', '’'),
+        ('「', '」'),
+        ('『', '』'),
+    ];
+
+    for (open, close) in quote_pairs {
+        let mut in_segment = false;
+        let mut buf = String::new();
+        for ch in text.chars() {
+            if !in_segment && ch == open {
+                in_segment = true;
+                buf.clear();
+                continue;
+            }
+            if in_segment && ch == close {
+                let value = buf.trim();
+                if !value.is_empty() {
+                    return Some(value.to_string());
+                }
+                in_segment = false;
+                continue;
+            }
+            if in_segment {
+                buf.push(ch);
+            }
+        }
+    }
+    None
+}
+
+fn escape_like_pattern(raw: &str) -> String {
+    raw.replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+        .replace('\'', "''")
+}
+
+fn build_sql_generation_keyword_filter(keyword: Option<&str>) -> String {
+    match keyword.map(str::trim).filter(|v| !v.is_empty()) {
+        Some(value) => {
+            let escaped = escape_like_pattern(value);
+            format!("WHERE msg.content LIKE '%{escaped}%' ESCAPE '\\\\'")
+        }
+        None => String::new(),
+    }
+}
+
+fn generate_sql_from_prompt(
+    prompt: &str,
+    max_rows: usize,
+    has_message_table: bool,
+    has_member_table: bool,
+) -> (String, String, Vec<String>) {
+    if !has_message_table {
+        let sql = format!(
+            "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name LIMIT {}",
+            max_rows
+        );
+        let explanation = "The database does not contain a `message` table yet, so this query lists available tables first.".to_string();
+        return (
+            sql,
+            explanation,
+            vec!["message table is missing; generated a schema discovery query".to_string()],
+        );
+    }
+
+    let normalized = prompt.to_lowercase();
+    let keyword = extract_first_quoted_segment(prompt);
+    let where_clause = build_sql_generation_keyword_filter(keyword.as_deref());
+    let mut warnings = Vec::new();
+    if keyword.is_none()
+        && contains_any(
+            &normalized,
+            &["keyword", "关键词", "包含", "contains", "search", "搜索"],
+        )
+    {
+        warnings.push(
+            "No quoted keyword detected; generated query without explicit keyword filter"
+                .to_string(),
+        );
+    }
+
+    let is_count_intent = contains_any(
+        &normalized,
+        &[
+            "count", "统计", "数量", "多少", "排行", "top", "active", "活跃",
+        ],
+    );
+    let is_hourly_intent = contains_any(
+        &normalized,
+        &[
+            "hour",
+            "hourly",
+            "按小时",
+            "小时",
+            "时段",
+            "time distribution",
+            "时间分布",
+        ],
+    );
+    let is_daily_intent = contains_any(
+        &normalized,
+        &["daily", "day", "按天", "每日", "每天", "日期"],
+    );
+    let is_recent_intent = contains_any(
+        &normalized,
+        &["recent", "latest", "last", "最近", "最新", "刚刚", "near"],
+    );
+
+    if is_hourly_intent {
+        let sql = format!(
+            "SELECT strftime('%H', datetime(msg.ts, 'unixepoch', 'localtime')) AS hour_bucket, COUNT(*) AS message_count \
+             FROM message msg {} GROUP BY hour_bucket ORDER BY hour_bucket LIMIT {}",
+            where_clause, max_rows
+        );
+        let explanation =
+            "Groups messages by local hour and returns message counts per hour bucket.".to_string();
+        return (sql, explanation, warnings);
+    }
+
+    if is_daily_intent {
+        let sql = format!(
+            "SELECT date(datetime(msg.ts, 'unixepoch', 'localtime')) AS day_bucket, COUNT(*) AS message_count \
+             FROM message msg {} GROUP BY day_bucket ORDER BY day_bucket DESC LIMIT {}",
+            where_clause, max_rows
+        );
+        let explanation =
+            "Groups messages by local day and returns message counts per day bucket.".to_string();
+        return (sql, explanation, warnings);
+    }
+
+    if is_count_intent {
+        if has_member_table {
+            let sql = format!(
+                "SELECT COALESCE(m.group_nickname, m.account_name, m.platform_id, printf('member_%d', msg.sender_id)) AS sender_name, \
+                 COUNT(*) AS message_count \
+                 FROM message msg \
+                 LEFT JOIN member m ON m.id = msg.sender_id \
+                 {} \
+                 GROUP BY msg.sender_id, sender_name \
+                 ORDER BY message_count DESC \
+                 LIMIT {}",
+                where_clause, max_rows
+            );
+            let explanation =
+                "Returns sender-level message counts ranked from most active to least active."
+                    .to_string();
+            return (sql, explanation, warnings);
+        }
+
+        warnings.push(
+            "member table is missing; sender names are unavailable and sender_id is used instead"
+                .to_string(),
+        );
+        let sql = format!(
+            "SELECT msg.sender_id, COUNT(*) AS message_count \
+             FROM message msg {} GROUP BY msg.sender_id ORDER BY message_count DESC LIMIT {}",
+            where_clause, max_rows
+        );
+        let explanation =
+            "Returns sender-level message counts using sender_id because member metadata is unavailable."
+                .to_string();
+        return (sql, explanation, warnings);
+    }
+
+    if is_recent_intent || keyword.is_some() {
+        if has_member_table {
+            let sql = format!(
+                "SELECT msg.id, datetime(msg.ts, 'unixepoch', 'localtime') AS local_time, \
+                 COALESCE(m.group_nickname, m.account_name, m.platform_id, printf('member_%d', msg.sender_id)) AS sender_name, \
+                 msg.content \
+                 FROM message msg \
+                 LEFT JOIN member m ON m.id = msg.sender_id \
+                 {} \
+                 ORDER BY msg.ts DESC, msg.id DESC \
+                 LIMIT {}",
+                where_clause, max_rows
+            );
+            let explanation =
+                "Returns recent messages (optionally keyword-filtered) with local time and sender display name."
+                    .to_string();
+            return (sql, explanation, warnings);
+        }
+
+        warnings.push(
+            "member table is missing; sender display name is unavailable and sender_id is returned"
+                .to_string(),
+        );
+        let sql = format!(
+            "SELECT msg.id, datetime(msg.ts, 'unixepoch', 'localtime') AS local_time, msg.sender_id, msg.content \
+             FROM message msg {} ORDER BY msg.ts DESC, msg.id DESC LIMIT {}",
+            where_clause, max_rows
+        );
+        let explanation =
+            "Returns recent messages (optionally keyword-filtered) with sender_id.".to_string();
+        return (sql, explanation, warnings);
+    }
+
+    let sql = format!(
+        "SELECT msg.id, datetime(msg.ts, 'unixepoch', 'localtime') AS local_time, msg.sender_id, msg.content \
+         FROM message msg ORDER BY msg.ts DESC, msg.id DESC LIMIT {}",
+        max_rows
+    );
+    let explanation = "Returns recent message rows as the default fallback query.".to_string();
+    (
+        sql,
+        explanation,
+        vec!["No specific intent detected; generated default recent-message query".to_string()],
+    )
+}
+
+fn sql_lab_timeout_ms() -> u64 {
+    const DEFAULT_TIMEOUT_MS: u64 = 5_000;
+    const MIN_TIMEOUT_MS: u64 = 50;
+    const MAX_TIMEOUT_MS: u64 = 120_000;
+
+    match std::env::var("XENOBOT_SQL_TIMEOUT_MS") {
+        Ok(raw) => raw
+            .trim()
+            .parse::<u64>()
+            .ok()
+            .map(|v| v.clamp(MIN_TIMEOUT_MS, MAX_TIMEOUT_MS))
+            .unwrap_or(DEFAULT_TIMEOUT_MS),
+        Err(_) => DEFAULT_TIMEOUT_MS,
+    }
+}
+
+#[instrument]
+async fn generate_sql_assist(
+    Path(session_id): Path<String>,
+    Json(req): Json<GenerateSqlRequest>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let prompt = req.prompt.trim();
+    if prompt.is_empty() {
+        return Err(ApiError::InvalidRequest(
+            "Prompt cannot be empty".to_string(),
+        ));
+    }
+
+    let meta_id = session_id
+        .parse::<i64>()
+        .map_err(|_| ApiError::InvalidRequest("Invalid session_id".to_string()))?;
+    let limit = sql_generation_limit(req.max_rows);
+
+    let pool = crate::database::get_pool()
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?;
+    let repo = crate::database::Repository::new(pool.clone());
+    let session_exists = repo
+        .get_chat(meta_id)
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?
+        .is_some();
+    if !session_exists {
+        return Err(ApiError::NotFound(format!("session {} not found", meta_id)));
+    }
+
+    let table_names: Vec<String> = sqlx::query_scalar(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
+    )
+    .fetch_all(&*pool)
+    .await
+    .map_err(|e| ApiError::Database(e.to_string()))?;
+    let table_set: HashSet<String> = table_names.into_iter().collect();
+    let has_message_table = table_set.contains("message");
+    let has_member_table = table_set.contains("member");
+
+    let (sql, explanation, warnings) =
+        generate_sql_from_prompt(prompt, limit, has_message_table, has_member_table);
+    validate_read_only_sql(&sql)?;
+
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "sql": sql,
+        "explanation": explanation,
+        "strategy": "rule_based_safe_sql",
+        "limit": limit,
+        "warnings": warnings
+    })))
+}
+
 #[instrument]
 async fn execute_sql(
     Path(session_id): Path<String>,
     Json(req): Json<ExecuteSqlRequest>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
+    const MAX_SQL_RESULT_ROWS: usize = 5000;
+
     // 1) Parse and validate input SQL
     let sql = req.sql.trim().to_string();
     validate_read_only_sql(&sql)?;
@@ -4924,11 +5362,28 @@ async fn execute_sql(
         .map_err(|e| ApiError::Database(e.to_string()))?;
 
     // 4) Execute and time the query
+    let timeout_ms = sql_lab_timeout_ms();
     let start = std::time::Instant::now();
-    let rows = sqlx::query(&sql)
-        .fetch_all(&*pool)
+    let (rows, limited) =
+        tokio::time::timeout(std::time::Duration::from_millis(timeout_ms), async {
+            let mut rows = Vec::new();
+            let mut limited = false;
+            let mut stream = sqlx::query(&sql).fetch(&*pool);
+            while let Some(row) = stream
+                .try_next()
+                .await
+                .map_err(|e| ApiError::Database(e.to_string()))?
+            {
+                if rows.len() >= MAX_SQL_RESULT_ROWS {
+                    limited = true;
+                    break;
+                }
+                rows.push(row);
+            }
+            Ok::<_, ApiError>((rows, limited))
+        })
         .await
-        .map_err(|e| ApiError::Database(e.to_string()))?;
+        .map_err(|_| ApiError::Timeout(format!("SQL query exceeded {} ms", timeout_ms)))??;
     let duration = start.elapsed().as_millis();
 
     // 5) Build columns from first row (if any)
@@ -4973,14 +5428,18 @@ async fn execute_sql(
         "rows": json_rows,
         "rowCount": json_rows.len(),
         "duration": duration,
-        "limited": false
+        "limited": limited,
+        "timedOut": false
     });
 
     Ok(Json(result))
 }
 
 #[instrument]
-async fn get_schema(Path(_session_id): Path<String>) -> Result<Json<serde_json::Value>, ApiError> {
+async fn get_schema(
+    Path(_session_id): Path<String>,
+    Query(query): Query<SchemaQueryParams>,
+) -> Result<Json<serde_json::Value>, ApiError> {
     // Get database connection pool
     let pool = crate::database::get_pool()
         .await
@@ -5000,46 +5459,167 @@ async fn get_schema(Path(_session_id): Path<String>) -> Result<Json<serde_json::
     .map_err(|e| ApiError::Database(e.to_string()))?;
 
     let mut schema = Vec::new();
+    let mut total_columns: usize = 0;
+    let mut total_indexes: usize = 0;
+    let mut total_foreign_keys: usize = 0;
 
     for table in tables {
         // Get column information for this table using PRAGMA table_info
-        #[derive(Debug, sqlx::FromRow)]
-        struct ColumnRow {
-            cid: i64,
-            name: String,
-            type_: String,
-            notnull: i64,
-            dflt_value: Option<String>,
-            pk: i64,
-        }
-
-        let columns: Vec<ColumnRow> = sqlx::query_as("PRAGMA table_info(?)")
-            .bind(&table.name)
+        // SQLite PRAGMA table_info does not support bound parameters reliably
+        // across all drivers, so we use an escaped string literal from a DB-
+        // discovered table name (not user input) to keep this path safe.
+        let escaped_table_name = escape_sqlite_literal(&table.name);
+        let pragma_sql = format!("PRAGMA table_info('{escaped_table_name}')");
+        let columns = sqlx::query(&pragma_sql)
             .fetch_all(&*pool)
             .await
             .map_err(|e| ApiError::Database(e.to_string()))?;
 
         let column_info: Vec<serde_json::Value> = columns
             .iter()
-            .map(|col| {
+            .map(|row| {
+                let cid = row.try_get::<i64, _>("cid").unwrap_or_default();
+                let name = row.try_get::<String, _>("name").unwrap_or_default();
+                let col_type = row.try_get::<String, _>("type").unwrap_or_default();
+                let notnull = row.try_get::<i64, _>("notnull").unwrap_or_default();
+                let dflt_value = row
+                    .try_get::<Option<String>, _>("dflt_value")
+                    .ok()
+                    .flatten();
+                let pk = row.try_get::<i64, _>("pk").unwrap_or_default();
                 serde_json::json!({
-                    "cid": col.cid,
-                    "name": col.name,
-                    "type": col.type_,
-                    "notnull": col.notnull == 1,
-                    "dflt_value": col.dflt_value,
-                    "pk": col.pk == 1,
+                    "cid": cid,
+                    "name": name,
+                    "type": col_type,
+                    "notnull": notnull == 1,
+                    "dflt_value": dflt_value,
+                    "pk": pk == 1,
                 })
             })
             .collect();
 
+        total_columns += column_info.len();
+
+        if !query.detailed {
+            schema.push(serde_json::json!({
+                "name": table.name,
+                "columns": column_info,
+            }));
+            continue;
+        }
+
+        // SQLite PRAGMA index_list/index_info also require dynamic statement assembly.
+        let index_list_sql = format!("PRAGMA index_list('{escaped_table_name}')");
+        let index_list_rows = sqlx::query(&index_list_sql)
+            .fetch_all(&*pool)
+            .await
+            .map_err(|e| ApiError::Database(e.to_string()))?;
+        let mut index_values = Vec::new();
+
+        for index_row in index_list_rows {
+            let index_name = index_row.try_get::<String, _>("name").unwrap_or_default();
+            if index_name.is_empty() {
+                continue;
+            }
+
+            let escaped_index_name = escape_sqlite_literal(&index_name);
+            let index_info_sql = format!("PRAGMA index_info('{escaped_index_name}')");
+            let index_columns_rows = sqlx::query(&index_info_sql)
+                .fetch_all(&*pool)
+                .await
+                .map_err(|e| ApiError::Database(e.to_string()))?;
+            let index_columns: Vec<String> = index_columns_rows
+                .iter()
+                .filter_map(|index_col| index_col.try_get::<String, _>("name").ok())
+                .collect();
+
+            index_values.push(serde_json::json!({
+                "name": index_name,
+                "unique": index_row.try_get::<i64, _>("unique").unwrap_or_default() == 1,
+                "origin": index_row.try_get::<String, _>("origin").unwrap_or_else(|_| "c".to_string()),
+                "partial": index_row.try_get::<i64, _>("partial").unwrap_or_default() == 1,
+                "columns": index_columns,
+            }));
+        }
+        total_indexes += index_values.len();
+
+        let fk_list_sql = format!("PRAGMA foreign_key_list('{escaped_table_name}')");
+        let fk_rows = sqlx::query(&fk_list_sql)
+            .fetch_all(&*pool)
+            .await
+            .map_err(|e| ApiError::Database(e.to_string()))?;
+        let foreign_keys: Vec<serde_json::Value> = fk_rows
+            .iter()
+            .map(|fk| {
+                serde_json::json!({
+                    "id": fk.try_get::<i64, _>("id").unwrap_or_default(),
+                    "seq": fk.try_get::<i64, _>("seq").unwrap_or_default(),
+                    "table": fk.try_get::<String, _>("table").unwrap_or_default(),
+                    "from": fk.try_get::<String, _>("from").unwrap_or_default(),
+                    "to": fk.try_get::<String, _>("to").unwrap_or_default(),
+                    "onUpdate": fk.try_get::<String, _>("on_update").unwrap_or_default(),
+                    "onDelete": fk.try_get::<String, _>("on_delete").unwrap_or_default(),
+                    "match": fk.try_get::<String, _>("match").unwrap_or_default(),
+                })
+            })
+            .collect();
+        total_foreign_keys += foreign_keys.len();
+
+        let row_count = if query.include_row_count {
+            let row_count_sql = format!(
+                "SELECT COUNT(*) FROM {}",
+                escape_sqlite_identifier(&table.name)
+            );
+            Some(
+                sqlx::query_scalar::<_, i64>(&row_count_sql)
+                    .fetch_one(&*pool)
+                    .await
+                    .map_err(|e| ApiError::Database(e.to_string()))?,
+            )
+        } else {
+            None
+        };
+
         schema.push(serde_json::json!({
             "name": table.name,
             "columns": column_info,
+            "indexes": index_values,
+            "foreignKeys": foreign_keys,
+            "rowCount": row_count,
         }));
     }
 
+    if query.detailed {
+        return Ok(Json(serde_json::json!({
+            "tables": schema,
+            "summary": {
+                "tableCount": schema.len(),
+                "columnCount": total_columns,
+                "indexCount": total_indexes,
+                "foreignKeyCount": total_foreign_keys
+            },
+            "includesRowCount": query.include_row_count
+        })));
+    }
+
     Ok(Json(serde_json::json!(schema)))
+}
+
+#[derive(Debug, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct SchemaQueryParams {
+    #[serde(default)]
+    detailed: bool,
+    #[serde(default, alias = "include_row_count")]
+    include_row_count: bool,
+}
+
+fn escape_sqlite_literal(value: &str) -> String {
+    value.replace('\'', "''")
+}
+
+fn escape_sqlite_identifier(value: &str) -> String {
+    format!("\"{}\"", value.replace('"', "\"\""))
 }
 
 #[derive(Debug, Deserialize)]
@@ -5776,12 +6356,10 @@ mod tests {
     #[test]
     fn validate_read_only_sql_accepts_select_and_with_queries() {
         assert!(validate_read_only_sql("SELECT id, content FROM message LIMIT 10").is_ok());
-        assert!(
-            validate_read_only_sql(
-                "WITH recent AS (SELECT id FROM message ORDER BY id DESC LIMIT 5) SELECT * FROM recent"
-            )
-            .is_ok()
-        );
+        assert!(validate_read_only_sql(
+            "WITH recent AS (SELECT id FROM message ORDER BY id DESC LIMIT 5) SELECT * FROM recent"
+        )
+        .is_ok());
     }
 
     #[test]
@@ -5795,10 +6373,8 @@ mod tests {
     fn validate_read_only_sql_ignores_keywords_inside_literals_and_comments() {
         assert!(validate_read_only_sql("SELECT 'drop table users' AS txt").is_ok());
         assert!(
-            validate_read_only_sql(
-                "SELECT 1 -- DELETE FROM message\nFROM (SELECT 1 AS v) t"
-            )
-            .is_ok()
+            validate_read_only_sql("SELECT 1 -- DELETE FROM message\nFROM (SELECT 1 AS v) t")
+                .is_ok()
         );
     }
 }

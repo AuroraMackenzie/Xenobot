@@ -7,6 +7,8 @@ use std::sync::Arc;
 /// Chinese text segmenter using jieba-rs.
 pub struct ChineseSegmenter {
     jieba: Arc<Jieba>,
+    custom_terms: Arc<HashSet<String>>,
+    max_custom_term_chars: usize,
 }
 
 impl ChineseSegmenter {
@@ -14,29 +16,49 @@ impl ChineseSegmenter {
     pub fn new() -> Self {
         Self {
             jieba: Arc::new(Jieba::new()),
+            custom_terms: Arc::new(HashSet::new()),
+            max_custom_term_chars: 0,
         }
     }
 
     /// Create a new ChineseSegmenter with custom dictionary.
-    pub fn with_dict(_dict_path: &str) -> AnalysisResult<Self> {
+    pub fn with_dict(dict_path: &str) -> AnalysisResult<Self> {
+        let raw = std::fs::read_to_string(dict_path)
+            .map_err(|e| AnalysisError::Io(std::io::Error::new(e.kind(), e.to_string())))?;
+
+        let custom_terms: HashSet<String> = raw
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty() && !line.starts_with('#'))
+            .filter_map(|line| line.split_whitespace().next().map(|v| v.to_string()))
+            .collect();
+
+        let max_custom_term_chars = custom_terms
+            .iter()
+            .map(|term| term.chars().count())
+            .max()
+            .unwrap_or(0);
+
         let jieba = Jieba::new();
-        // TODO: Load custom dictionary
-        // jieba.load_dict(dict_path).map_err(|e| AnalysisError::Nlp(e.to_string()))?;
         Ok(Self {
             jieba: Arc::new(jieba),
+            custom_terms: Arc::new(custom_terms),
+            max_custom_term_chars,
         })
     }
 
     /// Segment Chinese text into words.
     pub fn segment(&self, text: &str) -> AnalysisResult<Vec<String>> {
         let words = self.jieba.cut(text, false);
-        Ok(words.into_iter().map(String::from).collect())
+        let tokens: Vec<String> = words.into_iter().map(String::from).collect();
+        Ok(self.merge_custom_terms(tokens))
     }
 
     /// Segment Chinese text with HMM (Hidden Markov Model) for unknown words.
     pub fn segment_hmm(&self, text: &str) -> AnalysisResult<Vec<String>> {
         let words = self.jieba.cut(text, true);
-        Ok(words.into_iter().map(String::from).collect())
+        let tokens: Vec<String> = words.into_iter().map(String::from).collect();
+        Ok(self.merge_custom_terms(tokens))
     }
 
     /// Extract keywords from Chinese text using TF-IDF.
@@ -62,6 +84,42 @@ impl ChineseSegmenter {
         keywords.truncate(top_k);
 
         Ok(keywords)
+    }
+
+    fn merge_custom_terms(&self, tokens: Vec<String>) -> Vec<String> {
+        if self.custom_terms.is_empty() || tokens.is_empty() {
+            return tokens;
+        }
+
+        let mut merged = Vec::with_capacity(tokens.len());
+        let mut i = 0;
+        while i < tokens.len() {
+            let mut current = String::new();
+            let mut best: Option<(usize, String)> = None;
+            let mut total_chars = 0_usize;
+
+            for j in i..tokens.len() {
+                total_chars += tokens[j].chars().count();
+                if self.max_custom_term_chars > 0 && total_chars > self.max_custom_term_chars {
+                    break;
+                }
+
+                current.push_str(&tokens[j]);
+                if self.custom_terms.contains(&current) {
+                    best = Some((j + 1, current.clone()));
+                }
+            }
+
+            if let Some((next_index, term)) = best {
+                merged.push(term);
+                i = next_index;
+            } else {
+                merged.push(tokens[i].clone());
+                i += 1;
+            }
+        }
+
+        merged
     }
 }
 
@@ -510,5 +568,35 @@ impl ChineseTextNormalizer {
         }
 
         normalized
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ChineseSegmenter;
+
+    #[test]
+    fn with_dict_returns_error_for_missing_file() {
+        let missing = format!("/tmp/xenobot-nlp-missing-{}.dict", std::process::id());
+        let result = ChineseSegmenter::with_dict(&missing);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn custom_terms_are_merged_after_jieba_cut() {
+        let dict_path = format!(
+            "/tmp/xenobot-nlp-custom-{}-{}.dict",
+            std::process::id(),
+            chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()
+        );
+        std::fs::write(&dict_path, "超级词条 100 n\n").expect("write temp dict");
+
+        let segmenter = ChineseSegmenter::with_dict(&dict_path).expect("segmenter with dict");
+        let tokens = segmenter
+            .segment("这是超级词条测试")
+            .expect("segmentation should succeed");
+
+        let _ = std::fs::remove_file(&dict_path);
+        assert!(tokens.iter().any(|t| t == "超级词条"));
     }
 }

@@ -28,7 +28,8 @@ use xenobot_core::webhook::{
 };
 use xenobot_core::{
     discover_sources_for_all_platforms, discover_sources_for_platform,
-    platform_id as core_platform_id, Platform as RuntimePlatform, SourceCandidate,
+    legal_safe_runtime_platforms, platform_id as core_platform_id, Platform as RuntimePlatform,
+    SourceCandidate,
 };
 
 /// Configuration for the CLI application.
@@ -335,9 +336,7 @@ impl App {
 
         #[cfg(not(feature = "analysis"))]
         {
-            println!(
-                "monitor runtime is disabled in this build; enable with --features analysis"
-            );
+            println!("monitor runtime is disabled in this build; enable with --features analysis");
             Ok(())
         }
     }
@@ -439,6 +438,7 @@ impl App {
                 };
                 print_source_candidates(&items, *existing_only, format_out)
             }
+            SourceCommand::Matrix { format_out } => print_source_platform_matrix(format_out),
         }
     }
 
@@ -456,6 +456,7 @@ impl App {
                     file_gateway_dir,
                     file_gateway_poll_ms,
                     file_gateway_response_ttl_seconds,
+                    force_file_gateway,
                     db_path,
                     cors,
                     websocket,
@@ -467,6 +468,7 @@ impl App {
                     file_gateway_dir.clone(),
                     *file_gateway_poll_ms,
                     *file_gateway_response_ttl_seconds,
+                    *force_file_gateway,
                     db_path.clone(),
                     *cors,
                     *websocket,
@@ -490,6 +492,27 @@ impl App {
                     method.clone(),
                     path.clone(),
                 ),
+                ApiCommand::GatewayCall {
+                    file_gateway_dir,
+                    request_id,
+                    method,
+                    path,
+                    body_json,
+                    timeout_ms,
+                    format,
+                } => run_api_file_gateway_call(
+                    file_gateway_dir.clone(),
+                    request_id.clone(),
+                    method.clone(),
+                    path.clone(),
+                    body_json.clone(),
+                    *timeout_ms,
+                    format.clone(),
+                ),
+                ApiCommand::SandboxDoctor {
+                    file_gateway_dir,
+                    format,
+                } => run_api_sandbox_doctor(file_gateway_dir.clone(), format.clone()),
                 ApiCommand::McpSmoke { url, timeout_ms } => {
                     run_mcp_smoke_check(url.clone(), *timeout_ms)
                 }
@@ -501,6 +524,40 @@ impl App {
                 } => run_mcp_integration_preset_fetch(
                     url.clone(),
                     target.clone(),
+                    format.clone(),
+                    *timeout_ms,
+                ),
+                ApiCommand::McpCall {
+                    url,
+                    mode,
+                    tool,
+                    args_json,
+                    format,
+                    timeout_ms,
+                } => run_mcp_tool_call(
+                    url.clone(),
+                    mode.clone(),
+                    tool.clone(),
+                    args_json.clone(),
+                    format.clone(),
+                    *timeout_ms,
+                ),
+                ApiCommand::McpResources {
+                    url,
+                    mode,
+                    format,
+                    timeout_ms,
+                } => run_mcp_resources_list(url.clone(), mode.clone(), format.clone(), *timeout_ms),
+                ApiCommand::McpResource {
+                    url,
+                    mode,
+                    uri,
+                    format,
+                    timeout_ms,
+                } => run_mcp_resource_read(
+                    url.clone(),
+                    mode.clone(),
+                    uri.clone(),
                     format.clone(),
                     *timeout_ms,
                 ),
@@ -577,16 +634,13 @@ impl App {
                     )
                     .map_err(|e| CliError::Database(e.to_string()))?;
                 let rows = stmt
-                    .query_map(
-                        rusqlite::params![start_ts, end_ts, member_filter],
-                        |row| {
-                            Ok(serde_json::json!({
-                                "senderId": row.get::<_, i64>(0)?,
-                                "senderName": row.get::<_, String>(1)?,
-                                "messageCount": row.get::<_, i64>(2)?,
-                            }))
-                        },
-                    )
+                    .query_map(rusqlite::params![start_ts, end_ts, member_filter], |row| {
+                        Ok(serde_json::json!({
+                            "senderId": row.get::<_, i64>(0)?,
+                            "senderName": row.get::<_, String>(1)?,
+                            "messageCount": row.get::<_, i64>(2)?,
+                        }))
+                    })
                     .map_err(|e| CliError::Database(e.to_string()))?;
                 let mut top_members = Vec::new();
                 for row in rows {
@@ -614,7 +668,10 @@ impl App {
                 let payload = run_advanced_analysis(&conn, analysis)?;
                 print_analysis_result(&payload, format)?;
             }
-            AnalysisType::TimeDistribution { granularity, format } => {
+            AnalysisType::TimeDistribution {
+                granularity,
+                format,
+            } => {
                 let payload = run_time_distribution_analysis(&conn, granularity)?;
                 print_analysis_result(&payload, format)?;
             }
@@ -1317,10 +1374,9 @@ impl App {
                     .map(|item| item.id.clone())
                     .collect::<std::collections::HashSet<_>>();
                 let account_id = allocate_account_id(&platform, name, &existing_ids)?;
-                let resolved_data_dir = data_dir
-                    .as_ref()
-                    .cloned()
-                    .or_else(|| first_existing_path(&discover_sources_for_platform(&runtime_platform)));
+                let resolved_data_dir = data_dir.as_ref().cloned().or_else(|| {
+                    first_existing_path(&discover_sources_for_platform(&runtime_platform))
+                });
                 let now = chrono::Utc::now().to_rfc3339();
                 let profile = StoredAccountProfile {
                     id: account_id.clone(),
@@ -1668,6 +1724,48 @@ impl App {
                 println!("database optimize completed");
                 println!("path: {}", path.to_string_lossy());
                 Ok(())
+            }
+            DbCommand::Verify {
+                path,
+                format,
+                strict,
+            } => {
+                let conn = open_sqlite_read_connection(path)?;
+                let report = collect_db_verification(path, &conn)?;
+                print_db_verification(&report, format)?;
+                if *strict && !report.ok {
+                    return Err(CliError::Command(format!(
+                        "database verification failed: missing required checks ({})",
+                        report.missing_required
+                    )));
+                }
+                Ok(())
+            }
+            DbCommand::Checkpoints {
+                path,
+                source_kind,
+                status,
+                limit,
+                format,
+            } => {
+                let conn = open_sqlite_read_connection(path)?;
+                let report = collect_db_checkpoints(
+                    path,
+                    &conn,
+                    source_kind.as_deref(),
+                    status.as_deref(),
+                    *limit,
+                )?;
+                print_db_checkpoints(&report, format)
+            }
+            DbCommand::Schema {
+                path,
+                include_row_count,
+                format,
+            } => {
+                let conn = open_sqlite_read_connection(path)?;
+                let report = collect_db_schema(path, &conn, *include_row_count)?;
+                print_db_schema(&report, format)
             }
         }
     }
@@ -2327,6 +2425,62 @@ fn print_source_candidates(
             }
         }
     }
+    Ok(())
+}
+
+#[derive(Debug, Serialize)]
+struct SourceCoverageRow {
+    platform_id: String,
+    total_candidates: usize,
+    existing_candidates: usize,
+    readable_candidates: usize,
+}
+
+fn build_source_platform_matrix_rows() -> Vec<SourceCoverageRow> {
+    let mut rows = Vec::new();
+    for platform in legal_safe_runtime_platforms() {
+        let candidates = discover_sources_for_platform(&platform);
+        let existing = candidates.iter().filter(|item| item.exists).count();
+        let readable = candidates
+            .iter()
+            .filter(|item| item.exists && item.readable)
+            .count();
+
+        rows.push(SourceCoverageRow {
+            platform_id: core_platform_id(&platform).to_string(),
+            total_candidates: candidates.len(),
+            existing_candidates: existing,
+            readable_candidates: readable,
+        });
+    }
+    rows.sort_by(|a, b| a.platform_id.cmp(&b.platform_id));
+    rows
+}
+
+fn print_source_platform_matrix(format: &OutputFormat) -> Result<()> {
+    let rows = build_source_platform_matrix_rows();
+
+    match format {
+        OutputFormat::Json => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&rows).map_err(|e| CliError::Parse(e.to_string()))?
+            );
+        }
+        _ => {
+            println!("source coverage matrix (legal-safe runtime platforms)");
+            for row in rows {
+                println!(
+                    "- {} | total={} existing={} readable={}",
+                    row.platform_id,
+                    row.total_candidates,
+                    row.existing_candidates,
+                    row.readable_candidates
+                );
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -3458,6 +3612,730 @@ fn print_db_info(info: &DbInfoRow, format: &OutputFormat) -> Result<()> {
     Ok(())
 }
 
+#[derive(Debug, Serialize)]
+struct DbVerificationCheck {
+    kind: String,
+    name: String,
+    required: bool,
+    exists: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct DbVerificationReport {
+    path: String,
+    ok: bool,
+    required_total: usize,
+    optional_total: usize,
+    missing_required: usize,
+    missing_optional: usize,
+    checks: Vec<DbVerificationCheck>,
+}
+
+fn sqlite_object_exists(
+    conn: &rusqlite::Connection,
+    object_type: &str,
+    name: &str,
+) -> Result<bool> {
+    let exists: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = ?1 AND name = ?2",
+            rusqlite::params![object_type, name],
+            |row| row.get(0),
+        )
+        .map_err(|e| CliError::Database(e.to_string()))?;
+    Ok(exists > 0)
+}
+
+fn collect_db_verification(
+    path: &Path,
+    conn: &rusqlite::Connection,
+) -> Result<DbVerificationReport> {
+    // Required schema objects for API/analysis hot paths.
+    let required_tables = [
+        "meta",
+        "member",
+        "message",
+        "sessions",
+        "message_context",
+        "member_name_history",
+    ];
+    let required_indexes = [
+        "idx_message_meta_ts_id",
+        "idx_message_meta_sender_ts_id",
+        "idx_sessions_meta_created_at",
+        "idx_member_name_history_member_start_ts",
+        "idx_message_context_session_message",
+        "idx_chat_session_meta_start_ts_id",
+    ];
+
+    // Optional but expected for import/incremental diagnostics.
+    let optional_tables = ["import_progress", "import_source_checkpoint"];
+    let optional_indexes = ["idx_message_meta_id_sender_ts", "idx_message_meta_id_ts"];
+
+    let mut checks = Vec::new();
+
+    for table in required_tables {
+        checks.push(DbVerificationCheck {
+            kind: "table".to_string(),
+            name: table.to_string(),
+            required: true,
+            exists: sqlite_object_exists(conn, "table", table)?,
+        });
+    }
+    for index in required_indexes {
+        checks.push(DbVerificationCheck {
+            kind: "index".to_string(),
+            name: index.to_string(),
+            required: true,
+            exists: sqlite_object_exists(conn, "index", index)?,
+        });
+    }
+    for table in optional_tables {
+        checks.push(DbVerificationCheck {
+            kind: "table".to_string(),
+            name: table.to_string(),
+            required: false,
+            exists: sqlite_object_exists(conn, "table", table)?,
+        });
+    }
+    for index in optional_indexes {
+        checks.push(DbVerificationCheck {
+            kind: "index".to_string(),
+            name: index.to_string(),
+            required: false,
+            exists: sqlite_object_exists(conn, "index", index)?,
+        });
+    }
+
+    let required_total = checks.iter().filter(|row| row.required).count();
+    let optional_total = checks.iter().filter(|row| !row.required).count();
+    let missing_required = checks
+        .iter()
+        .filter(|row| row.required && !row.exists)
+        .count();
+    let missing_optional = checks
+        .iter()
+        .filter(|row| !row.required && !row.exists)
+        .count();
+
+    Ok(DbVerificationReport {
+        path: path.to_string_lossy().to_string(),
+        ok: missing_required == 0,
+        required_total,
+        optional_total,
+        missing_required,
+        missing_optional,
+        checks,
+    })
+}
+
+fn print_db_verification(report: &DbVerificationReport, format: &OutputFormat) -> Result<()> {
+    match format {
+        OutputFormat::Json => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(report).map_err(|e| CliError::Parse(e.to_string()))?
+            );
+        }
+        OutputFormat::Csv => {
+            println!("path,ok,required_total,optional_total,missing_required,missing_optional");
+            println!(
+                "{},{},{},{},{},{}",
+                csv_escape(&report.path),
+                report.ok,
+                report.required_total,
+                report.optional_total,
+                report.missing_required,
+                report.missing_optional
+            );
+            println!("kind,name,required,exists");
+            for row in &report.checks {
+                println!(
+                    "{},{},{},{}",
+                    csv_escape(&row.kind),
+                    csv_escape(&row.name),
+                    row.required,
+                    row.exists
+                );
+            }
+        }
+        OutputFormat::Yaml => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(report).map_err(|e| CliError::Parse(e.to_string()))?
+            );
+            println!("note: yaml renderer is not wired in cli; json is printed instead");
+        }
+        _ => {
+            println!("database verification");
+            println!("path: {}", report.path);
+            println!("ok: {}", report.ok);
+            println!("required checks: {}", report.required_total);
+            println!("optional checks: {}", report.optional_total);
+            println!("missing required: {}", report.missing_required);
+            println!("missing optional: {}", report.missing_optional);
+            if report.missing_required > 0 || report.missing_optional > 0 {
+                println!("missing objects");
+                for row in &report.checks {
+                    if !row.exists {
+                        println!(
+                            "- [{}] {} {}",
+                            if row.required { "required" } else { "optional" },
+                            row.kind,
+                            row.name
+                        );
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+#[derive(Debug, Serialize)]
+struct DbCheckpointRow {
+    id: i64,
+    source_kind: String,
+    source_path: String,
+    fingerprint: String,
+    file_size: i64,
+    modified_at: i64,
+    platform: Option<String>,
+    chat_name: Option<String>,
+    meta_id: Option<i64>,
+    last_processed_at: i64,
+    last_inserted_messages: i64,
+    last_duplicate_messages: i64,
+    status: String,
+    error_message: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct DbCheckpointReport {
+    path: String,
+    table_present: bool,
+    source_kind_filter: Option<String>,
+    status_filter: Option<String>,
+    limit: usize,
+    total_rows: usize,
+    returned_rows: usize,
+    rows: Vec<DbCheckpointRow>,
+}
+
+fn collect_db_checkpoints(
+    path: &Path,
+    conn: &rusqlite::Connection,
+    source_kind_filter: Option<&str>,
+    status_filter: Option<&str>,
+    limit: usize,
+) -> Result<DbCheckpointReport> {
+    let source_kind = source_kind_filter
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(ToOwned::to_owned);
+    let status = status_filter
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(ToOwned::to_owned);
+    let capped_limit = limit.max(1).min(10_000);
+
+    if !sqlite_object_exists(conn, "table", "import_source_checkpoint")? {
+        return Ok(DbCheckpointReport {
+            path: path.to_string_lossy().to_string(),
+            table_present: false,
+            source_kind_filter: source_kind,
+            status_filter: status,
+            limit: capped_limit,
+            total_rows: 0,
+            returned_rows: 0,
+            rows: Vec::new(),
+        });
+    }
+
+    let mut where_parts = Vec::new();
+    let mut args = Vec::<String>::new();
+    if let Some(value) = source_kind.as_ref() {
+        where_parts.push("source_kind = ?".to_string());
+        args.push(value.clone());
+    }
+    if let Some(value) = status.as_ref() {
+        where_parts.push("status = ?".to_string());
+        args.push(value.clone());
+    }
+
+    let where_sql = if where_parts.is_empty() {
+        String::new()
+    } else {
+        format!(" WHERE {}", where_parts.join(" AND "))
+    };
+
+    let total_sql = format!("SELECT COUNT(*) FROM import_source_checkpoint{}", where_sql);
+    let total_rows: i64 = conn
+        .query_row(
+            &total_sql,
+            rusqlite::params_from_iter(args.iter().map(|s| s.as_str())),
+            |row| row.get(0),
+        )
+        .map_err(|e| CliError::Database(e.to_string()))?;
+
+    let mut row_args = args.clone();
+    row_args.push(capped_limit.to_string());
+
+    let rows_sql = format!(
+        r#"
+        SELECT
+            id, source_kind, source_path, fingerprint, file_size, modified_at,
+            platform, chat_name, meta_id, last_processed_at,
+            last_inserted_messages, last_duplicate_messages, status, error_message
+        FROM import_source_checkpoint
+        {}
+        ORDER BY last_processed_at DESC, id DESC
+        LIMIT ?
+        "#,
+        where_sql
+    );
+
+    let mut stmt = conn
+        .prepare(&rows_sql)
+        .map_err(|e| CliError::Database(e.to_string()))?;
+    let mapped = stmt
+        .query_map(
+            rusqlite::params_from_iter(row_args.iter().map(|s| s.as_str())),
+            |row| {
+                Ok(DbCheckpointRow {
+                    id: row.get(0)?,
+                    source_kind: row.get(1)?,
+                    source_path: row.get(2)?,
+                    fingerprint: row.get(3)?,
+                    file_size: row.get(4)?,
+                    modified_at: row.get(5)?,
+                    platform: row.get(6)?,
+                    chat_name: row.get(7)?,
+                    meta_id: row.get(8)?,
+                    last_processed_at: row.get(9)?,
+                    last_inserted_messages: row.get(10)?,
+                    last_duplicate_messages: row.get(11)?,
+                    status: row.get(12)?,
+                    error_message: row.get(13)?,
+                })
+            },
+        )
+        .map_err(|e| CliError::Database(e.to_string()))?;
+
+    let mut rows = Vec::new();
+    for row in mapped {
+        rows.push(row.map_err(|e| CliError::Database(e.to_string()))?);
+    }
+
+    Ok(DbCheckpointReport {
+        path: path.to_string_lossy().to_string(),
+        table_present: true,
+        source_kind_filter: source_kind,
+        status_filter: status,
+        limit: capped_limit,
+        total_rows: total_rows.max(0) as usize,
+        returned_rows: rows.len(),
+        rows,
+    })
+}
+
+fn print_db_checkpoints(report: &DbCheckpointReport, format: &OutputFormat) -> Result<()> {
+    match format {
+        OutputFormat::Json => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(report).map_err(|e| CliError::Parse(e.to_string()))?
+            );
+        }
+        OutputFormat::Csv => {
+            println!(
+                "path,table_present,source_kind_filter,status_filter,limit,total_rows,returned_rows"
+            );
+            println!(
+                "{},{},{},{},{},{},{}",
+                csv_escape(&report.path),
+                report.table_present,
+                csv_escape(report.source_kind_filter.as_deref().unwrap_or_default()),
+                csv_escape(report.status_filter.as_deref().unwrap_or_default()),
+                report.limit,
+                report.total_rows,
+                report.returned_rows
+            );
+            println!("id,source_kind,source_path,status,platform,chat_name,meta_id,last_processed_at,last_inserted,last_duplicate,file_size,modified_at,fingerprint,error_message");
+            for row in &report.rows {
+                println!(
+                    "{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+                    row.id,
+                    csv_escape(&row.source_kind),
+                    csv_escape(&row.source_path),
+                    csv_escape(&row.status),
+                    csv_escape(row.platform.as_deref().unwrap_or_default()),
+                    csv_escape(row.chat_name.as_deref().unwrap_or_default()),
+                    row.meta_id
+                        .map(|v| v.to_string())
+                        .unwrap_or_else(String::new),
+                    row.last_processed_at,
+                    row.last_inserted_messages,
+                    row.last_duplicate_messages,
+                    row.file_size,
+                    row.modified_at,
+                    csv_escape(&row.fingerprint),
+                    csv_escape(row.error_message.as_deref().unwrap_or_default()),
+                );
+            }
+        }
+        OutputFormat::Yaml => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(report).map_err(|e| CliError::Parse(e.to_string()))?
+            );
+            println!("note: yaml renderer is not wired in cli; json is printed instead");
+        }
+        _ => {
+            println!("database checkpoints");
+            println!("path: {}", report.path);
+            println!("table present: {}", report.table_present);
+            println!(
+                "filters: source_kind={} status={}",
+                report
+                    .source_kind_filter
+                    .as_deref()
+                    .filter(|v| !v.is_empty())
+                    .unwrap_or("-"),
+                report
+                    .status_filter
+                    .as_deref()
+                    .filter(|v| !v.is_empty())
+                    .unwrap_or("-")
+            );
+            println!("limit: {}", report.limit);
+            println!("total rows: {}", report.total_rows);
+            println!("returned rows: {}", report.returned_rows);
+            if !report.table_present {
+                println!("note: import_source_checkpoint table does not exist in this database");
+                return Ok(());
+            }
+            for row in &report.rows {
+                println!(
+                    "- [{}] kind={} path={} meta_id={} inserted={} duplicate={} ts={} error={}",
+                    row.status,
+                    row.source_kind,
+                    row.source_path,
+                    row.meta_id
+                        .map(|v| v.to_string())
+                        .unwrap_or_else(|| "-".to_string()),
+                    row.last_inserted_messages,
+                    row.last_duplicate_messages,
+                    row.last_processed_at,
+                    row.error_message.as_deref().unwrap_or("-")
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+#[derive(Debug, Serialize)]
+struct DbSchemaColumn {
+    cid: i64,
+    name: String,
+    #[serde(rename = "type")]
+    column_type: String,
+    notnull: bool,
+    default_value: Option<String>,
+    primary_key: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct DbSchemaIndex {
+    name: String,
+    unique: bool,
+    origin: String,
+    partial: bool,
+    columns: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct DbSchemaForeignKey {
+    id: i64,
+    seq: i64,
+    table: String,
+    from: String,
+    to: String,
+    on_update: String,
+    on_delete: String,
+    match_rule: String,
+}
+
+#[derive(Debug, Serialize)]
+struct DbSchemaTable {
+    name: String,
+    columns: Vec<DbSchemaColumn>,
+    indexes: Vec<DbSchemaIndex>,
+    foreign_keys: Vec<DbSchemaForeignKey>,
+    row_count: Option<i64>,
+}
+
+#[derive(Debug, Serialize)]
+struct DbSchemaSummary {
+    table_count: usize,
+    column_count: usize,
+    index_count: usize,
+    foreign_key_count: usize,
+}
+
+#[derive(Debug, Serialize)]
+struct DbSchemaReport {
+    path: String,
+    include_row_count: bool,
+    summary: DbSchemaSummary,
+    tables: Vec<DbSchemaTable>,
+}
+
+fn escape_sqlite_literal_value(value: &str) -> String {
+    value.replace('\'', "''")
+}
+
+fn escape_sqlite_identifier_name(value: &str) -> String {
+    format!("\"{}\"", value.replace('"', "\"\""))
+}
+
+fn collect_db_schema(
+    path: &Path,
+    conn: &rusqlite::Connection,
+    include_row_count: bool,
+) -> Result<DbSchemaReport> {
+    let mut tables_stmt = conn
+        .prepare(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+        )
+        .map_err(|e| CliError::Database(e.to_string()))?;
+    let table_iter = tables_stmt
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(|e| CliError::Database(e.to_string()))?;
+    let mut table_names = Vec::new();
+    for table_name in table_iter {
+        table_names.push(table_name.map_err(|e| CliError::Database(e.to_string()))?);
+    }
+
+    let mut tables = Vec::new();
+    let mut summary = DbSchemaSummary {
+        table_count: 0,
+        column_count: 0,
+        index_count: 0,
+        foreign_key_count: 0,
+    };
+
+    for table_name in table_names {
+        let escaped_table_literal = escape_sqlite_literal_value(&table_name);
+
+        let mut columns_stmt = conn
+            .prepare(&format!("PRAGMA table_info('{escaped_table_literal}')"))
+            .map_err(|e| CliError::Database(e.to_string()))?;
+        let column_rows = columns_stmt
+            .query_map([], |row| {
+                Ok(DbSchemaColumn {
+                    cid: row.get::<_, i64>(0)?,
+                    name: row.get::<_, String>(1)?,
+                    column_type: row.get::<_, String>(2).unwrap_or_default(),
+                    notnull: row.get::<_, i64>(3).unwrap_or_default() == 1,
+                    default_value: row.get::<_, Option<String>>(4).unwrap_or(None),
+                    primary_key: row.get::<_, i64>(5).unwrap_or_default() == 1,
+                })
+            })
+            .map_err(|e| CliError::Database(e.to_string()))?;
+        let mut columns = Vec::new();
+        for col in column_rows {
+            columns.push(col.map_err(|e| CliError::Database(e.to_string()))?);
+        }
+        summary.column_count += columns.len();
+
+        let mut index_list_stmt = conn
+            .prepare(&format!("PRAGMA index_list('{escaped_table_literal}')"))
+            .map_err(|e| CliError::Database(e.to_string()))?;
+        let index_list_rows = index_list_stmt
+            .query_map([], |row| {
+                let index_name: String = row.get(1)?;
+                let unique: i64 = row.get(2)?;
+                let origin: String = row.get::<_, String>(3).unwrap_or_else(|_| "c".to_string());
+                let partial: i64 = row.get::<_, i64>(4).unwrap_or_default();
+                Ok((index_name, unique == 1, origin, partial == 1))
+            })
+            .map_err(|e| CliError::Database(e.to_string()))?;
+
+        let mut indexes = Vec::new();
+        for entry in index_list_rows {
+            let (index_name, unique, origin, partial) =
+                entry.map_err(|e| CliError::Database(e.to_string()))?;
+            if index_name.trim().is_empty() {
+                continue;
+            }
+            let escaped_index_literal = escape_sqlite_literal_value(&index_name);
+            let mut index_info_stmt = conn
+                .prepare(&format!("PRAGMA index_info('{escaped_index_literal}')"))
+                .map_err(|e| CliError::Database(e.to_string()))?;
+            let index_col_rows = index_info_stmt
+                .query_map([], |row| row.get::<_, String>(2))
+                .map_err(|e| CliError::Database(e.to_string()))?;
+            let mut index_columns = Vec::new();
+            for col in index_col_rows {
+                index_columns.push(col.map_err(|e| CliError::Database(e.to_string()))?);
+            }
+            indexes.push(DbSchemaIndex {
+                name: index_name,
+                unique,
+                origin,
+                partial,
+                columns: index_columns,
+            });
+        }
+        summary.index_count += indexes.len();
+
+        let mut fk_stmt = conn
+            .prepare(&format!(
+                "PRAGMA foreign_key_list('{escaped_table_literal}')"
+            ))
+            .map_err(|e| CliError::Database(e.to_string()))?;
+        let fk_rows = fk_stmt
+            .query_map([], |row| {
+                Ok(DbSchemaForeignKey {
+                    id: row.get::<_, i64>(0)?,
+                    seq: row.get::<_, i64>(1)?,
+                    table: row.get::<_, String>(2).unwrap_or_default(),
+                    from: row.get::<_, String>(3).unwrap_or_default(),
+                    to: row.get::<_, String>(4).unwrap_or_default(),
+                    on_update: row.get::<_, String>(5).unwrap_or_default(),
+                    on_delete: row.get::<_, String>(6).unwrap_or_default(),
+                    match_rule: row.get::<_, String>(7).unwrap_or_default(),
+                })
+            })
+            .map_err(|e| CliError::Database(e.to_string()))?;
+        let mut foreign_keys = Vec::new();
+        for fk in fk_rows {
+            foreign_keys.push(fk.map_err(|e| CliError::Database(e.to_string()))?);
+        }
+        summary.foreign_key_count += foreign_keys.len();
+
+        let row_count = if include_row_count {
+            let sql = format!(
+                "SELECT COUNT(*) FROM {}",
+                escape_sqlite_identifier_name(&table_name)
+            );
+            Some(
+                conn.query_row(&sql, [], |row| row.get::<_, i64>(0))
+                    .map_err(|e| CliError::Database(e.to_string()))?,
+            )
+        } else {
+            None
+        };
+
+        tables.push(DbSchemaTable {
+            name: table_name,
+            columns,
+            indexes,
+            foreign_keys,
+            row_count,
+        });
+    }
+
+    summary.table_count = tables.len();
+
+    Ok(DbSchemaReport {
+        path: path.to_string_lossy().to_string(),
+        include_row_count,
+        summary,
+        tables,
+    })
+}
+
+fn print_db_schema(report: &DbSchemaReport, format: &OutputFormat) -> Result<()> {
+    match format {
+        OutputFormat::Json => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(report).map_err(|e| CliError::Parse(e.to_string()))?
+            );
+        }
+        OutputFormat::Csv => {
+            println!(
+                "path,include_row_count,table_count,column_count,index_count,foreign_key_count"
+            );
+            println!(
+                "{},{},{},{},{},{}",
+                csv_escape(&report.path),
+                report.include_row_count,
+                report.summary.table_count,
+                report.summary.column_count,
+                report.summary.index_count,
+                report.summary.foreign_key_count
+            );
+            println!(
+                "table_name,column_count,index_count,foreign_key_count,row_count,column_names,index_names"
+            );
+            for table in &report.tables {
+                let column_names = table
+                    .columns
+                    .iter()
+                    .map(|c| c.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join("|");
+                let index_names = table
+                    .indexes
+                    .iter()
+                    .map(|idx| idx.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join("|");
+                println!(
+                    "{},{},{},{},{},{},{}",
+                    csv_escape(&table.name),
+                    table.columns.len(),
+                    table.indexes.len(),
+                    table.foreign_keys.len(),
+                    table
+                        .row_count
+                        .map(|v| v.to_string())
+                        .unwrap_or_else(String::new),
+                    csv_escape(&column_names),
+                    csv_escape(&index_names),
+                );
+            }
+        }
+        OutputFormat::Yaml => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(report).map_err(|e| CliError::Parse(e.to_string()))?
+            );
+            println!("note: yaml renderer is not wired in cli; json is printed instead");
+        }
+        _ => {
+            println!("database schema");
+            println!("path: {}", report.path);
+            println!("include row count: {}", report.include_row_count);
+            println!(
+                "summary: tables={} columns={} indexes={} foreign_keys={}",
+                report.summary.table_count,
+                report.summary.column_count,
+                report.summary.index_count,
+                report.summary.foreign_key_count
+            );
+            for table in &report.tables {
+                println!(
+                    "- table={} columns={} indexes={} foreign_keys={} row_count={}",
+                    table.name,
+                    table.columns.len(),
+                    table.indexes.len(),
+                    table.foreign_keys.len(),
+                    table
+                        .row_count
+                        .map(|v| v.to_string())
+                        .unwrap_or_else(|| "-".to_string()),
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
 fn parse_optional_member_id(raw: Option<&str>) -> Result<Option<i64>> {
     match raw.map(str::trim).filter(|v| !v.is_empty()) {
         None => Ok(None),
@@ -3504,7 +4382,8 @@ fn print_analysis_result(payload: &serde_json::Value, format: &OutputFormat) -> 
         OutputFormat::Json | OutputFormat::Yaml => {
             println!(
                 "{}",
-                serde_json::to_string_pretty(payload).map_err(|e| CliError::Parse(e.to_string()))?
+                serde_json::to_string_pretty(payload)
+                    .map_err(|e| CliError::Parse(e.to_string()))?
             );
             if matches!(format, OutputFormat::Yaml) {
                 println!("note: yaml renderer is not wired in cli; json is printed instead");
@@ -3565,7 +4444,8 @@ fn print_analysis_result(payload: &serde_json::Value, format: &OutputFormat) -> 
         OutputFormat::Text | OutputFormat::Table => {
             println!(
                 "{}",
-                serde_json::to_string_pretty(payload).map_err(|e| CliError::Parse(e.to_string()))?
+                serde_json::to_string_pretty(payload)
+                    .map_err(|e| CliError::Parse(e.to_string()))?
             );
         }
     }
@@ -4035,11 +4915,7 @@ fn semantic_chunk_text(text: &str, max_chars: usize, overlap_chars: usize) -> Ve
 }
 
 fn embed_text_for_semantic(text: &str) -> Vec<f32> {
-    let chunks = semantic_chunk_text(
-        text,
-        SEMANTIC_CHUNK_MAX_CHARS,
-        SEMANTIC_CHUNK_OVERLAP_CHARS,
-    );
+    let chunks = semantic_chunk_text(text, SEMANTIC_CHUNK_MAX_CHARS, SEMANTIC_CHUNK_OVERLAP_CHARS);
     if chunks.is_empty() {
         return vec![0.0; SEMANTIC_EMBEDDING_DIM];
     }
@@ -5532,6 +6408,7 @@ fn start_api_server_foreground(
     file_gateway_dir: Option<PathBuf>,
     file_gateway_poll_ms: u64,
     file_gateway_response_ttl_seconds: u64,
+    force_file_gateway: bool,
     db_path: Option<PathBuf>,
     cors: bool,
     websocket: bool,
@@ -5571,6 +6448,22 @@ fn start_api_server_foreground(
     let socket_mode = parse_unix_socket_mode(unix_socket_mode)?;
     let poll_ms = file_gateway_poll_ms.max(100);
     let response_ttl_seconds = file_gateway_response_ttl_seconds.max(30);
+
+    if force_file_gateway {
+        let gateway_root = select_file_gateway_root(file_gateway_dir)?;
+        println!("force file-gateway mode enabled (sandbox-coexist)");
+        return run_api_file_gateway_mode(
+            gateway_root,
+            poll_ms,
+            response_ttl_seconds,
+            db_path,
+            cors,
+            websocket,
+            socket_mode,
+            bind_addr,
+        );
+    }
+
     let primary_config = build_api_config(bind_addr, unix_socket.clone(), socket_mode, cors);
     match run_api_server_attempt(
         primary_config,
@@ -5828,6 +6721,7 @@ fn restart_api_server(force: bool) -> Result<()> {
         file_gateway_dir,
         file_gateway_poll_ms,
         file_gateway_response_ttl_seconds,
+        force_file_gateway,
         db_path,
         cors_enabled,
         websocket_enabled,
@@ -5844,6 +6738,7 @@ fn restart_api_server(force: bool) -> Result<()> {
             state.file_gateway_dir.map(PathBuf::from),
             state.file_gateway_poll_ms,
             state.file_gateway_response_ttl_seconds,
+            state.transport.eq_ignore_ascii_case("file-gateway"),
             state.db_path.map(PathBuf::from),
             state.cors_enabled,
             state.websocket_enabled,
@@ -5857,6 +6752,7 @@ fn restart_api_server(force: bool) -> Result<()> {
             None,
             1000,
             300,
+            false,
             None,
             false,
             true,
@@ -5872,6 +6768,7 @@ fn restart_api_server(force: bool) -> Result<()> {
         file_gateway_dir,
         file_gateway_poll_ms,
         file_gateway_response_ttl_seconds,
+        force_file_gateway,
         db_path,
         cors_enabled,
         websocket_enabled,
@@ -5925,6 +6822,352 @@ fn send_stop_signal(pid: i32, force: bool) -> Result<()> {
         "failed to signal pid {} via kill {}",
         pid, signal
     )))
+}
+
+#[cfg(feature = "api")]
+fn shell_quote_arg(value: &str) -> String {
+    if value
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.' | '/' | ':' | '+'))
+    {
+        return value.to_string();
+    }
+    format!("'{}'", value.replace('\'', "'\"'\"'"))
+}
+
+#[cfg(feature = "api")]
+fn build_sandbox_start_recommendation(
+    tcp_allowed: bool,
+    uds_allowed: bool,
+    gateway_root: &std::path::Path,
+) -> (String, String) {
+    let mode = if tcp_allowed {
+        "tcp"
+    } else if uds_allowed {
+        "unix"
+    } else {
+        "file-gateway"
+    };
+
+    let command = match mode {
+        "tcp" => "cargo run -p xenobot-cli --features \"api,analysis\" -- api start --host 127.0.0.1 --port 5030 --db-path /tmp/xenobot.db".to_string(),
+        "unix" => "cargo run -p xenobot-cli --features \"api,analysis\" -- api start --unix-socket /tmp/xenobot.sock --db-path /tmp/xenobot.db".to_string(),
+        _ => format!(
+            "cargo run -p xenobot-cli --features \"api,analysis\" -- api start --force-file-gateway --file-gateway-dir {} --db-path /tmp/xenobot.db",
+            shell_quote_arg(&gateway_root.to_string_lossy())
+        ),
+    };
+
+    (mode.to_string(), command)
+}
+
+#[cfg(feature = "api")]
+fn run_api_sandbox_doctor(file_gateway_dir: Option<PathBuf>, format: OutputFormat) -> Result<()> {
+    let now = chrono::Utc::now();
+    let (tcp_allowed, tcp_error) = match std::net::TcpListener::bind("127.0.0.1:0") {
+        Ok(listener) => {
+            drop(listener);
+            (true, None)
+        }
+        Err(err) => (false, Some(err.to_string())),
+    };
+
+    #[cfg(unix)]
+    let (uds_supported, uds_allowed, uds_path, uds_error) = {
+        match select_sandbox_safe_unix_socket_path() {
+            Ok(path) => {
+                let _ = std::fs::remove_file(&path);
+                match std::os::unix::net::UnixListener::bind(&path) {
+                    Ok(listener) => {
+                        drop(listener);
+                        let _ = std::fs::remove_file(&path);
+                        (
+                            true,
+                            true,
+                            Some(path.to_string_lossy().to_string()),
+                            None::<String>,
+                        )
+                    }
+                    Err(err) => (
+                        true,
+                        false,
+                        Some(path.to_string_lossy().to_string()),
+                        Some(err.to_string()),
+                    ),
+                }
+            }
+            Err(err) => (true, false, None, Some(err.to_string())),
+        }
+    };
+
+    #[cfg(not(unix))]
+    let (uds_supported, uds_allowed, uds_path, uds_error): (
+        bool,
+        bool,
+        Option<String>,
+        Option<String>,
+    ) = (
+        false,
+        false,
+        None,
+        Some("unix sockets are not supported on this platform".to_string()),
+    );
+
+    let gateway_root = select_file_gateway_root(file_gateway_dir)?;
+    let (gateway_writable, gateway_error) = match std::fs::create_dir_all(&gateway_root) {
+        Ok(_) => {
+            let probe = gateway_root.join(format!(
+                ".xenobot_probe_{}_{}",
+                std::process::id(),
+                now.timestamp_micros()
+            ));
+            match std::fs::write(&probe, b"xenobot-sandbox-probe") {
+                Ok(_) => {
+                    let _ = std::fs::remove_file(&probe);
+                    (true, None)
+                }
+                Err(err) => (false, Some(err.to_string())),
+            }
+        }
+        Err(err) => (false, Some(err.to_string())),
+    };
+
+    let (recommended_mode, recommended_command) =
+        build_sandbox_start_recommendation(tcp_allowed, uds_allowed, &gateway_root);
+
+    let payload = serde_json::json!({
+        "timestamp": now.to_rfc3339(),
+        "tcp": {
+            "allowed": tcp_allowed,
+            "error": tcp_error,
+        },
+        "uds": {
+            "supported": uds_supported,
+            "allowed": uds_allowed,
+            "path": uds_path,
+            "error": uds_error,
+        },
+        "fileGateway": {
+            "dir": gateway_root,
+            "writable": gateway_writable,
+            "error": gateway_error,
+        },
+        "recommended": {
+            "mode": recommended_mode,
+            "command": recommended_command,
+        }
+    });
+
+    match format {
+        OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Csv => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&payload).map_err(|e| CliError::Internal(format!(
+                    "format sandbox doctor output failed: {}",
+                    e
+                )))?
+            );
+        }
+        OutputFormat::Text | OutputFormat::Table => {
+            println!("sandbox doctor");
+            println!("tcp allowed: {}", tcp_allowed);
+            if let Some(err) = tcp_error.as_ref() {
+                println!("tcp error: {}", err);
+            }
+            println!("uds supported: {}", uds_supported);
+            println!("uds allowed: {}", uds_allowed);
+            if let Some(path) = uds_path.as_ref() {
+                println!("uds path probe: {}", path);
+            }
+            if let Some(err) = uds_error.as_ref() {
+                println!("uds error: {}", err);
+            }
+            println!("file gateway dir: {}", gateway_root.display());
+            println!("file gateway writable: {}", gateway_writable);
+            if let Some(err) = gateway_error.as_ref() {
+                println!("file gateway error: {}", err);
+            }
+            println!("recommended mode: {}", recommended_mode);
+            println!("recommended command: {}", recommended_command);
+        }
+    }
+
+    if recommended_mode == "file-gateway" && !gateway_writable {
+        return Err(CliError::Internal(
+            "sandbox doctor detected listener restrictions and non-writable file gateway path"
+                .to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
+#[cfg(feature = "api")]
+fn parse_optional_json_body(raw: Option<String>) -> Result<Option<serde_json::Value>> {
+    let Some(raw_value) = raw else {
+        return Ok(None);
+    };
+    let trimmed = raw_value.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    let parsed = serde_json::from_str::<serde_json::Value>(trimmed)
+        .map_err(|e| CliError::Argument(format!("invalid --body-json: {}", e)))?;
+    Ok(Some(parsed))
+}
+
+#[cfg(feature = "api")]
+fn run_api_file_gateway_call(
+    file_gateway_dir: Option<PathBuf>,
+    request_id: Option<String>,
+    method: String,
+    path: Option<String>,
+    body_json: Option<String>,
+    timeout_ms: u64,
+    format: OutputFormat,
+) -> Result<()> {
+    let gateway_root = select_file_gateway_root(file_gateway_dir)?;
+    std::fs::create_dir_all(&gateway_root)?;
+    let method_trimmed = method.trim().to_string();
+    if method_trimmed.is_empty() {
+        return Err(CliError::Argument(
+            "gateway-call method must not be empty".to_string(),
+        ));
+    }
+    let body_value = parse_optional_json_body(body_json)?;
+    let req_id = sanitize_file_gateway_id(request_id.as_deref().unwrap_or(&format!(
+        "manual_{}_{}",
+        std::process::id(),
+        chrono::Utc::now().timestamp_millis()
+    )));
+    let per_request_timeout = timeout_ms.max(100);
+
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| CliError::Internal(e.to_string()))?;
+
+    let gateway_root_for_task = gateway_root.clone();
+    let req_id_for_task = req_id.clone();
+    let method_for_task = method_trimmed.clone();
+    let path_for_task = path.clone();
+    let body_for_task = body_value.clone();
+    let response_json = runtime.block_on(async move {
+        let req_path = gateway_root_for_task.join(format!("req_{}.json", req_id_for_task));
+        let req_tmp_path = gateway_root_for_task.join(format!("req_{}.json.tmp", req_id_for_task));
+        let resp_path = gateway_root_for_task.join(format!("resp_{}.json", req_id_for_task));
+
+        let request_payload = serde_json::json!({
+            "id": req_id_for_task,
+            "method": method_for_task,
+            "path": path_for_task,
+            "body": body_for_task,
+            "timestamp": chrono::Utc::now().timestamp(),
+            "ttl": ((per_request_timeout / 1000).max(1) + 5),
+        });
+
+        tokio::fs::write(
+            &req_tmp_path,
+            serde_json::to_vec(&request_payload).map_err(|e| {
+                CliError::Internal(format!("serialize gateway request failed: {}", e))
+            })?,
+        )
+        .await
+        .map_err(|e| CliError::Internal(format!("write gateway request failed: {}", e)))?;
+        tokio::fs::rename(&req_tmp_path, &req_path)
+            .await
+            .map_err(|e| CliError::Internal(format!("commit gateway request failed: {}", e)))?;
+
+        let deadline =
+            std::time::Instant::now() + std::time::Duration::from_millis(per_request_timeout);
+        loop {
+            if tokio::fs::metadata(&resp_path).await.is_ok() {
+                let response_raw = tokio::fs::read_to_string(&resp_path).await.map_err(|e| {
+                    CliError::Internal(format!("read gateway response failed: {}", e))
+                })?;
+                let _ = tokio::fs::remove_file(&resp_path).await;
+                let parsed =
+                    serde_json::from_str::<serde_json::Value>(&response_raw).map_err(|e| {
+                        CliError::Internal(format!("decode gateway response json failed: {}", e))
+                    })?;
+                let _ = tokio::fs::remove_file(&req_path).await;
+                return Ok::<serde_json::Value, CliError>(parsed);
+            }
+            if std::time::Instant::now() >= deadline {
+                let _ = tokio::fs::remove_file(&req_path).await;
+                return Err(CliError::Internal(
+                    "timeout waiting for file gateway response".to_string(),
+                ));
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+    })?;
+
+    let status = response_json
+        .get("status")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+    let ok = response_json
+        .get("ok")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let output = serde_json::json!({
+        "transport": "file-gateway",
+        "gatewayDir": gateway_root,
+        "requestId": req_id,
+        "method": method_trimmed,
+        "path": path,
+        "status": status,
+        "ok": ok,
+        "response": response_json,
+    });
+
+    match format {
+        OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Csv => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&output).map_err(|e| CliError::Internal(format!(
+                    "format gateway-call output failed: {}",
+                    e
+                )))?
+            );
+        }
+        OutputFormat::Text | OutputFormat::Table => {
+            println!("file gateway call");
+            println!(
+                "request id: {}",
+                output["requestId"].as_str().unwrap_or_default()
+            );
+            println!("method: {}", output["method"].as_str().unwrap_or_default());
+            if let Some(p) = output.get("path").and_then(|v| v.as_str()) {
+                if !p.is_empty() {
+                    println!("path: {}", p);
+                }
+            }
+            println!("status: {}", status);
+            println!("ok: {}", ok);
+            println!("response:");
+            println!(
+                "{}",
+                serde_json::to_string_pretty(
+                    output.get("response").unwrap_or(&serde_json::Value::Null)
+                )
+                .map_err(|e| CliError::Internal(format!(
+                    "format gateway response failed: {}",
+                    e
+                )))?
+            );
+        }
+    }
+
+    if !ok || status >= 400 {
+        return Err(CliError::Internal(format!(
+            "file gateway request failed (status={}, ok={})",
+            status, ok
+        )));
+    }
+
+    Ok(())
 }
 
 #[cfg(feature = "api")]
@@ -6225,6 +7468,143 @@ fn run_api_smoke_check(db_path: Option<PathBuf>) -> Result<()> {
 }
 
 #[cfg(feature = "api")]
+fn percent_encode_path_component(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    for byte in input.as_bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(*byte as char)
+            }
+            _ => {
+                out.push('%');
+                out.push_str(&format!("{:02X}", byte));
+            }
+        }
+    }
+    out
+}
+
+#[cfg(feature = "api")]
+fn validate_mcp_integration_preset_contract(
+    target: &str,
+    payload: &serde_json::Value,
+) -> Result<()> {
+    let expected_id = target.trim();
+    let payload_id = payload
+        .get("id")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default();
+    if payload_id != expected_id {
+        return Err(CliError::Internal(format!(
+            "mcp smoke failed: integration preset '{}' returned mismatched id '{}'",
+            expected_id, payload_id
+        )));
+    }
+
+    let transport = payload.get("transport").and_then(|v| v.as_object());
+    let has_sse = transport
+        .and_then(|obj| obj.get("sse"))
+        .and_then(|v| v.as_str())
+        .is_some();
+    let has_websocket = transport
+        .and_then(|obj| obj.get("websocket"))
+        .and_then(|v| v.as_str())
+        .is_some();
+    let has_tools = transport
+        .and_then(|obj| obj.get("tools"))
+        .and_then(|v| v.as_str())
+        .is_some();
+    if !has_sse || !has_websocket || !has_tools {
+        return Err(CliError::Internal(format!(
+            "mcp smoke failed: integration preset '{}' missing transport.sse/websocket/tools",
+            expected_id
+        )));
+    }
+
+    if !payload
+        .get("notes")
+        .and_then(|v| v.as_array())
+        .is_some_and(|arr| !arr.is_empty())
+    {
+        return Err(CliError::Internal(format!(
+            "mcp smoke failed: integration preset '{}' missing notes",
+            expected_id
+        )));
+    }
+
+    match expected_id {
+        "claude-desktop" => {
+            let command = payload
+                .get("configuration")
+                .and_then(|v| v.get("mcpServers"))
+                .and_then(|v| v.get("xenobot"))
+                .and_then(|v| v.get("command"))
+                .and_then(|v| v.as_str());
+            let args = payload
+                .get("configuration")
+                .and_then(|v| v.get("mcpServers"))
+                .and_then(|v| v.get("xenobot"))
+                .and_then(|v| v.get("args"))
+                .and_then(|v| v.as_array())
+                .cloned()
+                .unwrap_or_default();
+            let has_remote = args.iter().any(|v| v.as_str() == Some("mcp-remote"));
+            if command != Some("pnpm") || !has_remote {
+                return Err(CliError::Internal(
+                    "mcp smoke failed: claude-desktop preset requires pnpm + mcp-remote bridge"
+                        .to_string(),
+                ));
+            }
+        }
+        "chatwise" => {
+            let first = payload
+                .get("configuration")
+                .and_then(|v| v.get("servers"))
+                .and_then(|v| v.as_array())
+                .and_then(|arr| arr.first());
+            let name = first
+                .and_then(|v| v.get("name"))
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
+            let transport_value = first
+                .and_then(|v| v.get("transport"))
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
+            let url = first.and_then(|v| v.get("url")).and_then(|v| v.as_str());
+            if name != "xenobot" || transport_value != "sse" || url.is_none() {
+                return Err(CliError::Internal(
+                    "mcp smoke failed: chatwise preset missing servers[0] contract".to_string(),
+                ));
+            }
+        }
+        "opencode" => {
+            let first = payload
+                .get("configuration")
+                .and_then(|v| v.get("mcpServers"))
+                .and_then(|v| v.as_array())
+                .and_then(|arr| arr.first());
+            let name = first
+                .and_then(|v| v.get("name"))
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
+            let transport_value = first
+                .and_then(|v| v.get("transport"))
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
+            let url = first.and_then(|v| v.get("url")).and_then(|v| v.as_str());
+            if name != "xenobot" || transport_value != "sse" || url.is_none() {
+                return Err(CliError::Internal(
+                    "mcp smoke failed: opencode preset missing mcpServers[0] contract".to_string(),
+                ));
+            }
+        }
+        _ => {}
+    }
+
+    Ok(())
+}
+
+#[cfg(feature = "api")]
 fn run_mcp_smoke_check(base_url: String, timeout_ms: u64) -> Result<()> {
     let base = base_url.trim_end_matches('/').to_string();
     if base.is_empty() {
@@ -6248,7 +7628,10 @@ fn run_mcp_smoke_check(base_url: String, timeout_ms: u64) -> Result<()> {
 
         let health_url = format!("{}/health", base_for_requests);
         let tools_url = format!("{}/tools", base_for_requests);
+        let resources_url = format!("{}/resources", base_for_requests);
         let integrations_url = format!("{}/integrations", base_for_requests);
+        let sse_url = format!("{}/sse", base_for_requests);
+        let ws_url = format!("{}/ws", base_for_requests);
         let mcp_url = format!("{}/mcp", base_for_requests);
 
         let health_resp = client
@@ -6282,6 +7665,60 @@ fn run_mcp_smoke_check(base_url: String, timeout_ms: u64) -> Result<()> {
             .filter_map(|v| v.as_str())
             .map(|s| s.to_string())
             .collect::<std::collections::HashSet<_>>();
+        let tool_specs = tools_json
+            .get("toolSpecs")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default();
+        let tool_spec_names = tool_specs
+            .iter()
+            .filter_map(|item| item.get("name").and_then(|v| v.as_str()))
+            .map(|s| s.to_string())
+            .collect::<std::collections::HashSet<_>>();
+        let tool_specs_with_schema = tool_specs
+            .iter()
+            .filter(|item| item.get("inputSchema").is_some_and(|v| v.is_object()))
+            .count();
+
+        let resources_resp = client
+            .get(&resources_url)
+            .send()
+            .await
+            .map_err(|e| CliError::Internal(format!("mcp resources request failed: {}", e)))?;
+        let resources_status = resources_resp.status();
+        let resources_json: serde_json::Value = resources_resp
+            .json()
+            .await
+            .map_err(|e| CliError::Internal(format!("mcp resources decode failed: {}", e)))?;
+        let resource_uris = resources_json
+            .get("resources")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|item| {
+                item.get("uri")
+                    .and_then(|uri| uri.as_str())
+                    .map(str::to_string)
+            })
+            .collect::<Vec<_>>();
+        let first_resource_uri = resource_uris.first().cloned().ok_or_else(|| {
+            CliError::Internal("mcp smoke failed: /resources returned no resource URIs".to_string())
+        })?;
+        let resource_read_url = format!(
+            "{}/resources/{}",
+            base_for_requests,
+            percent_encode_path_component(&first_resource_uri)
+        );
+        let resource_read_resp =
+            client.get(&resource_read_url).send().await.map_err(|e| {
+                CliError::Internal(format!("mcp resource read request failed: {}", e))
+            })?;
+        let resource_read_status = resource_read_resp.status();
+        let resource_read_json: serde_json::Value = resource_read_resp
+            .json()
+            .await
+            .map_err(|e| CliError::Internal(format!("mcp resource read decode failed: {}", e)))?;
 
         let mcp_initialize_resp = client
             .post(&mcp_url)
@@ -6317,12 +7754,15 @@ fn run_mcp_smoke_check(base_url: String, timeout_ms: u64) -> Result<()> {
             .json()
             .await
             .map_err(|e| CliError::Internal(format!("mcp tools/list decode failed: {}", e)))?;
-        let mcp_tool_names = mcp_list_json
+        let mcp_tool_items = mcp_list_json
             .get("result")
             .and_then(|v| v.get("tools"))
             .and_then(|v| v.as_array())
             .cloned()
-            .unwrap_or_default()
+            .unwrap_or_default();
+        let mcp_tool_names = mcp_tool_items
+            .iter()
+            .cloned()
             .into_iter()
             .filter_map(|item| {
                 item.get("name")
@@ -6331,6 +7771,111 @@ fn run_mcp_smoke_check(base_url: String, timeout_ms: u64) -> Result<()> {
                     .map(|name| name.to_string())
             })
             .collect::<std::collections::HashSet<_>>();
+        let mcp_tools_with_schema = mcp_tool_items
+            .iter()
+            .filter(|item| item.get("inputSchema").is_some_and(|v| v.is_object()))
+            .count();
+
+        let mcp_resources_list_resp = client
+            .post(&mcp_url)
+            .json(&serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": "mcp-smoke-resources-list",
+                "method": "resources/list"
+            }))
+            .send()
+            .await
+            .map_err(|e| CliError::Internal(format!("mcp resources/list request failed: {}", e)))?;
+        let mcp_resources_list_status = mcp_resources_list_resp.status();
+        let mcp_resources_list_json: serde_json::Value = mcp_resources_list_resp
+            .json()
+            .await
+            .map_err(|e| CliError::Internal(format!("mcp resources/list decode failed: {}", e)))?;
+        let mcp_resource_uris = mcp_resources_list_json
+            .get("result")
+            .and_then(|v| v.get("resources"))
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|item| {
+                item.get("uri")
+                    .and_then(|uri| uri.as_str())
+                    .map(str::to_string)
+            })
+            .collect::<Vec<_>>();
+        let first_mcp_resource_uri = mcp_resource_uris.first().cloned().ok_or_else(|| {
+            CliError::Internal(
+                "mcp smoke failed: /mcp resources/list returned no resource URIs".to_string(),
+            )
+        })?;
+
+        let mcp_resources_read_resp = client
+            .post(&mcp_url)
+            .json(&serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": "mcp-smoke-resources-read",
+                "method": "resources/read",
+                "params": {
+                    "uri": first_mcp_resource_uri
+                }
+            }))
+            .send()
+            .await
+            .map_err(|e| CliError::Internal(format!("mcp resources/read request failed: {}", e)))?;
+        let mcp_resources_read_status = mcp_resources_read_resp.status();
+        let mcp_resources_read_json: serde_json::Value = mcp_resources_read_resp
+            .json()
+            .await
+            .map_err(|e| CliError::Internal(format!("mcp resources/read decode failed: {}", e)))?;
+
+        let mcp_alias_tool_list_resp = client
+            .post(&mcp_url)
+            .json(&serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": "mcp-smoke-tool-list-alias",
+                "method": "tool/list"
+            }))
+            .send()
+            .await
+            .map_err(|e| {
+                CliError::Internal(format!("mcp tool/list alias request failed: {}", e))
+            })?;
+        let mcp_alias_tool_list_status = mcp_alias_tool_list_resp.status();
+        let mcp_alias_tool_list_json: serde_json::Value = mcp_alias_tool_list_resp
+            .json()
+            .await
+            .map_err(|e| CliError::Internal(format!("mcp tool/list alias decode failed: {}", e)))?;
+        let mcp_alias_tool_count = mcp_alias_tool_list_json
+            .get("result")
+            .and_then(|v| v.get("tools"))
+            .and_then(|v| v.as_array())
+            .map(|arr| arr.len())
+            .unwrap_or(0);
+
+        let mcp_alias_resource_list_resp = client
+            .post(&mcp_url)
+            .json(&serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": "mcp-smoke-resource-list-alias",
+                "method": "resource/list"
+            }))
+            .send()
+            .await
+            .map_err(|e| {
+                CliError::Internal(format!("mcp resource/list alias request failed: {}", e))
+            })?;
+        let mcp_alias_resource_list_status = mcp_alias_resource_list_resp.status();
+        let mcp_alias_resource_list_json: serde_json::Value =
+            mcp_alias_resource_list_resp.json().await.map_err(|e| {
+                CliError::Internal(format!("mcp resource/list alias decode failed: {}", e))
+            })?;
+        let mcp_alias_resource_count = mcp_alias_resource_list_json
+            .get("result")
+            .and_then(|v| v.get("resources"))
+            .and_then(|v| v.as_array())
+            .map(|arr| arr.len())
+            .unwrap_or(0);
 
         let mcp_call_resp = client
             .post(&mcp_url)
@@ -6352,11 +7897,91 @@ fn run_mcp_smoke_check(base_url: String, timeout_ms: u64) -> Result<()> {
             .await
             .map_err(|e| CliError::Internal(format!("mcp tools/call decode failed: {}", e)))?;
 
-        let integrations_resp = client
-            .get(&integrations_url)
+        let mcp_call_missing_arg_resp = client
+            .post(&mcp_url)
+            .json(&serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": "mcp-smoke-tools-call-chat-records-missing-session",
+                "method": "tools/call",
+                "params": {
+                    "name": "chat_records",
+                    "arguments": {}
+                }
+            }))
             .send()
             .await
-            .map_err(|e| CliError::Internal(format!("mcp integrations request failed: {}", e)))?;
+            .map_err(|e| {
+                CliError::Internal(format!(
+                    "mcp tools/call chat_records missing-arg request failed: {}",
+                    e
+                ))
+            })?;
+        let mcp_call_missing_arg_status = mcp_call_missing_arg_resp.status();
+        let mcp_call_missing_arg_json: serde_json::Value =
+            mcp_call_missing_arg_resp.json().await.map_err(|e| {
+                CliError::Internal(format!(
+                    "mcp tools/call chat_records missing-arg decode failed: {}",
+                    e
+                ))
+            })?;
+
+        let mcp_call_unknown_tool_resp = client
+            .post(&mcp_url)
+            .json(&serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": "mcp-smoke-tools-call-unknown",
+                "method": "tools/call",
+                "params": {
+                    "name": "totally_unknown_tool",
+                    "arguments": {}
+                }
+            }))
+            .send()
+            .await
+            .map_err(|e| {
+                CliError::Internal(format!("mcp tools/call unknown-tool request failed: {}", e))
+            })?;
+        let mcp_call_unknown_tool_status = mcp_call_unknown_tool_resp.status();
+        let mcp_call_unknown_tool_json: serde_json::Value =
+            mcp_call_unknown_tool_resp.json().await.map_err(|e| {
+                CliError::Internal(format!("mcp tools/call unknown-tool decode failed: {}", e))
+            })?;
+
+        let http_tool_not_found_url =
+            format!("{}/tools/{}", base_for_requests, "totally_unknown_tool");
+        let http_tool_not_found_resp = client
+            .post(&http_tool_not_found_url)
+            .json(&serde_json::json!({}))
+            .send()
+            .await
+            .map_err(|e| {
+                CliError::Internal(format!("mcp http tool_not_found request failed: {}", e))
+            })?;
+        let http_tool_not_found_status = http_tool_not_found_resp.status();
+        let http_tool_not_found_json: serde_json::Value =
+            http_tool_not_found_resp.json().await.map_err(|e| {
+                CliError::Internal(format!("mcp http tool_not_found decode failed: {}", e))
+            })?;
+
+        let http_tool_error_url = format!("{}/tools/{}", base_for_requests, "chat_records");
+        let http_tool_error_resp = client
+            .post(&http_tool_error_url)
+            .json(&serde_json::json!({}))
+            .send()
+            .await
+            .map_err(|e| {
+                CliError::Internal(format!("mcp http tool_error request failed: {}", e))
+            })?;
+        let http_tool_error_status = http_tool_error_resp.status();
+        let http_tool_error_json: serde_json::Value = http_tool_error_resp
+            .json()
+            .await
+            .map_err(|e| CliError::Internal(format!("mcp http tool_error decode failed: {}", e)))?;
+
+        let integrations_resp =
+            client.get(&integrations_url).send().await.map_err(|e| {
+                CliError::Internal(format!("mcp integrations request failed: {}", e))
+            })?;
         let integrations_status = integrations_resp.status();
         let integrations_json: serde_json::Value = integrations_resp
             .json()
@@ -6368,8 +7993,55 @@ fn run_mcp_smoke_check(base_url: String, timeout_ms: u64) -> Result<()> {
             .cloned()
             .unwrap_or_default()
             .into_iter()
-            .filter_map(|item| item.get("id").and_then(|id| id.as_str()).map(|s| s.to_string()))
+            .filter_map(|item| {
+                item.get("id")
+                    .and_then(|id| id.as_str())
+                    .map(|s| s.to_string())
+            })
             .collect::<std::collections::HashSet<_>>();
+        let mut integration_preset_statuses = Vec::new();
+        for target in ["claude-desktop", "chatwise", "opencode"] {
+            let preset_url = format!("{}/integrations/{}", base_for_requests, target);
+            let preset_resp = client.get(&preset_url).send().await.map_err(|e| {
+                CliError::Internal(format!(
+                    "mcp integration preset '{}' request failed: {}",
+                    target, e
+                ))
+            })?;
+            let preset_status = preset_resp.status();
+            let preset_json: serde_json::Value = preset_resp.json().await.map_err(|e| {
+                CliError::Internal(format!(
+                    "mcp integration preset '{}' decode failed: {}",
+                    target, e
+                ))
+            })?;
+            if preset_status != reqwest::StatusCode::OK {
+                return Err(CliError::Internal(format!(
+                    "mcp smoke failed: /integrations/{} expected 200, got {}",
+                    target, preset_status
+                )));
+            }
+            validate_mcp_integration_preset_contract(target, &preset_json)?;
+            integration_preset_statuses.push((target.to_string(), preset_status));
+        }
+
+        let sse_resp = client
+            .get(&sse_url)
+            .send()
+            .await
+            .map_err(|e| CliError::Internal(format!("mcp sse route request failed: {}", e)))?;
+        let sse_status = sse_resp.status();
+        let sse_content_type = sse_resp
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.to_string())
+            .unwrap_or_default();
+
+        let ws_resp = client.get(&ws_url).send().await.map_err(|e| {
+            CliError::Internal(format!("mcp websocket route request failed: {}", e))
+        })?;
+        let ws_status = ws_resp.status();
 
         Ok::<_, CliError>((
             health_status,
@@ -6377,14 +8049,43 @@ fn run_mcp_smoke_check(base_url: String, timeout_ms: u64) -> Result<()> {
             tools_status,
             tools.len(),
             tool_names,
+            tool_specs.len(),
+            tool_spec_names,
+            tool_specs_with_schema,
+            resources_status,
+            resource_uris.len(),
+            resource_read_status,
+            resource_read_json,
             mcp_initialize_status,
             mcp_initialize_json,
             mcp_list_status,
             mcp_tool_names,
+            mcp_tool_items.len(),
+            mcp_tools_with_schema,
+            mcp_resources_list_status,
+            mcp_resource_uris.len(),
+            mcp_resources_read_status,
+            mcp_resources_read_json,
+            mcp_alias_tool_list_status,
+            mcp_alias_tool_count,
+            mcp_alias_resource_list_status,
+            mcp_alias_resource_count,
             mcp_call_status,
             mcp_call_json,
+            mcp_call_missing_arg_status,
+            mcp_call_missing_arg_json,
+            mcp_call_unknown_tool_status,
+            mcp_call_unknown_tool_json,
+            http_tool_not_found_status,
+            http_tool_not_found_json,
+            http_tool_error_status,
+            http_tool_error_json,
             integrations_status,
             integration_ids,
+            integration_preset_statuses,
+            sse_status,
+            sse_content_type,
+            ws_status,
         ))
     })?;
 
@@ -6394,31 +8095,121 @@ fn run_mcp_smoke_check(base_url: String, timeout_ms: u64) -> Result<()> {
         tools_status,
         tool_count,
         tool_names,
+        tool_spec_count,
+        tool_spec_names,
+        tool_specs_with_schema,
+        resources_status,
+        resource_count,
+        resource_read_status,
+        resource_read_json,
         mcp_initialize_status,
         mcp_initialize_json,
         mcp_list_status,
         mcp_tool_names,
+        mcp_tool_count,
+        mcp_tools_with_schema,
+        mcp_resources_list_status,
+        mcp_resource_count,
+        mcp_resources_read_status,
+        mcp_resources_read_json,
+        mcp_alias_tool_list_status,
+        mcp_alias_tool_count,
+        mcp_alias_resource_list_status,
+        mcp_alias_resource_count,
         mcp_call_status,
         mcp_call_json,
+        mcp_call_missing_arg_status,
+        mcp_call_missing_arg_json,
+        mcp_call_unknown_tool_status,
+        mcp_call_unknown_tool_json,
+        http_tool_not_found_status,
+        http_tool_not_found_json,
+        http_tool_error_status,
+        http_tool_error_json,
         integrations_status,
         integration_ids,
+        integration_preset_statuses,
+        sse_status,
+        sse_content_type,
+        ws_status,
     ) = summary;
 
     println!("mcp smoke check completed");
     println!("base: {}", base);
-    println!("GET /health -> {} {}", health_status.as_u16(), health_body.trim());
-    println!("GET /tools -> {} (count={})", tools_status.as_u16(), tool_count);
     println!(
-        "POST /mcp initialize -> {}",
-        mcp_initialize_status.as_u16()
+        "GET /health -> {} {}",
+        health_status.as_u16(),
+        health_body.trim()
     );
-    println!("POST /mcp tools/list -> {}", mcp_list_status.as_u16());
-    println!("POST /mcp tools/call(get_current_time) -> {}", mcp_call_status.as_u16());
+    println!(
+        "GET /tools -> {} (count={}, specs={}, specs_with_schema={})",
+        tools_status.as_u16(),
+        tool_count,
+        tool_spec_count,
+        tool_specs_with_schema
+    );
+    println!(
+        "GET /resources -> {} (count={})",
+        resources_status.as_u16(),
+        resource_count
+    );
+    println!("GET /resources/*uri -> {}", resource_read_status.as_u16());
+    println!("POST /mcp initialize -> {}", mcp_initialize_status.as_u16());
+    println!(
+        "POST /mcp tools/list -> {} (count={}, with_schema={})",
+        mcp_list_status.as_u16(),
+        mcp_tool_count,
+        mcp_tools_with_schema
+    );
+    println!(
+        "POST /mcp resources/list -> {} (count={})",
+        mcp_resources_list_status.as_u16(),
+        mcp_resource_count
+    );
+    println!(
+        "POST /mcp resources/read -> {}",
+        mcp_resources_read_status.as_u16()
+    );
+    println!(
+        "POST /mcp tool/list(alias) -> {} (count={})",
+        mcp_alias_tool_list_status.as_u16(),
+        mcp_alias_tool_count
+    );
+    println!(
+        "POST /mcp resource/list(alias) -> {} (count={})",
+        mcp_alias_resource_list_status.as_u16(),
+        mcp_alias_resource_count
+    );
+    println!(
+        "POST /mcp tools/call(get_current_time) -> {}",
+        mcp_call_status.as_u16()
+    );
+    println!(
+        "POST /mcp tools/call(chat_records missing session_id) -> {}",
+        mcp_call_missing_arg_status.as_u16()
+    );
+    println!(
+        "POST /mcp tools/call(unknown tool) -> {}",
+        mcp_call_unknown_tool_status.as_u16()
+    );
+    println!(
+        "POST /tools/totally_unknown_tool -> {}",
+        http_tool_not_found_status.as_u16()
+    );
+    println!(
+        "POST /tools/chat_records({{}}) -> {}",
+        http_tool_error_status.as_u16()
+    );
     println!(
         "GET /integrations -> {} (count={})",
         integrations_status.as_u16(),
         integration_ids.len()
     );
+    for (target, status) in &integration_preset_statuses {
+        println!("GET /integrations/{} -> {}", target, status.as_u16());
+    }
+    println!("GET /sse -> {} ({})", sse_status.as_u16(), sse_content_type);
+    println!("GET /ws -> {}", ws_status.as_u16());
 
     if health_status != reqwest::StatusCode::OK {
         return Err(CliError::Internal(format!(
@@ -6430,6 +8221,18 @@ fn run_mcp_smoke_check(base_url: String, timeout_ms: u64) -> Result<()> {
         return Err(CliError::Internal(format!(
             "mcp smoke failed: /tools expected 200, got {}",
             tools_status
+        )));
+    }
+    if resources_status != reqwest::StatusCode::OK {
+        return Err(CliError::Internal(format!(
+            "mcp smoke failed: /resources expected 200, got {}",
+            resources_status
+        )));
+    }
+    if resource_read_status != reqwest::StatusCode::OK {
+        return Err(CliError::Internal(format!(
+            "mcp smoke failed: /resources/*uri expected 200, got {}",
+            resource_read_status
         )));
     }
     if mcp_initialize_status != reqwest::StatusCode::OK {
@@ -6444,6 +8247,60 @@ fn run_mcp_smoke_check(base_url: String, timeout_ms: u64) -> Result<()> {
             mcp_list_status
         )));
     }
+    if tool_spec_count == 0 {
+        return Err(CliError::Internal(
+            "mcp smoke failed: /tools missing toolSpecs contract".to_string(),
+        ));
+    }
+    if tool_specs_with_schema != tool_spec_count {
+        return Err(CliError::Internal(
+            "mcp smoke failed: /tools toolSpecs missing inputSchema object".to_string(),
+        ));
+    }
+    if mcp_tool_count == 0 {
+        return Err(CliError::Internal(
+            "mcp smoke failed: /mcp tools/list returned empty tools".to_string(),
+        ));
+    }
+    if mcp_tools_with_schema != mcp_tool_count {
+        return Err(CliError::Internal(
+            "mcp smoke failed: /mcp tools/list tools missing inputSchema object".to_string(),
+        ));
+    }
+    if tool_names != tool_spec_names {
+        return Err(CliError::Internal(
+            "mcp smoke failed: /tools tools and toolSpecs are out of sync".to_string(),
+        ));
+    }
+    if tool_spec_names != mcp_tool_names {
+        return Err(CliError::Internal(
+            "mcp smoke failed: /tools toolSpecs and /mcp tools/list are out of sync".to_string(),
+        ));
+    }
+    if mcp_resources_list_status != reqwest::StatusCode::OK {
+        return Err(CliError::Internal(format!(
+            "mcp smoke failed: /mcp resources/list expected 200, got {}",
+            mcp_resources_list_status
+        )));
+    }
+    if mcp_resources_read_status != reqwest::StatusCode::OK {
+        return Err(CliError::Internal(format!(
+            "mcp smoke failed: /mcp resources/read expected 200, got {}",
+            mcp_resources_read_status
+        )));
+    }
+    if mcp_alias_tool_list_status != reqwest::StatusCode::OK {
+        return Err(CliError::Internal(format!(
+            "mcp smoke failed: /mcp tool/list alias expected 200, got {}",
+            mcp_alias_tool_list_status
+        )));
+    }
+    if mcp_alias_resource_list_status != reqwest::StatusCode::OK {
+        return Err(CliError::Internal(format!(
+            "mcp smoke failed: /mcp resource/list alias expected 200, got {}",
+            mcp_alias_resource_list_status
+        )));
+    }
     if mcp_call_status != reqwest::StatusCode::OK {
         return Err(CliError::Internal(format!(
             "mcp smoke failed: /mcp tools/call expected 200, got {}",
@@ -6454,6 +8311,26 @@ fn run_mcp_smoke_check(base_url: String, timeout_ms: u64) -> Result<()> {
         return Err(CliError::Internal(format!(
             "mcp smoke failed: /integrations expected 200, got {}",
             integrations_status
+        )));
+    }
+    if sse_status != reqwest::StatusCode::OK {
+        return Err(CliError::Internal(format!(
+            "mcp smoke failed: /sse expected 200, got {}",
+            sse_status
+        )));
+    }
+    if !sse_content_type.starts_with("text/event-stream") {
+        return Err(CliError::Internal(format!(
+            "mcp smoke failed: /sse expected text/event-stream content-type, got '{}'",
+            sse_content_type
+        )));
+    }
+    if ws_status != reqwest::StatusCode::UPGRADE_REQUIRED
+        && ws_status != reqwest::StatusCode::BAD_REQUEST
+    {
+        return Err(CliError::Internal(format!(
+            "mcp smoke failed: /ws expected 426 or 400 without websocket upgrade headers, got {}",
+            ws_status
         )));
     }
     if !mcp_initialize_json
@@ -6484,6 +8361,131 @@ fn run_mcp_smoke_check(base_url: String, timeout_ms: u64) -> Result<()> {
     {
         return Err(CliError::Internal(
             "mcp smoke failed: /mcp tools/call missing structuredContent.unix".to_string(),
+        ));
+    }
+    if mcp_call_missing_arg_status != reqwest::StatusCode::OK {
+        return Err(CliError::Internal(format!(
+            "mcp smoke failed: /mcp tools/call(chat_records missing session_id) expected 200, got {}",
+            mcp_call_missing_arg_status
+        )));
+    }
+    if mcp_call_missing_arg_json
+        .get("error")
+        .and_then(|v| v.get("code"))
+        .and_then(|v| v.as_i64())
+        != Some(-32002)
+        || mcp_call_missing_arg_json
+            .get("error")
+            .and_then(|v| v.get("message"))
+            .and_then(|v| v.as_str())
+            != Some("tool_error")
+    {
+        return Err(CliError::Internal(
+            "mcp smoke failed: /mcp tools/call(chat_records missing session_id) expected error.code=-32002 message=tool_error".to_string(),
+        ));
+    }
+    if mcp_call_unknown_tool_status != reqwest::StatusCode::OK {
+        return Err(CliError::Internal(format!(
+            "mcp smoke failed: /mcp tools/call(unknown tool) expected 200, got {}",
+            mcp_call_unknown_tool_status
+        )));
+    }
+    if mcp_call_unknown_tool_json
+        .get("error")
+        .and_then(|v| v.get("code"))
+        .and_then(|v| v.as_i64())
+        != Some(-32001)
+        || mcp_call_unknown_tool_json
+            .get("error")
+            .and_then(|v| v.get("message"))
+            .and_then(|v| v.as_str())
+            != Some("tool_not_found")
+    {
+        return Err(CliError::Internal(
+            "mcp smoke failed: /mcp tools/call(unknown tool) expected error.code=-32001 message=tool_not_found".to_string(),
+        ));
+    }
+    if http_tool_not_found_status != reqwest::StatusCode::NOT_FOUND {
+        return Err(CliError::Internal(format!(
+            "mcp smoke failed: /tools/totally_unknown_tool expected 404, got {}",
+            http_tool_not_found_status
+        )));
+    }
+    if http_tool_not_found_json
+        .get("code")
+        .and_then(|v| v.as_str())
+        != Some("tool_not_found")
+    {
+        return Err(CliError::Internal(
+            "mcp smoke failed: /tools/totally_unknown_tool expected code=tool_not_found"
+                .to_string(),
+        ));
+    }
+    if http_tool_error_status != reqwest::StatusCode::INTERNAL_SERVER_ERROR {
+        return Err(CliError::Internal(format!(
+            "mcp smoke failed: /tools/chat_records({{}}) expected 500, got {}",
+            http_tool_error_status
+        )));
+    }
+    if http_tool_error_json.get("code").and_then(|v| v.as_str()) != Some("tool_error") {
+        return Err(CliError::Internal(
+            "mcp smoke failed: /tools/chat_records({}) expected code=tool_error".to_string(),
+        ));
+    }
+    if resource_count == 0 {
+        return Err(CliError::Internal(
+            "mcp smoke failed: /resources returned empty list".to_string(),
+        ));
+    }
+    if !resource_read_json
+        .get("uri")
+        .and_then(|v| v.as_str())
+        .is_some()
+    {
+        return Err(CliError::Internal(
+            "mcp smoke failed: /resources/*uri missing uri field".to_string(),
+        ));
+    }
+    if !resource_read_json
+        .get("content")
+        .is_some_and(|v| v.is_array())
+    {
+        return Err(CliError::Internal(
+            "mcp smoke failed: /resources/*uri missing content array".to_string(),
+        ));
+    }
+    if mcp_resource_count == 0 {
+        return Err(CliError::Internal(
+            "mcp smoke failed: /mcp resources/list returned empty list".to_string(),
+        ));
+    }
+    if mcp_alias_tool_count == 0 {
+        return Err(CliError::Internal(
+            "mcp smoke failed: /mcp tool/list alias returned empty list".to_string(),
+        ));
+    }
+    if mcp_alias_resource_count == 0 {
+        return Err(CliError::Internal(
+            "mcp smoke failed: /mcp resource/list alias returned empty list".to_string(),
+        ));
+    }
+    if !mcp_resources_read_json
+        .get("result")
+        .and_then(|v| v.get("uri"))
+        .and_then(|v| v.as_str())
+        .is_some()
+    {
+        return Err(CliError::Internal(
+            "mcp smoke failed: /mcp resources/read missing result.uri".to_string(),
+        ));
+    }
+    if !mcp_resources_read_json
+        .get("result")
+        .and_then(|v| v.get("content"))
+        .is_some_and(|v| v.is_array())
+    {
+        return Err(CliError::Internal(
+            "mcp smoke failed: /mcp resources/read missing result.content array".to_string(),
         ));
     }
 
@@ -6518,6 +8520,11 @@ fn run_mcp_smoke_check(base_url: String, timeout_ms: u64) -> Result<()> {
                 required
             )));
         }
+    }
+    if integration_preset_statuses.len() != 3 {
+        return Err(CliError::Internal(
+            "mcp smoke failed: expected 3 integration preset checks".to_string(),
+        ));
     }
 
     Ok(())
@@ -6608,7 +8615,9 @@ fn run_mcp_integration_preset_fetch(
             );
             println!(
                 "name: {}",
-                json.get("name").and_then(|v| v.as_str()).unwrap_or_default()
+                json.get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default()
             );
             println!(
                 "description: {}",
@@ -6633,6 +8642,387 @@ fn run_mcp_integration_preset_fetch(
                 .map_err(|e| CliError::Internal(format!("format configuration failed: {}", e)))?
             );
         }
+    }
+
+    Ok(())
+}
+
+#[cfg(feature = "api")]
+fn parse_mcp_tool_args_json(args_json: &str) -> Result<serde_json::Map<String, serde_json::Value>> {
+    let parsed: serde_json::Value = serde_json::from_str(args_json)
+        .map_err(|e| CliError::Argument(format!("invalid --args-json: {}", e)))?;
+    parsed
+        .as_object()
+        .cloned()
+        .ok_or_else(|| CliError::Argument("--args-json must be a JSON object".to_string()))
+}
+
+#[cfg(feature = "api")]
+fn run_mcp_tool_call(
+    base_url: String,
+    mode: crate::commands::McpCallMode,
+    tool: String,
+    args_json: String,
+    format: OutputFormat,
+    timeout_ms: u64,
+) -> Result<()> {
+    let base = base_url.trim().trim_end_matches('/').to_string();
+    if base.is_empty() {
+        return Err(CliError::Argument(
+            "mcp call requires a non-empty --url".to_string(),
+        ));
+    }
+    let tool = tool.trim().to_string();
+    if tool.is_empty() {
+        return Err(CliError::Argument(
+            "mcp call requires a non-empty --tool".to_string(),
+        ));
+    }
+    let args = parse_mcp_tool_args_json(&args_json)?;
+
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| CliError::Internal(e.to_string()))?;
+
+    let mode_for_request = mode.clone();
+    let tool_for_request = tool.clone();
+    let args_for_request = args.clone();
+    let response = runtime.block_on(async move {
+        let timeout = std::time::Duration::from_millis(timeout_ms.max(500));
+        let client = reqwest::Client::builder()
+            .timeout(timeout)
+            .build()
+            .map_err(|e| CliError::Internal(format!("failed to build HTTP client: {}", e)))?;
+
+        let (url, body) = match mode_for_request {
+            crate::commands::McpCallMode::Rpc => (
+                format!("{}/mcp", base),
+                serde_json::json!({
+                    "jsonrpc": "2.0",
+                    "id": "xenobot-mcp-call",
+                    "method": "tools/call",
+                    "params": {
+                        "name": tool_for_request,
+                        "arguments": args_for_request
+                    }
+                }),
+            ),
+            crate::commands::McpCallMode::Http => (
+                format!("{}/tools/{}", base, tool_for_request),
+                serde_json::Value::Object(args_for_request),
+            ),
+        };
+
+        let resp = client
+            .post(&url)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| CliError::Internal(format!("mcp call request failed: {}", e)))?;
+        let status = resp.status();
+        let json: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| CliError::Internal(format!("mcp call decode failed: {}", e)))?;
+        Ok::<(reqwest::StatusCode, serde_json::Value), CliError>((status, json))
+    })?;
+
+    let (status, payload) = response;
+    let output = serde_json::json!({
+        "mode": mode.to_string(),
+        "tool": tool,
+        "status": status.as_u16(),
+        "ok": status.is_success(),
+        "response": payload,
+    });
+
+    match format {
+        OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Csv => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&output).map_err(|e| CliError::Internal(format!(
+                    "format mcp call output failed: {}",
+                    e
+                )))?
+            );
+        }
+        OutputFormat::Text | OutputFormat::Table => {
+            println!("mcp tool call");
+            println!("mode: {}", mode);
+            println!("tool: {}", output["tool"].as_str().unwrap_or_default());
+            println!("status: {}", output["status"].as_u64().unwrap_or_default());
+            println!("ok: {}", output["ok"].as_bool().unwrap_or(false));
+            println!("response:");
+            println!(
+                "{}",
+                serde_json::to_string_pretty(
+                    output.get("response").unwrap_or(&serde_json::Value::Null)
+                )
+                .map_err(|e| CliError::Internal(format!("format mcp response failed: {}", e)))?
+            );
+        }
+    }
+
+    if !status.is_success() {
+        return Err(CliError::Internal(format!(
+            "mcp call failed with status {}",
+            status
+        )));
+    }
+
+    if output
+        .get("response")
+        .and_then(|v| v.get("error"))
+        .is_some()
+    {
+        return Err(CliError::Internal(
+            "mcp call returned JSON-RPC error payload".to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
+#[cfg(feature = "api")]
+fn encode_http_path_component(value: &str) -> String {
+    let mut encoded = String::with_capacity(value.len());
+    for byte in value.bytes() {
+        let unreserved = byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~');
+        if unreserved {
+            encoded.push(byte as char);
+        } else {
+            encoded.push('%');
+            encoded.push_str(&format!("{byte:02X}"));
+        }
+    }
+    encoded
+}
+
+#[cfg(feature = "api")]
+fn run_mcp_resources_list(
+    base_url: String,
+    mode: crate::commands::McpCallMode,
+    format: OutputFormat,
+    timeout_ms: u64,
+) -> Result<()> {
+    let base = base_url.trim().trim_end_matches('/').to_string();
+    if base.is_empty() {
+        return Err(CliError::Argument(
+            "mcp resources requires a non-empty --url".to_string(),
+        ));
+    }
+
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| CliError::Internal(e.to_string()))?;
+
+    let mode_for_request = mode.clone();
+    let response = runtime.block_on(async move {
+        let timeout = std::time::Duration::from_millis(timeout_ms.max(500));
+        let client = reqwest::Client::builder()
+            .timeout(timeout)
+            .build()
+            .map_err(|e| CliError::Internal(format!("failed to build HTTP client: {}", e)))?;
+
+        let request = match mode_for_request {
+            crate::commands::McpCallMode::Rpc => {
+                client
+                    .post(format!("{}/mcp", base))
+                    .json(&serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": "xenobot-mcp-resources-list",
+                        "method": "resources/list"
+                    }))
+            }
+            crate::commands::McpCallMode::Http => client.get(format!("{}/resources", base)),
+        };
+
+        let resp = request
+            .send()
+            .await
+            .map_err(|e| CliError::Internal(format!("mcp resources request failed: {}", e)))?;
+        let status = resp.status();
+        let json: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| CliError::Internal(format!("mcp resources decode failed: {}", e)))?;
+        Ok::<(reqwest::StatusCode, serde_json::Value), CliError>((status, json))
+    })?;
+
+    let (status, payload) = response;
+    let output = serde_json::json!({
+        "mode": mode.to_string(),
+        "status": status.as_u16(),
+        "ok": status.is_success(),
+        "response": payload,
+    });
+
+    match format {
+        OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Csv => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&output).map_err(|e| CliError::Internal(format!(
+                    "format mcp resources output failed: {}",
+                    e
+                )))?
+            );
+        }
+        OutputFormat::Text | OutputFormat::Table => {
+            println!("mcp resources");
+            println!("mode: {}", mode);
+            println!("status: {}", output["status"].as_u64().unwrap_or_default());
+            println!("ok: {}", output["ok"].as_bool().unwrap_or(false));
+            println!("response:");
+            println!(
+                "{}",
+                serde_json::to_string_pretty(
+                    output.get("response").unwrap_or(&serde_json::Value::Null)
+                )
+                .map_err(|e| CliError::Internal(format!("format mcp response failed: {}", e)))?
+            );
+        }
+    }
+
+    if !status.is_success() {
+        return Err(CliError::Internal(format!(
+            "mcp resources failed with status {}",
+            status
+        )));
+    }
+
+    if output
+        .get("response")
+        .and_then(|value| value.get("error"))
+        .is_some()
+    {
+        return Err(CliError::Internal(
+            "mcp resources returned JSON-RPC error payload".to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
+#[cfg(feature = "api")]
+fn run_mcp_resource_read(
+    base_url: String,
+    mode: crate::commands::McpCallMode,
+    uri: String,
+    format: OutputFormat,
+    timeout_ms: u64,
+) -> Result<()> {
+    let base = base_url.trim().trim_end_matches('/').to_string();
+    if base.is_empty() {
+        return Err(CliError::Argument(
+            "mcp resource requires a non-empty --url".to_string(),
+        ));
+    }
+    let uri = uri.trim().to_string();
+    if uri.is_empty() {
+        return Err(CliError::Argument(
+            "mcp resource requires a non-empty --uri".to_string(),
+        ));
+    }
+
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| CliError::Internal(e.to_string()))?;
+
+    let mode_for_request = mode.clone();
+    let uri_for_request = uri.clone();
+    let response = runtime.block_on(async move {
+        let timeout = std::time::Duration::from_millis(timeout_ms.max(500));
+        let client = reqwest::Client::builder()
+            .timeout(timeout)
+            .build()
+            .map_err(|e| CliError::Internal(format!("failed to build HTTP client: {}", e)))?;
+
+        let request = match mode_for_request {
+            crate::commands::McpCallMode::Rpc => {
+                client
+                    .post(format!("{}/mcp", base))
+                    .json(&serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": "xenobot-mcp-resource-read",
+                        "method": "resources/read",
+                        "params": {
+                            "uri": uri_for_request
+                        }
+                    }))
+            }
+            crate::commands::McpCallMode::Http => client.get(format!(
+                "{}/resources/{}",
+                base,
+                encode_http_path_component(&uri_for_request)
+            )),
+        };
+
+        let resp = request
+            .send()
+            .await
+            .map_err(|e| CliError::Internal(format!("mcp resource request failed: {}", e)))?;
+        let status = resp.status();
+        let json: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| CliError::Internal(format!("mcp resource decode failed: {}", e)))?;
+        Ok::<(reqwest::StatusCode, serde_json::Value), CliError>((status, json))
+    })?;
+
+    let (status, payload) = response;
+    let output = serde_json::json!({
+        "mode": mode.to_string(),
+        "uri": uri,
+        "status": status.as_u16(),
+        "ok": status.is_success(),
+        "response": payload,
+    });
+
+    match format {
+        OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Csv => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&output).map_err(|e| CliError::Internal(format!(
+                    "format mcp resource output failed: {}",
+                    e
+                )))?
+            );
+        }
+        OutputFormat::Text | OutputFormat::Table => {
+            println!("mcp resource");
+            println!("mode: {}", mode);
+            println!("uri: {}", output["uri"].as_str().unwrap_or_default());
+            println!("status: {}", output["status"].as_u64().unwrap_or_default());
+            println!("ok: {}", output["ok"].as_bool().unwrap_or(false));
+            println!("response:");
+            println!(
+                "{}",
+                serde_json::to_string_pretty(
+                    output.get("response").unwrap_or(&serde_json::Value::Null)
+                )
+                .map_err(|e| CliError::Internal(format!("format mcp response failed: {}", e)))?
+            );
+        }
+    }
+
+    if !status.is_success() {
+        return Err(CliError::Internal(format!(
+            "mcp resource failed with status {}",
+            status
+        )));
+    }
+
+    if output
+        .get("response")
+        .and_then(|value| value.get("error"))
+        .is_some()
+    {
+        return Err(CliError::Internal(
+            "mcp resource returned JSON-RPC error payload".to_string(),
+        ));
     }
 
     Ok(())
@@ -6665,6 +9055,186 @@ mod tests {
         assert!(err
             .to_string()
             .contains("multiple SQL statements are not allowed"));
+    }
+
+    #[cfg(feature = "api")]
+    #[test]
+    fn parse_mcp_tool_args_json_accepts_object_payload() {
+        let parsed = parse_mcp_tool_args_json(r#"{"session_id":1,"limit":10}"#)
+            .expect("object json should be accepted");
+        assert_eq!(parsed.get("session_id").and_then(|v| v.as_i64()), Some(1));
+        assert_eq!(parsed.get("limit").and_then(|v| v.as_i64()), Some(10));
+    }
+
+    #[cfg(feature = "api")]
+    #[test]
+    fn parse_mcp_tool_args_json_rejects_non_object_payload() {
+        let err =
+            parse_mcp_tool_args_json(r#"[1,2,3]"#).expect_err("array json should be rejected");
+        assert!(err
+            .to_string()
+            .contains("--args-json must be a JSON object"));
+    }
+
+    #[cfg(feature = "api")]
+    #[test]
+    fn parse_optional_json_body_accepts_valid_payload() {
+        let parsed =
+            parse_optional_json_body(Some(r#"{"hello":"world"}"#.to_string())).expect("valid json");
+        assert_eq!(
+            parsed
+                .as_ref()
+                .and_then(|v| v.get("hello"))
+                .and_then(|v| v.as_str()),
+            Some("world")
+        );
+    }
+
+    #[cfg(feature = "api")]
+    #[test]
+    fn parse_optional_json_body_rejects_invalid_payload() {
+        let err = parse_optional_json_body(Some("{not-json}".to_string()))
+            .expect_err("invalid json should be rejected");
+        assert!(err.to_string().contains("invalid --body-json"));
+    }
+
+    #[cfg(feature = "api")]
+    #[test]
+    fn run_mcp_tool_call_rejects_empty_url_before_network() {
+        let err = run_mcp_tool_call(
+            "   ".to_string(),
+            crate::commands::McpCallMode::Rpc,
+            "get_current_time".to_string(),
+            "{}".to_string(),
+            OutputFormat::Json,
+            1500,
+        )
+        .expect_err("empty url must fail before network execution");
+        assert!(err.to_string().contains("non-empty --url"));
+    }
+
+    #[cfg(feature = "api")]
+    #[test]
+    fn run_mcp_tool_call_rejects_empty_tool_before_network() {
+        let err = run_mcp_tool_call(
+            "http://127.0.0.1:5030".to_string(),
+            crate::commands::McpCallMode::Rpc,
+            "   ".to_string(),
+            "{}".to_string(),
+            OutputFormat::Json,
+            1500,
+        )
+        .expect_err("empty tool must fail before network execution");
+        assert!(err.to_string().contains("non-empty --tool"));
+    }
+
+    #[cfg(feature = "api")]
+    #[test]
+    fn run_mcp_tool_call_rejects_non_object_args_before_network() {
+        let err = run_mcp_tool_call(
+            "http://127.0.0.1:5030".to_string(),
+            crate::commands::McpCallMode::Http,
+            "chat_records".to_string(),
+            r#"["invalid"]"#.to_string(),
+            OutputFormat::Json,
+            1500,
+        )
+        .expect_err("non-object args should fail before network execution");
+        assert!(err
+            .to_string()
+            .contains("--args-json must be a JSON object"));
+    }
+
+    #[cfg(feature = "api")]
+    #[test]
+    fn encode_http_path_component_percent_encodes_reserved_chars() {
+        let encoded = encode_http_path_component("xenobot://server/info name");
+        assert_eq!(encoded, "xenobot%3A%2F%2Fserver%2Finfo%20name");
+    }
+
+    #[cfg(feature = "api")]
+    #[test]
+    fn build_sandbox_start_recommendation_prefers_tcp_when_available() {
+        let gateway = std::path::Path::new("/tmp/xenobot gateway");
+        let (mode, command) = build_sandbox_start_recommendation(true, true, gateway);
+        assert_eq!(mode, "tcp");
+        assert!(command.contains("--host 127.0.0.1"));
+    }
+
+    #[cfg(feature = "api")]
+    #[test]
+    fn build_sandbox_start_recommendation_uses_unix_when_tcp_blocked() {
+        let gateway = std::path::Path::new("/tmp/xenobot gateway");
+        let (mode, command) = build_sandbox_start_recommendation(false, true, gateway);
+        assert_eq!(mode, "unix");
+        assert!(command.contains("--unix-socket /tmp/xenobot.sock"));
+    }
+
+    #[cfg(feature = "api")]
+    #[test]
+    fn build_sandbox_start_recommendation_uses_file_gateway_and_quotes_path() {
+        let gateway = std::path::Path::new("/tmp/xenobot gateway/with spaces");
+        let (mode, command) = build_sandbox_start_recommendation(false, false, gateway);
+        assert_eq!(mode, "file-gateway");
+        assert!(command.contains("--force-file-gateway"));
+        assert!(command.contains("--file-gateway-dir '/tmp/xenobot gateway/with spaces'"));
+    }
+
+    #[cfg(feature = "api")]
+    #[test]
+    fn run_mcp_resources_list_rejects_empty_url_before_network() {
+        let err = run_mcp_resources_list(
+            "   ".to_string(),
+            crate::commands::McpCallMode::Rpc,
+            OutputFormat::Json,
+            1500,
+        )
+        .expect_err("empty url must fail before network execution");
+        assert!(err.to_string().contains("non-empty --url"));
+    }
+
+    #[cfg(feature = "api")]
+    #[test]
+    fn run_mcp_resource_read_rejects_empty_url_before_network() {
+        let err = run_mcp_resource_read(
+            " ".to_string(),
+            crate::commands::McpCallMode::Http,
+            "xenobot://server/info".to_string(),
+            OutputFormat::Json,
+            1500,
+        )
+        .expect_err("empty url must fail before network execution");
+        assert!(err.to_string().contains("non-empty --url"));
+    }
+
+    #[cfg(feature = "api")]
+    #[test]
+    fn run_mcp_resource_read_rejects_empty_uri_before_network() {
+        let err = run_mcp_resource_read(
+            "http://127.0.0.1:5030".to_string(),
+            crate::commands::McpCallMode::Rpc,
+            "   ".to_string(),
+            OutputFormat::Json,
+            1500,
+        )
+        .expect_err("empty uri must fail before network execution");
+        assert!(err.to_string().contains("non-empty --uri"));
+    }
+
+    #[cfg(feature = "api")]
+    #[test]
+    fn run_api_file_gateway_call_rejects_empty_method() {
+        let err = run_api_file_gateway_call(
+            Some(std::env::temp_dir().join("xenobot-gateway-call-test")),
+            Some("req_test".to_string()),
+            "   ".to_string(),
+            Some("/health".to_string()),
+            None,
+            1000,
+            OutputFormat::Json,
+        )
+        .expect_err("empty method should fail before request creation");
+        assert!(err.to_string().contains("method must not be empty"));
     }
 
     #[cfg(all(feature = "analysis", feature = "api"))]
@@ -6820,7 +9390,8 @@ mod tests {
     #[test]
     fn semantic_embedding_similarity_prefers_related_content() {
         let query = embed_text_for_semantic("database migration checkpoint incremental import");
-        let related = embed_text_for_semantic("incremental import checkpoint for database migration");
+        let related =
+            embed_text_for_semantic("incremental import checkpoint for database migration");
         let unrelated = embed_text_for_semantic("sunny beach holiday music and mountain hiking");
 
         let related_score = cosine_similarity(&query, &related);
@@ -6862,6 +9433,7 @@ mod tests {
         assert!(err.to_string().contains("account id generation failed"));
     }
 
+    #[cfg(feature = "analysis")]
     #[test]
     fn sanitize_file_component_falls_back_when_empty() {
         assert_eq!(sanitize_file_component(""), "chat");
@@ -6872,6 +9444,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "analysis")]
     #[test]
     fn short_path_hash_is_stable_for_same_path() {
         let path = std::path::Path::new("/tmp/xenobot/chat.json");
@@ -6943,13 +9516,285 @@ mod tests {
 
         let payload = run_advanced_analysis(&conn, &AdvancedAnalysis::DragonKing)
             .expect("advanced analysis should succeed");
-        assert_eq!(payload["analysis"].as_str().unwrap_or_default(), "dragon_king");
+        assert_eq!(
+            payload["analysis"].as_str().unwrap_or_default(),
+            "dragon_king"
+        );
         let rows = payload["rows"]
             .as_array()
             .expect("rows should be an array")
             .to_vec();
         assert!(!rows.is_empty());
         assert_eq!(rows[0]["senderName"], "alice");
+    }
+
+    #[test]
+    fn source_platform_matrix_rows_cover_expected_legal_safe_set() {
+        let rows = build_source_platform_matrix_rows();
+        assert_eq!(rows.len(), 17, "expected 17 legal-safe runtime platforms");
+
+        let ids = rows
+            .iter()
+            .map(|row| row.platform_id.as_str())
+            .collect::<std::collections::HashSet<_>>();
+        for required in [
+            "wechat",
+            "whatsapp",
+            "line",
+            "qq",
+            "discord",
+            "instagram",
+            "telegram",
+            "imessage",
+            "messenger",
+            "kakaotalk",
+            "slack",
+            "teams",
+            "signal",
+            "skype",
+            "googlechat",
+            "zoom",
+            "viber",
+        ] {
+            assert!(ids.contains(required), "missing platform id: {required}");
+        }
+    }
+
+    #[test]
+    fn collect_db_verification_reports_ok_when_required_objects_exist() {
+        let conn = rusqlite::Connection::open_in_memory().expect("open in-memory db");
+        conn.execute_batch(
+            r#"
+            CREATE TABLE meta (id INTEGER PRIMARY KEY);
+            CREATE TABLE member (id INTEGER PRIMARY KEY, platform_id TEXT);
+            CREATE TABLE message (id INTEGER PRIMARY KEY, sender_id INTEGER, meta_id INTEGER, ts INTEGER);
+            CREATE TABLE sessions (id INTEGER PRIMARY KEY, meta_id INTEGER, created_at INTEGER);
+            CREATE TABLE message_context (id INTEGER PRIMARY KEY, session_id INTEGER, message_id INTEGER);
+            CREATE TABLE member_name_history (
+                id INTEGER PRIMARY KEY,
+                member_id INTEGER,
+                start_ts INTEGER
+            );
+            CREATE TABLE import_progress (id INTEGER PRIMARY KEY);
+            CREATE TABLE import_source_checkpoint (id INTEGER PRIMARY KEY);
+
+            CREATE INDEX idx_message_meta_ts_id ON message(meta_id, ts, id);
+            CREATE INDEX idx_message_meta_sender_ts_id ON message(meta_id, sender_id, ts, id);
+            CREATE INDEX idx_sessions_meta_created_at ON sessions(meta_id, created_at);
+            CREATE INDEX idx_member_name_history_member_start_ts ON member_name_history(member_id, start_ts);
+            CREATE INDEX idx_message_context_session_message ON message_context(session_id, message_id);
+            CREATE INDEX idx_chat_session_meta_start_ts_id ON sessions(meta_id, created_at, id);
+            "#,
+        )
+        .expect("seed required schema");
+
+        let report =
+            collect_db_verification(std::path::Path::new(":memory:"), &conn).expect("verify db");
+        assert!(report.ok);
+        assert_eq!(report.missing_required, 0);
+    }
+
+    #[test]
+    fn collect_db_verification_reports_missing_required_objects() {
+        let conn = rusqlite::Connection::open_in_memory().expect("open in-memory db");
+        conn.execute_batch(
+            r#"
+            CREATE TABLE meta (id INTEGER PRIMARY KEY);
+            CREATE TABLE member (id INTEGER PRIMARY KEY);
+            CREATE TABLE message (id INTEGER PRIMARY KEY, meta_id INTEGER, ts INTEGER);
+            "#,
+        )
+        .expect("seed partial schema");
+
+        let report =
+            collect_db_verification(std::path::Path::new(":memory:"), &conn).expect("verify db");
+        assert!(!report.ok);
+        assert!(report.missing_required > 0);
+        assert!(report
+            .checks
+            .iter()
+            .any(|row| row.required && row.name == "sessions" && !row.exists));
+    }
+
+    #[test]
+    fn collect_db_checkpoints_handles_missing_table() {
+        let conn = rusqlite::Connection::open_in_memory().expect("open in-memory db");
+        let report = collect_db_checkpoints(
+            std::path::Path::new(":memory:"),
+            &conn,
+            Some("monitor"),
+            Some("completed"),
+            10,
+        )
+        .expect("collect checkpoints");
+        assert!(!report.table_present);
+        assert_eq!(report.total_rows, 0);
+        assert_eq!(report.returned_rows, 0);
+        assert!(report.rows.is_empty());
+    }
+
+    #[test]
+    fn collect_db_checkpoints_applies_filters_and_limit() {
+        let conn = rusqlite::Connection::open_in_memory().expect("open in-memory db");
+        conn.execute_batch(
+            r#"
+            CREATE TABLE import_source_checkpoint (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source_kind TEXT NOT NULL,
+                source_path TEXT NOT NULL,
+                fingerprint TEXT NOT NULL,
+                file_size INTEGER NOT NULL DEFAULT 0,
+                modified_at INTEGER NOT NULL DEFAULT 0,
+                platform TEXT,
+                chat_name TEXT,
+                meta_id INTEGER,
+                last_processed_at INTEGER NOT NULL,
+                last_inserted_messages INTEGER NOT NULL DEFAULT 0,
+                last_duplicate_messages INTEGER NOT NULL DEFAULT 0,
+                status TEXT NOT NULL DEFAULT 'completed',
+                error_message TEXT
+            );
+            INSERT INTO import_source_checkpoint (
+                source_kind, source_path, fingerprint, file_size, modified_at,
+                platform, chat_name, meta_id, last_processed_at,
+                last_inserted_messages, last_duplicate_messages, status, error_message
+            ) VALUES
+                ('monitor', '/tmp/a.json', 'fp-a', 10, 100, 'wechat', 'alpha', 1, 200, 2, 0, 'completed', NULL),
+                ('monitor', '/tmp/b.json', 'fp-b', 11, 101, 'wechat', 'beta', 2, 300, 1, 1, 'failed', 'parse error'),
+                ('api-import', '/tmp/c.json', 'fp-c', 12, 102, 'telegram', 'gamma', 3, 400, 3, 0, 'completed', NULL);
+            "#,
+        )
+        .expect("seed checkpoint table");
+
+        let report = collect_db_checkpoints(
+            std::path::Path::new(":memory:"),
+            &conn,
+            Some("monitor"),
+            None,
+            1,
+        )
+        .expect("collect checkpoints");
+        assert!(report.table_present);
+        assert_eq!(report.total_rows, 2);
+        assert_eq!(report.returned_rows, 1);
+        assert_eq!(report.rows[0].source_kind, "monitor");
+        assert_eq!(report.rows[0].source_path, "/tmp/b.json");
+    }
+
+    #[test]
+    fn collect_db_schema_reports_tables_columns_indexes_and_foreign_keys() {
+        let conn = rusqlite::Connection::open_in_memory().expect("open in-memory db");
+        conn.execute_batch(
+            r#"
+            CREATE TABLE parent (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL
+            );
+            CREATE TABLE child (
+                id INTEGER PRIMARY KEY,
+                parent_id INTEGER NOT NULL,
+                content TEXT,
+                FOREIGN KEY(parent_id) REFERENCES parent(id) ON DELETE CASCADE
+            );
+            CREATE INDEX idx_child_parent_id ON child(parent_id);
+            "#,
+        )
+        .expect("seed schema");
+
+        let report = collect_db_schema(std::path::Path::new(":memory:"), &conn, false)
+            .expect("collect schema");
+        assert_eq!(report.summary.table_count, 2);
+        assert!(report.summary.column_count >= 5);
+        assert!(report.summary.index_count >= 1);
+        assert!(report.summary.foreign_key_count >= 1);
+
+        let child = report
+            .tables
+            .iter()
+            .find(|t| t.name == "child")
+            .expect("child table");
+        assert!(child
+            .columns
+            .iter()
+            .any(|c| c.name == "id" && c.primary_key));
+        assert!(child
+            .indexes
+            .iter()
+            .any(|idx| idx.name == "idx_child_parent_id"));
+        assert!(child.foreign_keys.iter().any(|fk| fk.table == "parent"));
+        assert!(child.row_count.is_none());
+    }
+
+    #[test]
+    fn collect_db_schema_can_include_row_count() {
+        let conn = rusqlite::Connection::open_in_memory().expect("open in-memory db");
+        conn.execute_batch(
+            r#"
+            CREATE TABLE sample (
+                id INTEGER PRIMARY KEY,
+                content TEXT
+            );
+            INSERT INTO sample(id, content) VALUES (1, 'a'), (2, 'b'), (3, 'c');
+            "#,
+        )
+        .expect("seed schema");
+
+        let report = collect_db_schema(std::path::Path::new(":memory:"), &conn, true)
+            .expect("collect schema");
+        let sample = report
+            .tables
+            .iter()
+            .find(|t| t.name == "sample")
+            .expect("sample table");
+        assert_eq!(sample.row_count, Some(3));
+    }
+
+    #[cfg(feature = "api")]
+    #[test]
+    fn validate_mcp_integration_preset_contract_accepts_known_targets() {
+        let claude = serde_json::json!({
+            "id": "claude-desktop",
+            "transport": { "sse": "http://127.0.0.1:8081/sse", "websocket": "ws://127.0.0.1:8081/ws", "tools": "http://127.0.0.1:8081/tools" },
+            "configuration": {
+                "mcpServers": { "xenobot": { "command": "pnpm", "args": ["dlx", "mcp-remote", "http://127.0.0.1:8081/sse"] } }
+            },
+            "notes": ["n1"]
+        });
+        validate_mcp_integration_preset_contract("claude-desktop", &claude)
+            .expect("claude preset should validate");
+
+        let chatwise = serde_json::json!({
+            "id": "chatwise",
+            "transport": { "sse": "http://127.0.0.1:8081/sse", "websocket": "ws://127.0.0.1:8081/ws", "tools": "http://127.0.0.1:8081/tools" },
+            "configuration": { "servers": [{ "name": "xenobot", "transport": "sse", "url": "http://127.0.0.1:8081/sse" }] },
+            "notes": ["n1"]
+        });
+        validate_mcp_integration_preset_contract("chatwise", &chatwise)
+            .expect("chatwise preset should validate");
+
+        let opencode = serde_json::json!({
+            "id": "opencode",
+            "transport": { "sse": "http://127.0.0.1:8081/sse", "websocket": "ws://127.0.0.1:8081/ws", "tools": "http://127.0.0.1:8081/tools" },
+            "configuration": { "mcpServers": [{ "name": "xenobot", "transport": "sse", "url": "http://127.0.0.1:8081/sse" }] },
+            "notes": ["n1"]
+        });
+        validate_mcp_integration_preset_contract("opencode", &opencode)
+            .expect("opencode preset should validate");
+    }
+
+    #[cfg(feature = "api")]
+    #[test]
+    fn validate_mcp_integration_preset_contract_rejects_invalid_payload() {
+        let invalid = serde_json::json!({
+            "id": "claude-desktop",
+            "transport": { "sse": "http://127.0.0.1:8081/sse", "websocket": "ws://127.0.0.1:8081/ws", "tools": "http://127.0.0.1:8081/tools" },
+            "configuration": { "mcpServers": { "xenobot": { "command": "node", "args": ["run"] } } },
+            "notes": ["n1"]
+        });
+        let err = validate_mcp_integration_preset_contract("claude-desktop", &invalid)
+            .expect_err("invalid preset should fail");
+        let msg = err.to_string();
+        assert!(msg.contains("mcp-remote"));
     }
 }
 

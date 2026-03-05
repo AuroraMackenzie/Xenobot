@@ -1,7 +1,7 @@
 //! Axum router configuration for Xenobot HTTP API.
 
 use crate::config::ApiConfig;
-use axum::Router;
+use axum::{Json, Router};
 use tower_http::cors::CorsLayer;
 
 /// Build the main API router with all enabled modules.
@@ -65,10 +65,35 @@ pub fn build_router(config: &ApiConfig) -> Router {
         router = router.nest("/events", crate::events::router());
     }
 
-    // Add health check endpoint
+    // Add service index and health check endpoints
+    router = router.route("/", axum::routing::get(api_index));
     router = router.route("/health", axum::routing::get(health_check));
 
     router
+}
+
+/// Service index endpoint for quick browser/manual checks.
+async fn api_index() -> Json<serde_json::Value> {
+    Json(serde_json::json!({
+        "service": "xenobot-api",
+        "status": "running",
+        "health": "/health",
+        "endpoints": [
+            "/chat",
+            "/media",
+            "/merge",
+            "/ai",
+            "/llm",
+            "/agent",
+            "/embedding",
+            "/core",
+            "/nlp",
+            "/network",
+            "/cache",
+            "/session",
+            "/events"
+        ]
+    }))
 }
 
 /// Health check endpoint.
@@ -127,5 +152,51 @@ impl ApiPathBuilder {
         } else {
             format!("{}/{}", self.base_path, endpoint)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::{to_bytes, Body};
+    use axum::http::{Method, Request, StatusCode};
+    use tower::util::ServiceExt;
+
+    #[tokio::test]
+    async fn root_route_returns_service_index_payload() {
+        let app = build_router(&ApiConfig::default());
+        let request = Request::builder()
+            .method(Method::GET)
+            .uri("/")
+            .body(Body::empty())
+            .expect("build request");
+        let response = app.oneshot(request).await.expect("route response");
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let bytes = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("read body");
+        let json: serde_json::Value = serde_json::from_slice(&bytes).expect("json body");
+        assert_eq!(json["service"], "xenobot-api");
+        assert_eq!(json["status"], "running");
+        assert_eq!(json["health"], "/health");
+        assert!(json["endpoints"].is_array());
+    }
+
+    #[tokio::test]
+    async fn health_route_returns_ok_plain_text() {
+        let app = build_router(&ApiConfig::default());
+        let request = Request::builder()
+            .method(Method::GET)
+            .uri("/health")
+            .body(Body::empty())
+            .expect("build request");
+        let response = app.oneshot(request).await.expect("route response");
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let bytes = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("read body");
+        assert_eq!(std::str::from_utf8(&bytes).expect("utf8"), "OK");
     }
 }

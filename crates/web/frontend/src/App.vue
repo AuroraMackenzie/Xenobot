@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -23,6 +23,8 @@ const settingsStore = useSettingsStore()
 const llmStore = useLLMStore()
 const { isInitialized } = storeToRefs(sessionStore)
 const route = useRoute()
+const isBooting = ref(true)
+const isRouteTransitioning = ref(false)
 
 const tooltip = {
   delayDuration: 100,
@@ -44,14 +46,41 @@ onMounted(async () => {
   llmStore.init()
   // English engineering note.
   await sessionStore.loadSessions()
+
+  // English engineering note.
+  window.setTimeout(() => {
+    isBooting.value = false
+  }, 680)
 })
+
+// English engineering note.
+function onRouteBeforeEnter() {
+  isRouteTransitioning.value = true
+}
+
+// English engineering note.
+function onRouteBeforeLeave() {
+  isRouteTransitioning.value = true
+}
+
+// English engineering note.
+function onRouteAfterEnter() {
+  window.setTimeout(() => {
+    isRouteTransitioning.value = false
+  }, 80)
+}
+
+// English engineering note.
+function onRouteTransitionCancelled() {
+  isRouteTransitioning.value = false
+}
 </script>
 
 <template>
   <UApp :tooltip="tooltip">
     <!-- English UI note -->
     <TitleBar />
-    <div class="relative flex h-screen w-full overflow-hidden bg-gray-50 dark:bg-gray-900">
+    <div class="xeno-app-shell relative flex h-screen w-full overflow-hidden" :class="{ 'xeno-app-booting': isBooting }">
       <!-- English UI note -->
       <template v-if="!isInitialized">
         <div class="flex h-full w-full items-center justify-center">
@@ -63,10 +92,23 @@ onMounted(async () => {
       </template>
       <template v-else>
         <Sidebar />
-        <main class="relative flex-1 overflow-hidden">
+        <main class="xeno-page-content relative flex-1 overflow-hidden">
+          <div
+            class="xeno-route-curtain pointer-events-none absolute inset-0 z-20"
+            :class="{ 'xeno-route-curtain-active': isRouteTransitioning }"
+            aria-hidden="true"
+          />
           <router-view v-slot="{ Component }">
-            <Transition name="page-fade" mode="out-in">
-              <component :is="Component" :key="route.path" />
+            <Transition
+              name="xeno-route"
+              mode="out-in"
+              @before-enter="onRouteBeforeEnter"
+              @before-leave="onRouteBeforeLeave"
+              @after-enter="onRouteAfterEnter"
+              @enter-cancelled="onRouteTransitionCancelled"
+              @leave-cancelled="onRouteTransitionCancelled"
+            >
+              <component :is="Component" :key="route.fullPath" />
             </Transition>
           </router-view>
         </main>
@@ -84,20 +126,105 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.page-fade-enter-active,
-.page-fade-leave-active {
+.xeno-app-shell {
+  isolation: isolate;
+}
+
+.xeno-app-shell::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(circle at 18% 8%, rgba(14, 165, 233, 0.24), transparent 42%);
+}
+
+.xeno-app-booting::before {
+  animation: xeno-boot-reveal 760ms cubic-bezier(0.22, 0.92, 0.3, 1) forwards;
+}
+
+.xeno-route-curtain {
+  opacity: 0;
+  transform: scale(1.02);
+  background:
+    radial-gradient(circle at 70% 22%, rgba(14, 165, 233, 0.14), transparent 40%),
+    radial-gradient(circle at 16% 84%, rgba(45, 212, 191, 0.12), transparent 36%),
+    linear-gradient(120deg, transparent 32%, rgba(255, 255, 255, 0.09) 48%, transparent 62%);
+}
+
+.xeno-route-curtain-active {
+  animation: xeno-route-curtain-pulse 420ms cubic-bezier(0.22, 0.92, 0.3, 1) both;
+}
+
+.xeno-route-enter-active,
+.xeno-route-leave-active {
   transition:
-    opacity 0.2s ease,
-    transform 0.2s ease;
+    opacity 0.34s cubic-bezier(0.22, 0.92, 0.3, 1),
+    transform 0.34s cubic-bezier(0.22, 0.92, 0.3, 1),
+    filter 0.34s cubic-bezier(0.22, 0.92, 0.3, 1);
 }
 
-.page-fade-enter-from {
+.xeno-route-enter-from {
   opacity: 0;
-  transform: translateY(10px);
+  transform: translateY(16px) scale(0.992);
+  filter: blur(8px) saturate(108%);
 }
 
-.page-fade-leave-to {
+.xeno-route-leave-to {
   opacity: 0;
-  transform: translateY(-10px);
+  transform: translateY(-12px) scale(0.996);
+  filter: blur(7px) saturate(106%);
+}
+
+.xeno-route-enter-to,
+.xeno-route-leave-from {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  filter: blur(0) saturate(100%);
+}
+
+@keyframes xeno-boot-reveal {
+  0% {
+    opacity: 0.66;
+    transform: scale(1.02);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
+@keyframes xeno-route-curtain-pulse {
+  0% {
+    opacity: 0;
+    transform: scale(1.03);
+  }
+  20% {
+    opacity: 0.8;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xeno-app-booting::before,
+  .xeno-route-curtain-active {
+    animation: none !important;
+  }
+
+  .xeno-route-enter-active,
+  .xeno-route-leave-active {
+    transition-duration: 0.01ms !important;
+  }
+
+  .xeno-route-enter-from,
+  .xeno-route-leave-to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
 }
 </style>

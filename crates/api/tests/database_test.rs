@@ -6,6 +6,24 @@ use xenobot_api::database::Repository;
 
 static MIGRATOR: Migrator = sqlx::migrate!("./migrations");
 
+fn latest_migration_version_on_disk() -> Result<i64, Box<dyn std::error::Error>> {
+    let migrations_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("migrations");
+    let mut versions: Vec<i64> = std::fs::read_dir(&migrations_dir)?
+        .filter_map(|entry| entry.ok())
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .filter(|name| name.ends_with(".sql"))
+        .filter_map(|name| {
+            let prefix = name.split('_').next().unwrap_or_default();
+            prefix.parse::<i64>().ok()
+        })
+        .collect();
+    versions.sort_unstable();
+    versions
+        .last()
+        .copied()
+        .ok_or_else(|| "no migration files found".into())
+}
+
 async fn setup_test_repo() -> Result<Repository, Box<dyn std::error::Error>> {
     let pool = SqlitePoolOptions::new()
         .max_connections(1)
@@ -14,6 +32,48 @@ async fn setup_test_repo() -> Result<Repository, Box<dyn std::error::Error>> {
 
     MIGRATOR.run(&pool).await?;
     Ok(Repository::new(Arc::new(pool)))
+}
+
+#[tokio::test]
+async fn test_migrations_apply_latest_version_and_hot_path_indexes(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let pool = SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect("sqlite::memory:")
+        .await?;
+    MIGRATOR.run(&pool).await?;
+
+    let applied_version: i64 = sqlx::query_scalar(
+        "SELECT COALESCE(MAX(version), 0) FROM _sqlx_migrations WHERE success = 1",
+    )
+    .fetch_one(&pool)
+    .await?;
+    let expected_version = latest_migration_version_on_disk()?;
+    assert_eq!(
+        applied_version, expected_version,
+        "applied migration version should match latest migration file version"
+    );
+
+    let expected_indexes = [
+        "idx_message_meta_ts_id",
+        "idx_message_meta_sender_ts_id",
+        "idx_sessions_meta_created_at",
+        "idx_member_name_history_member_start_ts",
+        "idx_message_context_session_message",
+        "idx_chat_session_meta_start_ts_id",
+    ];
+
+    for idx in expected_indexes {
+        let exists: Option<i64> = sqlx::query_scalar(
+            "SELECT 1 FROM sqlite_master WHERE type='index' AND name = ?1 LIMIT 1",
+        )
+        .bind(idx)
+        .fetch_optional(&pool)
+        .await?;
+        assert!(exists.is_some(), "expected index to exist: {idx}");
+    }
+
+    Ok(())
 }
 
 #[tokio::test]

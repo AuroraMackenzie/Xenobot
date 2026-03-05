@@ -21,7 +21,6 @@ dirs = "5.0"
 notify = "6.1"
 walkdir = "2.5"
 regex = "1.10"
-libc = "0.2"
 
 # Process enumeration
 sysinfo = "0.30"
@@ -42,10 +41,6 @@ dashmap = "5.5"
 
 # Platform-specific dependencies
 [target.'cfg(target_os = "macos")'.dependencies]
-core-foundation = "0.9"
-security-framework = "2.9"
-mach = "0.3"
-objc = "0.2"
 plist = "1.6"
 
 # SQLite for reading decrypted databases

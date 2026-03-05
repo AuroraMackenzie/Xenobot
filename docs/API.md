@@ -21,6 +21,48 @@ This document describes the current HTTP endpoints exposed by `xenobot-api` (Axu
 - `POST /import-with-options`
 - `POST /scan-multi-chat-file`
 
+## Media
+
+- `GET /media/resolve` (authorized absolute path validation + metadata)
+- `GET /media/file` (authorized file streaming)
+- `GET /media/messages/:message_id` (resolve local media path from message content and stream)
+- `POST /media/decrypt/dat` (in-memory `.dat` image decrypt; requires `xenobot-api --features wechat`)
+- `POST /media/transcode/audio/mp3` (in-memory audio->MP3 transcode; requires `xenobot-api --features wechat` and local `ffmpeg`)
+
+`POST /media/decrypt/dat` request (camelCase):
+
+```json
+{
+  "path": "/absolute/path/to/image.dat",
+  "xorKeyHex": "10",
+  "autoDetectXor": true
+}
+```
+
+or inline payload:
+
+```json
+{
+  "payloadBase64": "BASE64_BYTES",
+  "aesKeyHex": "001122...",
+  "aesIvHex": "001122..."
+}
+```
+
+`POST /media/transcode/audio/mp3` request (camelCase):
+
+```json
+{
+  "path": "/absolute/path/to/voice.silk",
+  "inputFormat": "silk",
+  "bitrateKbps": 128,
+  "sampleRateHz": 24000,
+  "channels": 1
+}
+```
+
+Both endpoints return in-memory payload bytes as Base64 (`bytes`) and never require a temporary output file path.
+
 ## AI Search
 
 - `POST /ai/search-messages` (keyword search)
@@ -143,7 +185,29 @@ Incremental responses include checkpoint diagnostics:
 ## SQL and Plugin
 
 - `POST /sessions/:session_id/execute-sql` (read-only SQL guard: SELECT/CTE only, no multi-statement)
+- `POST /sessions/:session_id/generate-sql` (AI-assisted safe SQL draft, rule-based local fallback)
+  - request:
+    - `prompt` (required)
+    - `maxRows` (optional, clamped `1..500`, default `100`)
+  - response:
+    - `success`
+    - `sql`
+    - `explanation`
+    - `strategy` (`rule_based_safe_sql`)
+    - `limit`
+    - `warnings` (array)
+  - generated SQL is re-validated by the same read-only guard used by `execute-sql`.
 - `GET /sessions/:session_id/schema`
+  - default response: compatibility array of `{ name, columns }`
+  - supports query params:
+    - `detailed=true`: returns `{ tables, summary, includesRowCount }`
+    - `includeRowCount=true`: valid when `detailed=true`, includes per-table `rowCount`
+  - detailed table item fields:
+    - `name`
+    - `columns`
+    - `indexes` (`name`, `unique`, `origin`, `partial`, `columns`)
+    - `foreignKeys` (`table`, `from`, `to`, `onUpdate`, `onDelete`, `match`, ...)
+    - `rowCount` (`null` when not requested)
 - `POST /sessions/:session_id/plugin-query`
 - `POST /plugin-compute`
 
@@ -200,8 +264,14 @@ Transport endpoints:
 - `POST /mcp` (Streamable HTTP JSON-RPC)
 - `GET /tools`
 - `POST /tools/:tool_name`
+- `GET /resources`
+- `GET /resources/*uri`
 - `GET /integrations`
 - `GET /integrations/:target`
+
+`GET /tools` response includes:
+- `tools` (legacy-compatible list of tool names)
+- `toolSpecs` (structured tool metadata with `name`, `description`, `inputSchema`)
 
 ### MCP Tool List (first batch)
 
@@ -249,6 +319,13 @@ Supported methods:
 - `initialize`
 - `tools/list` (alias: `tool/list`)
 - `tools/call` (alias: `tool/call`)
+- `resources/list` (alias: `resource/list`)
+- `resources/read` (alias: `resource/read`)
+
+`tools/list` response entries include:
+- `name`
+- `description`
+- `inputSchema`
 
 Example call:
 
@@ -276,18 +353,39 @@ Response semantics:
   - `-32602` `invalid_params`
   - `-32001` `tool_not_found`
   - `-32002` `tool_error`
+  - `-32003` `resource_not_found`
+
+Parameter compatibility notes:
+- `tools/call` accepts both flat and nested styles:
+  - flat: `params.name` + `params.arguments` (or `params.args`)
+  - nested: `params.tool.name` + `params.tool.arguments` (or `params.tool.args` / `params.tool.input`)
+- `resources/read` accepts both flat and nested styles:
+  - flat: `params.uri` (also `params.resource`, `params.path`, `params.resource_uri`, `params.resourceUri`)
+  - nested: `params.resource.uri` (also `params.resource.path`, `params.resource.resource_uri`, `params.resource.resourceUri`)
+
+Built-in resource URIs (current baseline):
+- `xenobot://server/info`
+- `xenobot://server/capabilities`
+- `xenobot://server/integrations`
 
 CLI smoke command:
 
 ```bash
-cargo run -p xenobot-cli --features "api,analysis" -- api mcp-smoke --url http://127.0.0.1:5030
+cargo run -p xenobot-mcp -- --host 127.0.0.1 --port 8081 --db-path /tmp/xenobot.db
+cargo run -p xenobot-cli --features "api,analysis" -- api mcp-smoke --url http://127.0.0.1:8081
 ```
 
 Checks:
 - `GET /health`
 - `GET /tools`
+- `GET /resources`
+- `GET /resources/*uri`
 - `POST /mcp` `initialize`
 - `POST /mcp` `tools/list`
+- `POST /mcp` `resources/list`
+- `POST /mcp` `resources/read`
+- `POST /mcp` `tool/list` (alias contract)
+- `POST /mcp` `resource/list` (alias contract)
 - `POST /mcp` `tools/call` (smoke call on `get_current_time`)
 - `GET /integrations`
 - required first-batch MCP tool aliases and integration preset IDs
@@ -295,7 +393,92 @@ Checks:
 CLI preset fetch:
 
 ```bash
-cargo run -p xenobot-cli --features "api,analysis" -- api mcp-preset --url http://127.0.0.1:5030 --target claude-desktop --format json
+cargo run -p xenobot-cli --features "api,analysis" -- api mcp-preset --url http://127.0.0.1:8081 --target claude-desktop --format json
+```
+
+CLI direct tool call (RPC mode):
+
+```bash
+cargo run -p xenobot-cli --features "api,analysis" -- \
+  api mcp-call \
+  --url http://127.0.0.1:8081 \
+  --mode rpc \
+  --tool get_current_time \
+  --args-json '{}' \
+  --format json
+```
+
+CLI direct tool call (HTTP mode):
+
+```bash
+cargo run -p xenobot-cli --features "api,analysis" -- \
+  api mcp-call \
+  --url http://127.0.0.1:8081 \
+  --mode http \
+  --tool chat_records \
+  --args-json '{"session_id":1,"limit":20,"offset":0}' \
+  --format text
+```
+
+CLI list resources (RPC mode):
+
+```bash
+cargo run -p xenobot-cli --features "api,analysis" -- \
+  api mcp-resources \
+  --url http://127.0.0.1:8081 \
+  --mode rpc \
+  --format json
+```
+
+CLI read resource (HTTP mode):
+
+```bash
+cargo run -p xenobot-cli --features "api,analysis" -- \
+  api mcp-resource \
+  --url http://127.0.0.1:8081 \
+  --mode http \
+  --uri xenobot://server/info \
+  --format text
+```
+
+CLI sandbox-coexist startup (force file-gateway mode):
+
+```bash
+cargo run -p xenobot-cli --features "api,analysis" -- \
+  api start \
+  --force-file-gateway \
+  --file-gateway-dir /tmp/xenobot-file-gateway \
+  --db-path /tmp/xenobot.db
+```
+
+CLI sandbox runtime diagnostic (listener/file-gateway probe + recommended command):
+
+```bash
+cargo run -p xenobot-cli --features "api,analysis" -- \
+  api sandbox-doctor \
+  --format json
+```
+
+CLI file-gateway single call (no socket required):
+
+```bash
+cargo run -p xenobot-cli --features "api,analysis" -- \
+  api gateway-call \
+  --file-gateway-dir /tmp/xenobot-file-gateway \
+  --method GET \
+  --path /health \
+  --format json
+```
+
+One-key wrappers (project root auto-detection):
+
+```bash
+scripts/xb api sandbox-doctor
+scripts/xb api sandbox-up --db-path /tmp/xenobot.db
+scripts/xb api sandbox-health --format json
+scripts/xb mcp start --db-path /tmp/xenobot.db
+scripts/xb mcp smoke --url http://127.0.0.1:8081
+scripts/xb mcp preset --url http://127.0.0.1:8081 --target claude-desktop --format json
 ```
 
 ## Compatibility Notes

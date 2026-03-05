@@ -213,12 +213,10 @@ async fn test_incremental_checkpoint_fast_skip_and_failed_writeback(
     assert_eq!(second_analyze["duplicateCount"], 0);
     assert_eq!(second_analyze["totalInFile"], 0);
     assert_eq!(second_analyze["lastCheckpoint"]["status"], "completed");
-    assert!(
-        second_analyze["checkpointMeta"]["fingerprint"]
-            .as_str()
-            .unwrap_or_default()
-            .starts_with("v2:")
-    );
+    assert!(second_analyze["checkpointMeta"]["fingerprint"]
+        .as_str()
+        .unwrap_or_default()
+        .starts_with("v2:"));
 
     let (status, second_import) =
         post_json(&app, &import_path, json!({ "file_path": valid_export })).await?;
@@ -229,12 +227,10 @@ async fn test_incremental_checkpoint_fast_skip_and_failed_writeback(
     assert_eq!(second_import["newMessageCount"], 0);
     assert_eq!(second_import["duplicateCount"], 0);
     assert_eq!(second_import["lastCheckpoint"]["status"], "completed");
-    assert!(
-        second_import["checkpointMeta"]["fingerprint"]
-            .as_str()
-            .unwrap_or_default()
-            .starts_with("v2:")
-    );
+    assert!(second_import["checkpointMeta"]["fingerprint"]
+        .as_str()
+        .unwrap_or_default()
+        .starts_with("v2:"));
 
     let source_kind = format!("api-incremental-{meta_id}");
     let completed_checkpoint = repo
@@ -459,7 +455,9 @@ async fn test_incremental_import_rejects_stale_expected_fingerprint(
         "error.source_changed_since_analyze"
     );
     assert!(
-        stale_import_resp["sourceFingerprint"].as_str().unwrap_or_default()
+        stale_import_resp["sourceFingerprint"]
+            .as_str()
+            .unwrap_or_default()
             != stale_import_resp["expectedFingerprint"]
                 .as_str()
                 .unwrap_or_default()
@@ -1039,7 +1037,10 @@ async fn test_import_batch_merged_mode_orders_messages_by_timestamp_across_sourc
             .bind(session_id)
             .fetch_all(&*pool)
             .await?;
-    assert_eq!(inserted_timestamps, vec![2300000001, 2300000002, 2300000003]);
+    assert_eq!(
+        inserted_timestamps,
+        vec![2300000001, 2300000002, 2300000003]
+    );
 
     let _ = fs::remove_dir_all(&test_root);
     Ok(())
@@ -1800,10 +1801,9 @@ async fn test_import_batch_merged_mode_skips_duplicate_input_paths(
         .as_array()
         .expect("merged batch should return items");
     assert_eq!(items.len(), 2);
-    assert!(
-        items.iter()
-            .any(|item| item["duplicateInputSkipped"] == true && item["success"] == true)
-    );
+    assert!(items
+        .iter()
+        .any(|item| item["duplicateInputSkipped"] == true && item["success"] == true));
 
     let session_id = batch_resp["mergedSessionId"]
         .as_str()
@@ -1822,6 +1822,335 @@ async fn test_import_batch_merged_mode_skips_duplicate_input_paths(
     assert_eq!(checkpoint.status, "completed");
     assert_eq!(checkpoint.last_inserted_messages, 1);
     assert_eq!(checkpoint.last_duplicate_messages, 0);
+
+    let _ = fs::remove_dir_all(&test_root);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_import_batch_merged_mode_dedup_and_checkpoint_consistency_in_single_batch(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let _test_guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+    let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .canonicalize()?;
+    let _cwd_guard = WorkingDirGuard::change_to(&workspace_root)?;
+
+    let test_root = unique_test_root();
+    fs::create_dir_all(&test_root)?;
+    let db_path = test_root.join("xenobot_api_import_batch_merged_dedup_checkpoint.db");
+
+    let mut db_config = DatabaseConfig::default();
+    db_config.sqlite_path = db_path;
+    xenobot_api::database::init_database_with_config(&db_config).await?;
+    let pool = xenobot_api::database::get_pool().await?;
+    let repo = Repository::new(pool.clone());
+    let app = chat::router();
+
+    let file_a_path = test_root.join("telegram_merged_consistency_a.json");
+    let file_b_path = test_root.join("telegram_merged_consistency_b.json");
+
+    write_json_file(
+        &file_a_path,
+        &json!({
+            "name": "Merged Consistency A",
+            "type": "group",
+            "messages": [
+                {
+                    "sender_id": "tg_consistency_1",
+                    "sender_name": "User A1",
+                    "timestamp": 2500000001u64,
+                    "msg_type": 0,
+                    "content": "m1"
+                },
+                {
+                    "sender_id": "tg_consistency_2",
+                    "sender_name": "User A2",
+                    "timestamp": 2500000002u64,
+                    "msg_type": 0,
+                    "content": "m2"
+                }
+            ]
+        }),
+    )?;
+    write_json_file(
+        &file_b_path,
+        &json!({
+            "name": "Merged Consistency B",
+            "type": "group",
+            "messages": [
+                {
+                    "sender_id": "tg_consistency_2",
+                    "sender_name": "User A2",
+                    "timestamp": 2500000002u64,
+                    "msg_type": 0,
+                    "content": "m2"
+                },
+                {
+                    "sender_id": "tg_consistency_3",
+                    "sender_name": "User B1",
+                    "timestamp": 2500000003u64,
+                    "msg_type": 0,
+                    "content": "m3"
+                }
+            ]
+        }),
+    )?;
+
+    let file_a = file_a_path.to_string_lossy().to_string();
+    let file_b = file_b_path.to_string_lossy().to_string();
+    let (status, batch_resp) = post_json(
+        &app,
+        "/import-batch",
+        json!({
+            "filePaths": [file_a, file_b, file_b],
+            "merge": true,
+            "mergedSessionName": "Merged Consistency Regression"
+        }),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(batch_resp["mode"], "merged");
+    assert_eq!(batch_resp["success"], true);
+    assert_eq!(batch_resp["totalFiles"], 3);
+    assert_eq!(batch_resp["importedFiles"], 2);
+    assert_eq!(batch_resp["failedFiles"], 0);
+    assert_eq!(batch_resp["skippedFiles"], 1);
+    assert_eq!(batch_resp["totalInsertedMessages"], 3);
+    assert_eq!(batch_resp["totalDuplicateMessages"], 1);
+
+    let items = batch_resp["items"]
+        .as_array()
+        .expect("merged consistency response should include items");
+    assert_eq!(items.len(), 3);
+
+    let imported_a = items
+        .iter()
+        .find(|item| item["filePath"] == file_a_path.to_string_lossy().to_string())
+        .expect("source A item should exist");
+    assert_eq!(imported_a["success"], true);
+    assert_eq!(imported_a["insertedMessages"], 2);
+    assert_eq!(imported_a["duplicateMessages"], 0);
+
+    let imported_b = items
+        .iter()
+        .find(|item| {
+            item["filePath"] == file_b_path.to_string_lossy().to_string()
+                && item["duplicateInputSkipped"] != true
+        })
+        .expect("source B imported item should exist");
+    assert_eq!(imported_b["success"], true);
+    assert_eq!(imported_b["insertedMessages"], 1);
+    assert_eq!(imported_b["duplicateMessages"], 1);
+
+    assert!(items
+        .iter()
+        .any(|item| item["duplicateInputSkipped"] == true && item["success"] == true));
+
+    let session_id = batch_resp["mergedSessionId"]
+        .as_str()
+        .and_then(|v| v.parse::<i64>().ok())
+        .expect("merged consistency import should include mergedSessionId");
+    let message_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM message WHERE meta_id = ?1")
+        .bind(session_id)
+        .fetch_one(&*pool)
+        .await?;
+    assert_eq!(message_count, 3);
+
+    let checkpoint_a = repo
+        .get_import_source_checkpoint(
+            "api-import-batch-merged",
+            file_a_path.to_string_lossy().as_ref(),
+        )
+        .await?
+        .expect("checkpoint for source A should exist");
+    assert_eq!(checkpoint_a.status, "completed");
+    assert_eq!(checkpoint_a.meta_id, Some(session_id));
+    assert_eq!(checkpoint_a.last_inserted_messages, 2);
+    assert_eq!(checkpoint_a.last_duplicate_messages, 0);
+
+    let checkpoint_b = repo
+        .get_import_source_checkpoint(
+            "api-import-batch-merged",
+            file_b_path.to_string_lossy().as_ref(),
+        )
+        .await?
+        .expect("checkpoint for source B should exist");
+    assert_eq!(checkpoint_b.status, "completed");
+    assert_eq!(checkpoint_b.meta_id, Some(session_id));
+    assert_eq!(checkpoint_b.last_inserted_messages, 1);
+    assert_eq!(checkpoint_b.last_duplicate_messages, 1);
+
+    let _ = fs::remove_dir_all(&test_root);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_import_batch_merged_mode_rerun_is_idempotent_with_checkpoint_only(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let _test_guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+    let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .canonicalize()?;
+    let _cwd_guard = WorkingDirGuard::change_to(&workspace_root)?;
+
+    let test_root = unique_test_root();
+    fs::create_dir_all(&test_root)?;
+    let db_path = test_root.join("xenobot_api_import_batch_merged_idempotent_rerun.db");
+
+    let mut db_config = DatabaseConfig::default();
+    db_config.sqlite_path = db_path;
+    xenobot_api::database::init_database_with_config(&db_config).await?;
+    let pool = xenobot_api::database::get_pool().await?;
+    let repo = Repository::new(pool.clone());
+    let app = chat::router();
+
+    let file_a_path = test_root.join("telegram_merged_idempotent_a.json");
+    let file_b_path = test_root.join("telegram_merged_idempotent_b.json");
+
+    write_json_file(
+        &file_a_path,
+        &json!({
+            "name": "Merged Idempotent A",
+            "type": "group",
+            "messages": [
+                {
+                    "sender_id": "tg_idempotent_1",
+                    "sender_name": "ID User 1",
+                    "timestamp": 2550000001u64,
+                    "msg_type": 0,
+                    "content": "same-shared"
+                }
+            ]
+        }),
+    )?;
+    write_json_file(
+        &file_b_path,
+        &json!({
+            "name": "Merged Idempotent B",
+            "type": "group",
+            "messages": [
+                {
+                    "sender_id": "tg_idempotent_1",
+                    "sender_name": "ID User 1",
+                    "timestamp": 2550000001u64,
+                    "msg_type": 0,
+                    "content": "same-shared"
+                },
+                {
+                    "sender_id": "tg_idempotent_2",
+                    "sender_name": "ID User 2",
+                    "timestamp": 2550000002u64,
+                    "msg_type": 0,
+                    "content": "unique-after-shared"
+                }
+            ]
+        }),
+    )?;
+
+    let file_a = file_a_path.to_string_lossy().to_string();
+    let file_b = file_b_path.to_string_lossy().to_string();
+
+    let (status, first_resp) = post_json(
+        &app,
+        "/import-batch",
+        json!({
+            "filePaths": [file_a, file_b],
+            "merge": true,
+            "mergedSessionName": "Merged Idempotent Baseline"
+        }),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(first_resp["success"], true);
+    assert_eq!(first_resp["mode"], "merged");
+    assert_eq!(first_resp["importedFiles"], 2);
+    assert_eq!(first_resp["failedFiles"], 0);
+    assert_eq!(first_resp["skippedFiles"], 0);
+    assert_eq!(first_resp["totalInsertedMessages"], 2);
+    assert_eq!(first_resp["totalDuplicateMessages"], 1);
+
+    let first_session_id = first_resp["mergedSessionId"]
+        .as_str()
+        .and_then(|v| v.parse::<i64>().ok())
+        .expect("first merged run should include mergedSessionId");
+
+    let first_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM message WHERE meta_id = ?1")
+        .bind(first_session_id)
+        .fetch_one(&*pool)
+        .await?;
+    assert_eq!(first_count, 2);
+
+    let (status, second_resp) = post_json(
+        &app,
+        "/import-batch",
+        json!({
+            "filePaths": [
+                file_b_path.to_string_lossy().to_string(),
+                file_a_path.to_string_lossy().to_string()
+            ],
+            "merge": true,
+            "mergedSessionName": "Merged Idempotent Rerun"
+        }),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(second_resp["success"], true);
+    assert_eq!(second_resp["mode"], "merged");
+    assert_eq!(second_resp["checkpointOnly"], true);
+    assert_eq!(second_resp["importedFiles"], 0);
+    assert_eq!(second_resp["failedFiles"], 0);
+    assert_eq!(second_resp["skippedFiles"], 2);
+    assert_eq!(
+        second_resp["totalInsertedMessages"].as_i64().unwrap_or(0),
+        0
+    );
+    assert_eq!(
+        second_resp["totalDuplicateMessages"].as_i64().unwrap_or(0),
+        0
+    );
+    assert_eq!(second_resp["mergedSessionId"], serde_json::Value::Null);
+
+    let second_items = second_resp["items"]
+        .as_array()
+        .expect("second merged run should include items");
+    assert_eq!(second_items.len(), 2);
+    assert!(second_items
+        .iter()
+        .all(|item| item["success"] == true && item["checkpointSkipped"] == true));
+
+    let count_after_rerun: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM message WHERE meta_id = ?1")
+            .bind(first_session_id)
+            .fetch_one(&*pool)
+            .await?;
+    assert_eq!(count_after_rerun, 2);
+
+    let checkpoint_a = repo
+        .get_import_source_checkpoint(
+            "api-import-batch-merged",
+            file_a_path.to_string_lossy().as_ref(),
+        )
+        .await?
+        .expect("checkpoint A should exist");
+    assert_eq!(checkpoint_a.status, "completed");
+    assert_eq!(checkpoint_a.meta_id, Some(first_session_id));
+    assert_eq!(checkpoint_a.last_inserted_messages, 1);
+    assert_eq!(checkpoint_a.last_duplicate_messages, 0);
+
+    let checkpoint_b = repo
+        .get_import_source_checkpoint(
+            "api-import-batch-merged",
+            file_b_path.to_string_lossy().as_ref(),
+        )
+        .await?
+        .expect("checkpoint B should exist");
+    assert_eq!(checkpoint_b.status, "completed");
+    assert_eq!(checkpoint_b.meta_id, Some(first_session_id));
+    assert_eq!(checkpoint_b.last_inserted_messages, 1);
+    assert_eq!(checkpoint_b.last_duplicate_messages, 1);
 
     let _ = fs::remove_dir_all(&test_root);
     Ok(())
@@ -1889,6 +2218,745 @@ async fn test_whatsapp_native_txt_uses_analysis_parser_sender_identity(
             .fetch_one(&*pool)
             .await?;
     assert_eq!(text_importer_rows, 0);
+
+    let _ = fs::remove_dir_all(&test_root);
+    Ok(())
+}
+
+fn analysis_platform_fixtures() -> Vec<(&'static str, &'static str, &'static str, &'static str)> {
+    vec![
+        (
+            "wechat",
+            "json",
+            r#"[{"msg_id":"1","type":1,"is_sender":false,"sender_name":"Alice","sender_id":"wxid_alice","create_time":1735813230,"content":"hello wechat"}]"#,
+            "analysis-wechat",
+        ),
+        (
+            "whatsapp",
+            "txt",
+            "[01/02/2025, 10:20:30] Alice: hello whatsapp",
+            "analysis-whatsapp",
+        ),
+        (
+            "line",
+            "txt",
+            "2025/01/02 10:20:30 Alice hello line",
+            "analysis-line",
+        ),
+        (
+            "qq",
+            "txt",
+            "[2025-01-02 10:20:30] Alice hello qq",
+            "analysis-qq",
+        ),
+        (
+            "telegram",
+            "json",
+            r#"{"name":"tg","messages":[{"from":"Alice","date":"2025-01-02T10:20:30Z","text":"hello telegram"}]}"#,
+            "analysis-telegram",
+        ),
+        (
+            "discord",
+            "json",
+            r#"[{"ID":"1","Timestamp":"2025-01-02T10:20:30Z","Author":{"ID":"u1","Name":"Alice"},"Content":"hello discord"}]"#,
+            "analysis-discord",
+        ),
+        (
+            "instagram",
+            "json",
+            r#"[{"sender":"Alice","timestamp":1735813230,"content":"hello instagram"}]"#,
+            "analysis-instagram",
+        ),
+        (
+            "imessage",
+            "json",
+            r#"[{"text":"hello imessage","sender":"Alice","date":"2025-01-02T10:20:30Z"}]"#,
+            "analysis-imessage",
+        ),
+        (
+            "messenger",
+            "json",
+            r#"[{"sender_name":"Alice","timestamp_ms":1735813230000,"content":"hello messenger"}]"#,
+            "analysis-messenger",
+        ),
+        (
+            "kakaotalk",
+            "json",
+            r#"[{"sender":"Alice","message":"hello kakao","date":"2025-01-02 10:20:30"}]"#,
+            "analysis-kakaotalk",
+        ),
+        (
+            "slack",
+            "json",
+            r#"[{"user":"U1","ts":"1735813230.000200","text":"hello slack"}]"#,
+            "analysis-slack",
+        ),
+        (
+            "teams",
+            "json",
+            r#"[{"from":"Alice","date":"2025-01-02T10:20:30Z","content":"hello teams"}]"#,
+            "analysis-teams",
+        ),
+        (
+            "signal",
+            "json",
+            r#"[{"sender":"Alice","timestamp":1735813230000,"body":"hello signal"}]"#,
+            "analysis-signal",
+        ),
+        (
+            "skype",
+            "json",
+            r#"[{"sender":"Alice","datetime":"2025-01-02T10:20:30Z","msg_content":"hello skype"}]"#,
+            "analysis-skype",
+        ),
+        (
+            "googlechat",
+            "json",
+            r#"[{"sender":{"name":"users/1","display_name":"Alice"},"create_time":"2025-01-02T10:20:30Z","text":"hello googlechat"}]"#,
+            "analysis-googlechat",
+        ),
+        (
+            "zoom",
+            "json",
+            r#"[{"sender":"Alice","timestamp":"2025-01-02T10:20:30Z","message":"hello zoom"}]"#,
+            "analysis-zoom",
+        ),
+        (
+            "viber",
+            "json",
+            r#"[{"sender":"Alice","date_time":"2025-01-02T10:20:30Z","text":"hello viber"}]"#,
+            "analysis-viber",
+        ),
+    ]
+}
+
+#[tokio::test]
+async fn test_detect_format_uses_analysis_parser_across_all_17_platform_fixtures(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let _test_guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+    let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .canonicalize()?;
+    let _cwd_guard = WorkingDirGuard::change_to(&workspace_root)?;
+
+    let test_root = unique_test_root();
+    fs::create_dir_all(&test_root)?;
+    let db_path = test_root.join("xenobot_api_detect_analysis_matrix.db");
+
+    let mut db_config = DatabaseConfig::default();
+    db_config.sqlite_path = db_path;
+    xenobot_api::database::init_database_with_config(&db_config).await?;
+    let app = chat::router();
+
+    let fixtures = analysis_platform_fixtures();
+
+    for (platform, ext, content, expected_format) in fixtures {
+        let path = test_root.join(format!("{}_analysis_fixture.{}", platform, ext));
+        fs::write(&path, content)?;
+        let export_file = path.to_string_lossy().to_string();
+
+        let (status, detect_resp) =
+            post_json(&app, "/detect-format", json!({ "file_path": export_file })).await?;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(detect_resp["platform"], platform);
+        assert_eq!(detect_resp["parserSource"], "analysis");
+        assert_eq!(detect_resp["format"], expected_format);
+    }
+
+    let _ = fs::remove_dir_all(&test_root);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_import_uses_analysis_parser_across_all_17_platform_fixtures(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let _test_guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+    let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .canonicalize()?;
+    let _cwd_guard = WorkingDirGuard::change_to(&workspace_root)?;
+
+    let test_root = unique_test_root();
+    fs::create_dir_all(&test_root)?;
+    let db_path = test_root.join("xenobot_api_import_analysis_matrix.db");
+
+    let mut db_config = DatabaseConfig::default();
+    db_config.sqlite_path = db_path;
+    xenobot_api::database::init_database_with_config(&db_config).await?;
+    let pool = xenobot_api::database::get_pool().await?;
+    let repo = Repository::new(pool.clone());
+    let app = chat::router();
+
+    for (platform, ext, content, _expected_format) in analysis_platform_fixtures() {
+        let path = test_root.join(format!("{}_analysis_import_fixture.{}", platform, ext));
+        fs::write(&path, content)?;
+        let export_file = path.to_string_lossy().to_string();
+
+        let (status, import_resp) =
+            post_json(&app, "/import", json!({ "file_path": export_file })).await?;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(import_resp["success"], true);
+
+        let session_id = import_resp["sessionId"]
+            .as_str()
+            .and_then(|v| v.parse::<i64>().ok())
+            .expect("import should return sessionId");
+
+        let chat_meta = repo
+            .get_chat(session_id)
+            .await?
+            .expect("session must exist after import");
+        assert_eq!(chat_meta.platform, platform);
+
+        let message_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM message WHERE meta_id = ?1")
+                .bind(session_id)
+                .fetch_one(&*pool)
+                .await?;
+        assert!(
+            message_count >= 1,
+            "platform '{}' import should persist at least one message",
+            platform
+        );
+    }
+
+    let text_importer_rows: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM member WHERE platform_id = 'text-importer'")
+            .fetch_one(&*pool)
+            .await?;
+    assert_eq!(
+        text_importer_rows, 0,
+        "analysis-parser fixture imports should not create text-importer members"
+    );
+
+    let _ = fs::remove_dir_all(&test_root);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_incremental_jsonl_partial_parse_no_messages_failure_and_recovery_checkpoint_consistency(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let _test_guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+    let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .canonicalize()?;
+    let _cwd_guard = WorkingDirGuard::change_to(&workspace_root)?;
+
+    let test_root = unique_test_root();
+    fs::create_dir_all(&test_root)?;
+    let db_path = test_root.join("xenobot_api_incremental_jsonl_partial_recovery.db");
+
+    let mut db_config = DatabaseConfig::default();
+    db_config.sqlite_path = db_path;
+    xenobot_api::database::init_database_with_config(&db_config).await?;
+    let pool = xenobot_api::database::get_pool().await?;
+    let repo = Repository::new(pool.clone());
+    let app = chat::router();
+
+    let incremental_path = test_root.join("telegram_incremental_partial.jsonl");
+    fs::write(
+        &incremental_path,
+        concat!(
+            "{\"sender_id\":\"tg_u1\",\"sender_name\":\"Alice\",\"timestamp\":2610000001,\"msg_type\":0,\"content\":\"first\"}\n",
+            "{\"sender_id\":\"tg_u2\"\n",
+            "{\"sender_id\":\"tg_u3\",\"sender_name\":\"Carol\",\"msg_type\":0,\"content\":\"missing ts\"}\n",
+            "{\"sender_id\":\"tg_u2\",\"sender_name\":\"Bob\",\"timestamp\":2610000002,\"msg_type\":0,\"content\":\"second\"}\n"
+        ),
+    )?;
+    let incremental_file = incremental_path.to_string_lossy().to_string();
+
+    let (status, import_resp) =
+        post_json(&app, "/import", json!({ "file_path": incremental_file })).await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(import_resp["success"], true);
+    assert_eq!(import_resp["diagnostics"]["detectedFormat"], "jsonl");
+    assert_eq!(import_resp["diagnostics"]["messagesReceived"], 4);
+    assert_eq!(import_resp["diagnostics"]["messagesWritten"], 2);
+    assert_eq!(import_resp["diagnostics"]["messagesSkipped"], 2);
+
+    let session_id = import_resp["sessionId"]
+        .as_str()
+        .and_then(|v| v.parse::<i64>().ok())
+        .expect("import should return sessionId");
+    let import_path = format!("/sessions/{session_id}/incremental-import");
+
+    let (status, first_incremental_resp) = post_json(
+        &app,
+        &import_path,
+        json!({ "file_path": incremental_path.to_string_lossy().to_string() }),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(first_incremental_resp["success"], true);
+    assert_eq!(first_incremental_resp["newMessageCount"], 0);
+    assert_eq!(first_incremental_resp["duplicateCount"], 2);
+    assert_eq!(first_incremental_resp["totalInFile"], 4);
+
+    let source_kind = format!("api-incremental-{session_id}");
+    let completed_checkpoint = repo
+        .get_import_source_checkpoint(&source_kind, incremental_path.to_string_lossy().as_ref())
+        .await?
+        .expect("completed incremental checkpoint should exist");
+    assert_eq!(completed_checkpoint.status, "completed");
+    assert_eq!(completed_checkpoint.last_inserted_messages, 0);
+    assert_eq!(completed_checkpoint.last_duplicate_messages, 2);
+
+    fs::write(
+        &incremental_path,
+        concat!(
+            "{\"sender_id\":\"tg_bad\"\n",
+            "{\"sender_id\":\"tg_u4\",\"sender_name\":\"Delta\",\"msg_type\":0,\"content\":\"missing ts\"}\n"
+        ),
+    )?;
+
+    let (status, failed_incremental_resp) = post_json(
+        &app,
+        &import_path,
+        json!({ "file_path": incremental_path.to_string_lossy().to_string() }),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(failed_incremental_resp["success"], false);
+    assert_eq!(failed_incremental_resp["error"], "error.no_messages");
+
+    let failed_checkpoint = repo
+        .get_import_source_checkpoint(&source_kind, incremental_path.to_string_lossy().as_ref())
+        .await?
+        .expect("failed incremental checkpoint should exist");
+    assert_eq!(failed_checkpoint.status, "failed");
+    assert_eq!(failed_checkpoint.meta_id, Some(session_id));
+    assert_eq!(failed_checkpoint.last_inserted_messages, 0);
+    assert_eq!(failed_checkpoint.last_duplicate_messages, 0);
+    assert!(failed_checkpoint
+        .error_message
+        .as_deref()
+        .unwrap_or_default()
+        .contains("no new messages"));
+    assert_ne!(
+        failed_checkpoint.fingerprint,
+        completed_checkpoint.fingerprint
+    );
+
+    fs::write(
+        &incremental_path,
+        concat!(
+            "{\"sender_id\":\"tg_u4\",\"sender_name\":\"Delta\",\"timestamp\":2610000003,\"msg_type\":0,\"content\":\"recovered\"}\n",
+            "{\"sender_id\":\"tg_bad\"\n"
+        ),
+    )?;
+
+    let (status, recovered_incremental_resp) = post_json(
+        &app,
+        &import_path,
+        json!({ "file_path": incremental_path.to_string_lossy().to_string() }),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(recovered_incremental_resp["success"], true);
+    assert_eq!(recovered_incremental_resp["newMessageCount"], 1);
+    assert_eq!(recovered_incremental_resp["duplicateCount"], 0);
+    assert_eq!(recovered_incremental_resp["totalInFile"], 2);
+
+    let recovered_checkpoint = repo
+        .get_import_source_checkpoint(&source_kind, incremental_path.to_string_lossy().as_ref())
+        .await?
+        .expect("recovered incremental checkpoint should exist");
+    assert_eq!(recovered_checkpoint.status, "completed");
+    assert_eq!(recovered_checkpoint.meta_id, Some(session_id));
+    assert_eq!(recovered_checkpoint.last_inserted_messages, 1);
+    assert_eq!(recovered_checkpoint.last_duplicate_messages, 0);
+    assert_ne!(
+        recovered_checkpoint.fingerprint,
+        failed_checkpoint.fingerprint
+    );
+
+    let session_message_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM message WHERE meta_id = ?1")
+            .bind(session_id)
+            .fetch_one(&*pool)
+            .await?;
+    assert_eq!(session_message_count, 3);
+
+    let _ = fs::remove_dir_all(&test_root);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_import_batch_merged_mode_jsonl_no_messages_checkpoint_recovery(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let _test_guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+    let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .canonicalize()?;
+    let _cwd_guard = WorkingDirGuard::change_to(&workspace_root)?;
+
+    let test_root = unique_test_root();
+    fs::create_dir_all(&test_root)?;
+    let db_path = test_root.join("xenobot_api_import_batch_merged_jsonl_no_messages_recovery.db");
+
+    let mut db_config = DatabaseConfig::default();
+    db_config.sqlite_path = db_path;
+    xenobot_api::database::init_database_with_config(&db_config).await?;
+    let pool = xenobot_api::database::get_pool().await?;
+    let repo = Repository::new(pool.clone());
+    let app = chat::router();
+
+    let ok_path = test_root.join("telegram_merged_jsonl_ok.jsonl");
+    let no_messages_path = test_root.join("telegram_merged_jsonl_no_messages.jsonl");
+    fs::write(
+        &ok_path,
+        concat!(
+            "{\"sender_id\":\"tg_ok\",\"sender_name\":\"OK\",\"timestamp\":2620000001,\"msg_type\":0,\"content\":\"ok\"}\n",
+            "{\"sender_id\":\"tg_bad\"\n"
+        ),
+    )?;
+    fs::write(
+        &no_messages_path,
+        concat!(
+            "{\"sender_id\":\"tg_bad\"\n",
+            "{\"sender_id\":\"tg_skip\",\"sender_name\":\"Skip\",\"msg_type\":0,\"content\":\"missing ts\"}\n"
+        ),
+    )?;
+
+    let ok_file = ok_path.to_string_lossy().to_string();
+    let no_messages_file = no_messages_path.to_string_lossy().to_string();
+
+    let (status, first_resp) = post_json(
+        &app,
+        "/import-batch",
+        json!({
+            "filePaths": [ok_file, no_messages_file],
+            "merge": true,
+            "mergedSessionName": "Merged JSONL NoMessages Recovery"
+        }),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(first_resp["mode"], "merged");
+    assert_eq!(first_resp["success"], true);
+    assert_eq!(first_resp["importedFiles"], 1);
+    assert_eq!(first_resp["failedFiles"], 1);
+    assert_eq!(first_resp["skippedFiles"], 0);
+    assert_eq!(first_resp["totalInsertedMessages"], 1);
+    assert_eq!(first_resp["totalDuplicateMessages"], 0);
+
+    let first_items = first_resp["items"]
+        .as_array()
+        .expect("first merged response should include items");
+    assert_eq!(first_items.len(), 2);
+
+    let no_messages_item = first_items
+        .iter()
+        .find(|item| item["filePath"] == no_messages_path.to_string_lossy().to_string())
+        .expect("no-messages source item should exist");
+    assert_eq!(no_messages_item["success"], false);
+    assert_eq!(no_messages_item["error"], "error.no_messages");
+
+    let ok_item = first_items
+        .iter()
+        .find(|item| item["filePath"] == ok_path.to_string_lossy().to_string())
+        .expect("ok source item should exist");
+    assert_eq!(ok_item["success"], true);
+    assert_eq!(ok_item["insertedMessages"], 1);
+    assert_eq!(ok_item["duplicateMessages"], 0);
+
+    let first_session_id = first_resp["mergedSessionId"]
+        .as_str()
+        .and_then(|v| v.parse::<i64>().ok())
+        .expect("first merged response should include session id");
+
+    let first_session_messages: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM message WHERE meta_id = ?1")
+            .bind(first_session_id)
+            .fetch_one(&*pool)
+            .await?;
+    assert_eq!(first_session_messages, 1);
+
+    let ok_checkpoint_first = repo
+        .get_import_source_checkpoint(
+            "api-import-batch-merged",
+            ok_path.to_string_lossy().as_ref(),
+        )
+        .await?
+        .expect("ok checkpoint should exist after first merged import");
+    assert_eq!(ok_checkpoint_first.status, "completed");
+    assert_eq!(ok_checkpoint_first.meta_id, Some(first_session_id));
+    assert_eq!(ok_checkpoint_first.last_inserted_messages, 1);
+    assert_eq!(ok_checkpoint_first.last_duplicate_messages, 0);
+
+    let no_messages_checkpoint_first = repo
+        .get_import_source_checkpoint(
+            "api-import-batch-merged",
+            no_messages_path.to_string_lossy().as_ref(),
+        )
+        .await?
+        .expect("no-messages checkpoint should exist after first merged import");
+    assert_eq!(no_messages_checkpoint_first.status, "failed");
+    assert!(no_messages_checkpoint_first.meta_id.is_none());
+    assert_eq!(
+        no_messages_checkpoint_first.error_message.as_deref(),
+        Some("error.no_messages")
+    );
+
+    fs::write(
+        &no_messages_path,
+        concat!(
+            "{\"sender_id\":\"tg_recover\",\"sender_name\":\"Recover\",\"timestamp\":2620000010,\"msg_type\":0,\"content\":\"recovered\"}\n",
+            "{\"sender_id\":\"tg_bad\"\n"
+        ),
+    )?;
+
+    let (status, second_resp) = post_json(
+        &app,
+        "/import-batch",
+        json!({
+            "filePaths": [
+                ok_path.to_string_lossy().to_string(),
+                no_messages_path.to_string_lossy().to_string()
+            ],
+            "merge": true,
+            "mergedSessionName": "Merged JSONL NoMessages Recovery Retry"
+        }),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(second_resp["mode"], "merged");
+    assert_eq!(second_resp["success"], true);
+    assert_eq!(second_resp["importedFiles"], 1);
+    assert_eq!(second_resp["failedFiles"], 0);
+    assert_eq!(second_resp["skippedFiles"], 1);
+    assert_eq!(second_resp["totalInsertedMessages"], 1);
+    assert_eq!(second_resp["totalDuplicateMessages"], 0);
+
+    let second_items = second_resp["items"]
+        .as_array()
+        .expect("second merged response should include items");
+    assert_eq!(second_items.len(), 2);
+    assert!(second_items.iter().any(|item| {
+        item["filePath"] == ok_path.to_string_lossy().to_string()
+            && item["success"] == true
+            && item["checkpointSkipped"] == true
+    }));
+    assert!(second_items.iter().any(|item| {
+        item["filePath"] == no_messages_path.to_string_lossy().to_string()
+            && item["success"] == true
+            && item["insertedMessages"] == 1
+            && item["duplicateMessages"] == 0
+    }));
+
+    let second_session_id = second_resp["mergedSessionId"]
+        .as_str()
+        .and_then(|v| v.parse::<i64>().ok())
+        .expect("second merged response should include session id");
+    assert_ne!(second_session_id, first_session_id);
+
+    let second_session_messages: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM message WHERE meta_id = ?1")
+            .bind(second_session_id)
+            .fetch_one(&*pool)
+            .await?;
+    assert_eq!(second_session_messages, 1);
+
+    let no_messages_checkpoint_second = repo
+        .get_import_source_checkpoint(
+            "api-import-batch-merged",
+            no_messages_path.to_string_lossy().as_ref(),
+        )
+        .await?
+        .expect("no-messages checkpoint should exist after recovery import");
+    assert_eq!(no_messages_checkpoint_second.status, "completed");
+    assert_eq!(
+        no_messages_checkpoint_second.meta_id,
+        Some(second_session_id)
+    );
+    assert_eq!(no_messages_checkpoint_second.last_inserted_messages, 1);
+    assert_eq!(no_messages_checkpoint_second.last_duplicate_messages, 0);
+
+    let ok_checkpoint_second = repo
+        .get_import_source_checkpoint(
+            "api-import-batch-merged",
+            ok_path.to_string_lossy().as_ref(),
+        )
+        .await?
+        .expect("ok checkpoint should still exist after retry import");
+    assert_eq!(ok_checkpoint_second.status, "completed");
+    assert_eq!(ok_checkpoint_second.meta_id, Some(first_session_id));
+    assert_eq!(ok_checkpoint_second.last_inserted_messages, 1);
+    assert_eq!(ok_checkpoint_second.last_duplicate_messages, 0);
+
+    // Deep consistency regression:
+    // Ensure recovery run does not duplicate skipped source payload into the new merged session.
+    let total_messages_across_two_sessions: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM message WHERE meta_id IN (?1, ?2)")
+            .bind(first_session_id)
+            .bind(second_session_id)
+            .fetch_one(&*pool)
+            .await?;
+    assert_eq!(
+        total_messages_across_two_sessions, 2,
+        "expected exactly one message in each merged session after recovery"
+    );
+
+    let ok_in_first: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM message WHERE meta_id = ?1 AND content = 'ok'")
+            .bind(first_session_id)
+            .fetch_one(&*pool)
+            .await?;
+    let ok_in_second: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM message WHERE meta_id = ?1 AND content = 'ok'")
+            .bind(second_session_id)
+            .fetch_one(&*pool)
+            .await?;
+    assert_eq!(ok_in_first, 1);
+    assert_eq!(ok_in_second, 0);
+
+    let recovered_in_first: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM message WHERE meta_id = ?1 AND content = 'recovered'",
+    )
+    .bind(first_session_id)
+    .fetch_one(&*pool)
+    .await?;
+    let recovered_in_second: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM message WHERE meta_id = ?1 AND content = 'recovered'",
+    )
+    .bind(second_session_id)
+    .fetch_one(&*pool)
+    .await?;
+    assert_eq!(recovered_in_first, 0);
+    assert_eq!(recovered_in_second, 1);
+
+    let _ = fs::remove_dir_all(&test_root);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_import_batch_separate_mode_jsonl_no_messages_failure_then_recovery(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let _test_guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+    let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .canonicalize()?;
+    let _cwd_guard = WorkingDirGuard::change_to(&workspace_root)?;
+
+    let test_root = unique_test_root();
+    fs::create_dir_all(&test_root)?;
+    let db_path = test_root.join("xenobot_api_import_batch_separate_jsonl_no_messages.db");
+
+    let mut db_config = DatabaseConfig::default();
+    db_config.sqlite_path = db_path;
+    xenobot_api::database::init_database_with_config(&db_config).await?;
+    let pool = xenobot_api::database::get_pool().await?;
+    let repo = Repository::new(pool.clone());
+    let app = chat::router();
+
+    let flaky_path = test_root.join("telegram_separate_jsonl_no_messages.jsonl");
+    fs::write(
+        &flaky_path,
+        concat!(
+            "{\"sender_id\":\"tg_bad\"\n",
+            "{\"sender_id\":\"tg_skip\",\"sender_name\":\"Skip\",\"msg_type\":0,\"content\":\"missing ts\"}\n"
+        ),
+    )?;
+    let flaky_file = flaky_path.to_string_lossy().to_string();
+
+    let (status, first_resp) = post_json(
+        &app,
+        "/import-batch",
+        json!({
+            "filePaths": [flaky_file],
+            "merge": false,
+            "retryFailed": true,
+            "maxRetries": 1
+        }),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(first_resp["mode"], "separate");
+    assert_eq!(first_resp["success"], false);
+    assert_eq!(first_resp["importedFiles"], 0);
+    assert_eq!(first_resp["failedFiles"], 1);
+    assert_eq!(first_resp["skippedFiles"], 0);
+
+    let first_item = first_resp["items"]
+        .as_array()
+        .and_then(|arr| arr.first())
+        .expect("first response should contain one item");
+    assert_eq!(first_item["attemptsUsed"], 2);
+    assert_eq!(first_item["result"]["success"], false);
+    assert_eq!(first_item["result"]["error"], "error.no_messages");
+
+    let checkpoint_failed = repo
+        .get_import_source_checkpoint(
+            "api-import-batch-separate",
+            flaky_path.to_string_lossy().as_ref(),
+        )
+        .await?
+        .expect("failed separate checkpoint should exist");
+    assert_eq!(checkpoint_failed.status, "failed");
+    assert_eq!(checkpoint_failed.platform.as_deref(), Some("telegram"));
+    assert!(checkpoint_failed.meta_id.is_none());
+    let failed_fingerprint = checkpoint_failed.fingerprint.clone();
+
+    fs::write(
+        &flaky_path,
+        concat!(
+            "{\"sender_id\":\"tg_recover\",\"sender_name\":\"Recover\",\"timestamp\":2630000001,\"msg_type\":0,\"content\":\"recovered\"}\n",
+            "{\"sender_id\":\"tg_bad\"\n"
+        ),
+    )?;
+
+    let (status, second_resp) = post_json(
+        &app,
+        "/import-batch",
+        json!({
+            "filePaths": [flaky_path.to_string_lossy().to_string()],
+            "merge": false,
+            "retryFailed": true,
+            "maxRetries": 1
+        }),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(second_resp["mode"], "separate");
+    assert_eq!(second_resp["success"], true);
+    assert_eq!(second_resp["importedFiles"], 1);
+    assert_eq!(second_resp["failedFiles"], 0);
+    assert_eq!(second_resp["skippedFiles"], 0);
+
+    let second_item = second_resp["items"]
+        .as_array()
+        .and_then(|arr| arr.first())
+        .expect("second response should contain one item");
+    assert_eq!(second_item["attemptsUsed"], 1);
+    assert_eq!(second_item["result"]["success"], true);
+    let session_id = second_item["result"]["sessionId"]
+        .as_str()
+        .and_then(|v| v.parse::<i64>().ok())
+        .expect("recovered separate import should include sessionId");
+
+    let checkpoint_recovered = repo
+        .get_import_source_checkpoint(
+            "api-import-batch-separate",
+            flaky_path.to_string_lossy().as_ref(),
+        )
+        .await?
+        .expect("recovered separate checkpoint should exist");
+    assert_eq!(checkpoint_recovered.status, "completed");
+    assert_eq!(checkpoint_recovered.meta_id, Some(session_id));
+    assert_eq!(checkpoint_recovered.last_inserted_messages, 1);
+    assert_eq!(checkpoint_recovered.last_duplicate_messages, 1);
+    assert_ne!(checkpoint_recovered.fingerprint, failed_fingerprint);
+
+    let message_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM message WHERE meta_id = ?1")
+        .bind(session_id)
+        .fetch_one(&*pool)
+        .await?;
+    assert_eq!(message_count, 1);
 
     let _ = fs::remove_dir_all(&test_root);
     Ok(())

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use thiserror::Error;
-use tracing::info;
+use tracing::{info, warn};
 
 /// Errors that can occur during chat parsing.
 #[derive(Error, Debug)]
@@ -152,12 +152,77 @@ impl ParserRegistry {
     ///
     /// Tries each registered parser in order until one successfully parses the file.
     pub fn detect_and_parse(&self, path: &Path) -> Result<ParsedChat, ParseError> {
-        for parser in &self.parsers {
-            if parser.can_parse(path) {
-                info!("Detected format: {}", parser.name());
-                return parser.parse(path);
+        let path_lower = path.to_string_lossy().to_lowercase();
+        let mut best_match: Option<(usize, ParsedChat, String)> = None;
+        let mut hinted_empty_fallback: Option<(ParsedChat, String)> = None;
+        let mut last_hinted_error: Option<ParseError> = None;
+        let mut saw_hinted_parser = false;
+        let mut attempted = vec![false; self.parsers.len()];
+
+        // Pass 1: respect parser-level hints for fast-path matching.
+        // Pass 2: broaden to all parsers only if pass 1 did not produce a confident match.
+        for pass in 0..=1 {
+            for (idx, parser) in self.parsers.iter().enumerate() {
+                let hinted = parser.can_parse(path);
+                if pass == 0 && !hinted {
+                    continue;
+                }
+                if attempted[idx] {
+                    continue;
+                }
+                attempted[idx] = true;
+                if hinted {
+                    saw_hinted_parser = true;
+                }
+
+                match parser.parse(path) {
+                    Ok(parsed) => {
+                        let score = score_parsed_chat(&parsed, parser.name(), &path_lower, hinted);
+                        if score > 0 {
+                            let should_replace = best_match
+                                .as_ref()
+                                .map(|(best_score, _, _)| score > *best_score)
+                                .unwrap_or(true);
+                            if should_replace {
+                                best_match = Some((score, parsed, parser.name().to_string()));
+                            }
+                        } else if hinted && hinted_empty_fallback.is_none() {
+                            // Keep a deterministic fallback only for hinted parsers.
+                            hinted_empty_fallback = Some((parsed, parser.name().to_string()));
+                        }
+                    }
+                    Err(error) => {
+                        if hinted {
+                            last_hinted_error = Some(error);
+                        }
+                    }
+                }
+            }
+
+            if best_match.is_some() {
+                break;
             }
         }
+
+        if let Some((_, parsed, parser_name)) = best_match {
+            info!("Detected format: {}", parser_name);
+            return Ok(parsed);
+        }
+
+        if let Some((parsed, parser_name)) = hinted_empty_fallback {
+            warn!(
+                "Parser '{}' returned empty message set; accepting hinted fallback",
+                parser_name
+            );
+            return Ok(parsed);
+        }
+
+        if saw_hinted_parser {
+            if let Some(error) = last_hinted_error {
+                return Err(error);
+            }
+        }
+
         Err(ParseError::UnsupportedFormat(
             "Unknown chat format".to_string(),
         ))
@@ -181,6 +246,29 @@ impl Default for ParserRegistry {
     fn default() -> Self {
         Self::new()
     }
+}
+
+fn score_parsed_chat(
+    parsed: &ParsedChat,
+    parser_name: &str,
+    path_lower: &str,
+    hinted: bool,
+) -> usize {
+    if parsed.messages.is_empty() {
+        return 0;
+    }
+
+    let mut score = parsed.messages.len().saturating_mul(100) + parsed.members.len();
+    if hinted {
+        score += 500;
+    }
+    if parsed.platform.eq_ignore_ascii_case(parser_name) {
+        score += 250;
+    }
+    if path_lower.contains(parser_name) {
+        score += 25;
+    }
+    score
 }
 
 /// Parser for WhatsApp chat exports.
@@ -1560,8 +1648,25 @@ fn parse_viber_timestamp(s: Option<&str>) -> Option<i64> {
 
 #[cfg(test)]
 mod tests {
-    use super::ParserRegistry;
+    use super::{ParseError, ParserRegistry};
     use std::collections::HashSet;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    static TEST_FILE_SEQ: AtomicU64 = AtomicU64::new(0);
+
+    fn write_temp_file(prefix: &str, extension: &str, content: &str) -> std::path::PathBuf {
+        let epoch_nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let seq = TEST_FILE_SEQ.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!(
+            "xenobot_parser_{prefix}_{epoch_nanos}_{seq}.{extension}"
+        ));
+        std::fs::write(&path, content).expect("write temp parser fixture");
+        path
+    }
 
     #[test]
     fn registry_contains_mainstream_global_platform_parsers() {
@@ -1600,5 +1705,182 @@ mod tests {
             "parser count should be at least {}",
             expected.len()
         );
+    }
+
+    #[test]
+    fn detect_and_parse_uses_content_sniff_when_path_hint_is_missing() {
+        let registry = ParserRegistry::new();
+        let fixture = write_temp_file(
+            "generic_export",
+            "txt",
+            "2025/03/01 08:00:00 Alice hello from line",
+        );
+
+        let parsed = registry
+            .detect_and_parse(&fixture)
+            .expect("line-formatted content should be detected");
+        assert_eq!(parsed.platform, "line");
+        assert_eq!(parsed.messages.len(), 1);
+        assert_eq!(parsed.messages[0].sender, "Alice");
+
+        let _ = std::fs::remove_file(&fixture);
+    }
+
+    #[test]
+    fn detect_and_parse_rejects_unrecognized_content_without_hints() {
+        let registry = ParserRegistry::new();
+        let fixture = write_temp_file(
+            "unknown_export",
+            "log",
+            "this content does not match supported chat export structures",
+        );
+
+        let err = registry
+            .detect_and_parse(&fixture)
+            .expect_err("unknown format should not produce a false parser match");
+        assert!(matches!(err, ParseError::UnsupportedFormat(_)));
+
+        let _ = std::fs::remove_file(&fixture);
+    }
+
+    #[test]
+    fn detect_and_parse_keeps_hinted_empty_export_as_fallback() {
+        let registry = ParserRegistry::new();
+        let fixture = write_temp_file("whatsapp_empty_export", "txt", "");
+
+        let parsed = registry
+            .detect_and_parse(&fixture)
+            .expect("hinted empty export should keep deterministic fallback");
+        assert_eq!(parsed.platform, "whatsapp");
+        assert_eq!(parsed.messages.len(), 0);
+
+        let _ = std::fs::remove_file(&fixture);
+    }
+
+    #[test]
+    fn detect_and_parse_supports_all_17_platform_fixture_shapes() {
+        let registry = ParserRegistry::new();
+        let fixtures = vec![
+            (
+                "whatsapp_fixture",
+                "txt",
+                "[01/02/2025, 10:20:30] Alice: hello whatsapp",
+                "whatsapp",
+            ),
+            (
+                "line_fixture",
+                "txt",
+                "2025/01/02 10:20:30 Alice hello line",
+                "line",
+            ),
+            (
+                "qq_fixture",
+                "txt",
+                "[2025-01-02 10:20:30] Alice hello qq",
+                "qq",
+            ),
+            (
+                "telegram_fixture",
+                "json",
+                r#"{"name":"tg","messages":[{"from":"Alice","date":"2025-01-02T10:20:30Z","text":"hello telegram"}]}"#,
+                "telegram",
+            ),
+            (
+                "discord_fixture",
+                "json",
+                r#"[{"ID":"1","Timestamp":"2025-01-02T10:20:30Z","Author":{"ID":"u1","Name":"Alice"},"Content":"hello discord"}]"#,
+                "discord",
+            ),
+            (
+                "wechat_fixture",
+                "json",
+                r#"[{"msg_id":"1","type":1,"is_sender":false,"sender_name":"Alice","sender_id":"wxid_alice","create_time":1735813230,"content":"hello wechat"}]"#,
+                "wechat",
+            ),
+            (
+                "instagram_fixture",
+                "json",
+                r#"[{"sender":"Alice","timestamp":1735813230,"content":"hello instagram"}]"#,
+                "instagram",
+            ),
+            (
+                "imessage_fixture",
+                "json",
+                r#"[{"text":"hello imessage","sender":"Alice","date":"2025-01-02T10:20:30Z"}]"#,
+                "imessage",
+            ),
+            (
+                "messenger_fixture",
+                "json",
+                r#"[{"sender_name":"Alice","timestamp_ms":1735813230000,"content":"hello messenger"}]"#,
+                "messenger",
+            ),
+            (
+                "kakaotalk_fixture",
+                "json",
+                r#"[{"sender":"Alice","message":"hello kakao","date":"2025-01-02 10:20:30"}]"#,
+                "kakaotalk",
+            ),
+            (
+                "slack_fixture",
+                "json",
+                r#"[{"user":"U1","ts":"1735813230.000200","text":"hello slack"}]"#,
+                "slack",
+            ),
+            (
+                "teams_fixture",
+                "json",
+                r#"[{"from":"Alice","date":"2025-01-02T10:20:30Z","content":"hello teams"}]"#,
+                "teams",
+            ),
+            (
+                "signal_fixture",
+                "json",
+                r#"[{"sender":"Alice","timestamp":1735813230000,"body":"hello signal"}]"#,
+                "signal",
+            ),
+            (
+                "skype_fixture",
+                "json",
+                r#"[{"sender":"Alice","datetime":"2025-01-02T10:20:30Z","msg_content":"hello skype"}]"#,
+                "skype",
+            ),
+            (
+                "googlechat_fixture",
+                "json",
+                r#"[{"sender":{"name":"users/1","display_name":"Alice"},"create_time":"2025-01-02T10:20:30Z","text":"hello googlechat"}]"#,
+                "googlechat",
+            ),
+            (
+                "zoom_fixture",
+                "json",
+                r#"[{"sender":"Alice","timestamp":"2025-01-02T10:20:30Z","message":"hello zoom"}]"#,
+                "zoom",
+            ),
+            (
+                "viber_fixture",
+                "json",
+                r#"[{"sender":"Alice","date_time":"2025-01-02T10:20:30Z","text":"hello viber"}]"#,
+                "viber",
+            ),
+        ];
+
+        for (prefix, ext, content, expected_platform) in fixtures {
+            let fixture = write_temp_file(prefix, ext, content);
+            let parsed = registry
+                .detect_and_parse(&fixture)
+                .unwrap_or_else(|e| panic!("fixture '{}' parse failed: {}", prefix, e));
+            assert_eq!(
+                parsed.platform, expected_platform,
+                "platform mismatch for fixture '{}'",
+                prefix
+            );
+            assert!(
+                !parsed.messages.is_empty(),
+                "fixture '{}' should produce at least one message",
+                prefix
+            );
+            let _ = std::fs::remove_file(&fixture);
+        }
     }
 }

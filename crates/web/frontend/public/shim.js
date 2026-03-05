@@ -30,6 +30,61 @@
             throw error;
         }
     }
+
+    function joinRequestUrl(baseUrl, path) {
+        const base = String(baseUrl || '').trim().replace(/\/+$/, '');
+        const normalizedPath = String(path || '/');
+        if (/^https?:\/\//i.test(normalizedPath)) {
+            return normalizedPath;
+        }
+        if (base.length === 0) {
+            return normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`;
+        }
+        if (normalizedPath.startsWith('/')) {
+            return `${base}${normalizedPath}`;
+        }
+        return `${base}/${normalizedPath}`;
+    }
+
+    async function requestWithMeta(
+        method,
+        path,
+        data = null,
+        { baseUrl = '', allowErrorStatus = false } = {}
+    ) {
+        const url = joinRequestUrl(baseUrl, path);
+        const options = {
+            method,
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        };
+        if (data !== null && data !== undefined) {
+            options.body = JSON.stringify(data);
+        }
+        const response = await fetch(url, options);
+        const rawText = await response.text();
+        let json = null;
+        if (rawText) {
+            try {
+                json = JSON.parse(rawText);
+            } catch (_) {
+                json = null;
+            }
+        }
+        if (!response.ok && !allowErrorStatus) {
+            const detail = json?.message || json?.error || response.statusText || 'request failed';
+            throw new Error(`HTTP ${response.status}: ${detail}`);
+        }
+        return {
+            ok: response.ok,
+            status: response.status,
+            statusText: response.statusText,
+            json,
+            text: rawText,
+            headers: response.headers,
+        };
+    }
     
     function createNotImplementedAdapter(namespace) {
         return new Proxy({}, {
@@ -705,8 +760,19 @@
             }),
         executeSQL: (sessionId, sql) =>
             httpRequest('POST', `/chat/sessions/${encodeURIComponent(sessionId)}/execute-sql`, { sql }),
-        getSchema: (sessionId) =>
-            httpRequest('GET', `/chat/sessions/${encodeURIComponent(sessionId)}/schema`),
+        generateSQL: (sessionId, prompt, options = {}) =>
+            httpRequest('POST', `/chat/sessions/${encodeURIComponent(sessionId)}/generate-sql`, {
+                prompt,
+                maxRows: options.maxRows ?? options.max_rows,
+            }),
+        getSchema: (sessionId, options = {}) =>
+            httpRequest(
+                'GET',
+                `/chat/sessions/${encodeURIComponent(sessionId)}/schema${toQuery({
+                    detailed: options.detailed,
+                    includeRowCount: options.includeRowCount ?? options.include_row_count,
+                })}`
+            ),
 
         analyzeIncrementalImport: (sessionId, filePath) =>
             httpRequest(
@@ -759,6 +825,19 @@
             return { code: 'error.http', message: text };
         }
         return { code: 'error.agent_runtime', message: text };
+    }
+
+    function normalizeAgentStreamChunk(raw) {
+        const chunk = toCamelDeep(raw || {});
+        if (chunk.type === 'error') {
+            const normalized = normalizeAgentError(
+                chunk.errorMessage || chunk.error || chunk.message || ''
+            );
+            chunk.errorCode = chunk.errorCode || normalized.code;
+            chunk.error = chunk.error || normalized.message;
+            chunk.errorMessage = chunk.errorMessage || chunk.error;
+        }
+        return chunk;
     }
 
     function normalizeAiMessage(raw) {
@@ -1208,6 +1287,14 @@
             activeAgentRequests.set(requestId, controller);
 
             const ownerInfo = context.ownerInfo || context.owner_info;
+            const ownerIdRaw = ownerInfo?.id ?? ownerInfo?.memberId ?? ownerInfo?.member_id;
+            const ownerIdNum = Number(ownerIdRaw);
+            const ownerId = Number.isFinite(ownerIdNum) && ownerIdNum > 0 ? ownerIdNum : null;
+            const ownerPlatformId =
+                ownerInfo?.platformId ??
+                ownerInfo?.platform_id ??
+                ownerInfo?.platformID ??
+                null;
             const rawTimeFilter = context.timeFilter || context.time_filter || null;
             const payload = {
                 requestId,
@@ -1223,7 +1310,8 @@
                     maxMessagesLimit: context.maxMessagesLimit ?? context.max_messages_limit ?? null,
                     ownerInfo: ownerInfo
                         ? {
-                              id: toNumber(ownerInfo.id ?? ownerInfo.platformId, 0),
+                              id: ownerId,
+                              platformId: ownerPlatformId,
                               name: ownerInfo.name ?? ownerInfo.displayName ?? '',
                               avatarUrl: ownerInfo.avatarUrl ?? ownerInfo.avatar_url ?? null,
                           }
@@ -1250,32 +1338,36 @@
                         '/agent/run-stream',
                         payload,
                         (chunk) => {
-                            if (chunk.type === 'content' && chunk.content) {
-                                content += chunk.content;
+                            const normalizedChunk = normalizeAgentStreamChunk(chunk);
+                            if (normalizedChunk.type === 'content' && normalizedChunk.content) {
+                                content += normalizedChunk.content;
                             }
-                            if (chunk.type === 'tool_start' && chunk.toolName) {
-                                toolsUsed.add(chunk.toolName);
+                            if (normalizedChunk.type === 'tool_start' && normalizedChunk.toolName) {
+                                toolsUsed.add(normalizedChunk.toolName);
                             }
-                            if (chunk.type === 'done' && chunk.usage) {
-                                usage = chunk.usage;
+                            if (normalizedChunk.type === 'done' && normalizedChunk.usage) {
+                                usage = normalizedChunk.usage;
                             }
                             if (typeof onChunk === 'function') {
-                                onChunk(chunk);
+                                onChunk(normalizedChunk);
                             }
                         },
                         controller.signal
                     );
 
-                    for (const chunk of chunks) {
+                    for (const rawChunk of chunks) {
+                        const chunk = normalizeAgentStreamChunk(rawChunk);
                         if (chunk.type === 'tool_start' && chunk.toolName) {
                             toolsUsed.add(chunk.toolName);
                         }
-                        if (chunk.type === 'error' && chunk.error) {
-                            const normalized = normalizeAgentError(chunk.error);
+                        if (chunk.type === 'error') {
+                            const normalized = normalizeAgentError(
+                                chunk.errorMessage || chunk.error || ''
+                            );
                             return {
                                 success: false,
-                                error: normalized.code,
-                                errorMessage: normalized.message,
+                                error: chunk.errorCode || normalized.code,
+                                errorMessage: chunk.errorMessage || chunk.error || normalized.message,
                             };
                         }
                     }
@@ -1325,6 +1417,152 @@
             const tools = Array.isArray(result) ? result : [];
             return tools.map((item) => toCamelDeep(item || {}));
         },
+    };
+
+    window.mcpApi = {
+        health: async (baseUrl = '') => {
+            const response = await requestWithMeta('GET', '/health', null, {
+                baseUrl,
+                allowErrorStatus: true,
+            });
+            return {
+                success: response.ok,
+                status: response.status,
+                body:
+                    response.json && Object.keys(response.json).length > 0
+                        ? toCamelDeep(response.json)
+                        : response.text,
+            };
+        },
+        listTools: async (baseUrl = '') => {
+            const response = await requestWithMeta('GET', '/tools', null, {
+                baseUrl,
+                allowErrorStatus: true,
+            });
+            const payload = toCamelDeep(response.json || {});
+            return {
+                success: response.ok,
+                status: response.status,
+                tools: Array.isArray(payload.tools) ? payload.tools : [],
+                toolSpecs: Array.isArray(payload.toolSpecs) ? payload.toolSpecs : [],
+                raw: payload,
+            };
+        },
+        listResources: async (baseUrl = '') => {
+            const response = await requestWithMeta('GET', '/resources', null, {
+                baseUrl,
+                allowErrorStatus: true,
+            });
+            const payload = toCamelDeep(response.json || {});
+            return {
+                success: response.ok,
+                status: response.status,
+                resources: Array.isArray(payload.resources) ? payload.resources : [],
+                raw: payload,
+            };
+        },
+        listIntegrations: async (baseUrl = '') => {
+            const response = await requestWithMeta('GET', '/integrations', null, {
+                baseUrl,
+                allowErrorStatus: true,
+            });
+            const payload = toCamelDeep(response.json || {});
+            return {
+                success: response.ok,
+                status: response.status,
+                integrations: Array.isArray(payload.integrations) ? payload.integrations : [],
+                raw: payload,
+            };
+        },
+        getIntegrationPreset: async (target, baseUrl = '') => {
+            const safeTarget = encodeURIComponent(String(target || '').trim());
+            const response = await requestWithMeta(
+                'GET',
+                `/integrations/${safeTarget}`,
+                null,
+                { baseUrl, allowErrorStatus: true }
+            );
+            const payload = toCamelDeep(response.json || {});
+            return {
+                success: response.ok,
+                status: response.status,
+                preset: payload,
+            };
+        },
+        rpcCall: async (method, params = {}, id = randomId('mcp-rpc'), baseUrl = '') => {
+            const response = await requestWithMeta(
+                'POST',
+                '/mcp',
+                {
+                    jsonrpc: '2.0',
+                    id,
+                    method,
+                    params: params || {},
+                },
+                { baseUrl, allowErrorStatus: true }
+            );
+            const payload = toCamelDeep(response.json || {});
+            return {
+                success: response.ok && !payload.error,
+                status: response.status,
+                id: payload.id ?? id,
+                result: payload.result ?? null,
+                error: payload.error ?? null,
+                raw: payload,
+            };
+        },
+        initialize: async (baseUrl = '') =>
+            window.mcpApi.rpcCall(
+                'initialize',
+                {
+                    protocolVersion: '2024-11-05',
+                    capabilities: {},
+                    clientInfo: {
+                        name: 'xenobot-web-shim',
+                        version: '0.1.0',
+                    },
+                },
+                randomId('mcp-init'),
+                baseUrl
+            ),
+        listToolsRpc: async (baseUrl = '') =>
+            window.mcpApi.rpcCall('tools/list', {}, randomId('mcp-tools-list'), baseUrl),
+        listResourcesRpc: async (baseUrl = '') =>
+            window.mcpApi.rpcCall('resources/list', {}, randomId('mcp-res-list'), baseUrl),
+        readResourceRpc: async (uri, baseUrl = '') =>
+            window.mcpApi.rpcCall(
+                'resources/read',
+                { uri: String(uri || '') },
+                randomId('mcp-res-read'),
+                baseUrl
+            ),
+        callToolHttp: async (toolName, args = {}, baseUrl = '') => {
+            const safeTool = encodeURIComponent(String(toolName || '').trim());
+            const response = await requestWithMeta(
+                'POST',
+                `/tools/${safeTool}`,
+                args || {},
+                { baseUrl, allowErrorStatus: true }
+            );
+            const payload = toCamelDeep(response.json || {});
+            return {
+                success: response.ok,
+                status: response.status,
+                code: payload.code ?? null,
+                message: payload.message ?? null,
+                result: payload,
+            };
+        },
+        callToolRpc: async (toolName, args = {}, baseUrl = '') =>
+            window.mcpApi.rpcCall(
+                'tools/call',
+                {
+                    name: String(toolName || ''),
+                    arguments: args || {},
+                },
+                randomId('mcp-tools-call'),
+                baseUrl
+            ),
     };
     
     // window.api.* (app-level APIs)

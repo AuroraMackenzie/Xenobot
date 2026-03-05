@@ -12,7 +12,7 @@ use futures::stream;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use sqlx::{QueryBuilder, Row, SqlitePool};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::convert::Infallible;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -50,6 +50,130 @@ const ALL_TOOLS: [&str; 12] = [
     TOOL_SEMANTIC_SEARCH,
 ];
 
+const TOOL_ALIAS_ENTRIES: &[(&str, &[&str])] = &[
+    (TOOL_SEARCH_MESSAGES, &["searchmessages", "searchMessages"]),
+    (
+        TOOL_GET_RECENT_MESSAGES,
+        &[
+            "recent_messages",
+            "getrecentmessages",
+            "recentmessages",
+            "getRecentMessages",
+            "recentMessages",
+        ],
+    ),
+    (
+        TOOL_MEMBER_STATS,
+        &[
+            "get_member_stats",
+            "memberstats",
+            "getmemberstats",
+            "getMemberStats",
+        ],
+    ),
+    (
+        TOOL_TIME_STATS,
+        &[
+            "get_time_stats",
+            "timestats",
+            "gettimestats",
+            "getTimeStats",
+        ],
+    ),
+    (
+        TOOL_MEMBER_LIST,
+        &[
+            "get_member_list",
+            "get_group_members",
+            "memberlist",
+            "getmemberlist",
+            "getgroupmembers",
+            "getMemberList",
+            "getGroupMembers",
+        ],
+    ),
+    (
+        TOOL_NICKNAME_HISTORY,
+        &[
+            "member_name_history",
+            "get_member_name_history",
+            "nicknamehistory",
+            "membernamehistory",
+            "getmembernamehistory",
+            "memberNameHistory",
+            "getMemberNameHistory",
+        ],
+    ),
+    (
+        TOOL_CONVERSATION_BETWEEN,
+        &[
+            "get_conversation_between",
+            "conversationbetween",
+            "getconversationbetween",
+            "conversationBetween",
+            "getConversationBetween",
+        ],
+    ),
+    (
+        TOOL_MESSAGE_CONTEXT,
+        &[
+            "get_message_context",
+            "messagecontext",
+            "getmessagecontext",
+            "messageContext",
+            "getMessageContext",
+        ],
+    ),
+    (TOOL_SEARCH_SESSIONS, &["searchsessions", "searchSessions"]),
+    (
+        TOOL_GET_SESSION_MESSAGES,
+        &[
+            "session_messages",
+            "getsessionmessages",
+            "sessionmessages",
+            "sessionMessages",
+            "getSessionMessages",
+        ],
+    ),
+    (
+        TOOL_GET_SESSION_SUMMARY,
+        &[
+            "session_summary",
+            "get_session_summaries",
+            "sessionsummary",
+            "getsessionsummary",
+            "getsessionsummaries",
+            "sessionSummary",
+            "getSessionSummary",
+            "getSessionSummaries",
+        ],
+    ),
+    (
+        TOOL_SEMANTIC_SEARCH,
+        &[
+            "semantic_search_messages",
+            "semanticsearch",
+            "semanticsearchmessages",
+            "semanticSearch",
+            "semanticSearchMessages",
+        ],
+    ),
+];
+
+static TOOL_ALIAS_LOOKUP: Lazy<HashMap<String, &'static str>> = Lazy::new(|| {
+    let mut lookup: HashMap<String, &'static str> = HashMap::new();
+    for canonical in ALL_TOOLS {
+        lookup.insert(normalize_tool_alias_input(canonical), canonical);
+    }
+    for (canonical, aliases) in TOOL_ALIAS_ENTRIES {
+        lookup.insert(normalize_tool_alias_input(canonical), canonical);
+        for alias in *aliases {
+            lookup.insert(normalize_tool_alias_input(alias), canonical);
+        }
+    }
+    lookup
+});
+
 /// Agent API router.
 pub fn router() -> Router {
     Router::new()
@@ -64,6 +188,7 @@ struct AgentToolDefinition {
     name: String,
     description: String,
     parameters: serde_json::Value,
+    aliases: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -78,8 +203,12 @@ struct TimeFilter {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct OwnerInfo {
-    id: i32,
-    name: String,
+    #[serde(default, alias = "member_id", alias = "memberId")]
+    id: Option<i64>,
+    #[serde(default, alias = "platform_id", alias = "platformId")]
+    platform_id: Option<String>,
+    #[serde(default, alias = "display_name", alias = "displayName")]
+    name: Option<String>,
     #[serde(alias = "avatar_url")]
     avatar_url: Option<String>,
 }
@@ -116,6 +245,7 @@ struct AgentStreamChunk {
     tool_params: Option<serde_json::Value>,
     tool_result: Option<serde_json::Value>,
     error: Option<String>,
+    error_code: Option<String>,
     is_finished: Option<bool>,
     usage: Option<TokenUsage>,
 }
@@ -164,6 +294,7 @@ struct AgentRuntimeContext {
     filter: Option<TimeFilter>,
     max_messages_limit: i64,
     owner_info: Option<OwnerInfo>,
+    owner_member_id: Option<i64>,
 }
 
 #[instrument]
@@ -178,6 +309,7 @@ async fn list_tools() -> Json<Vec<AgentToolDefinition>> {
                 "inferredFromPrompt": ["query", "keywords"],
                 "notes": "When query is missing, keywords are inferred from the user message."
             }),
+            aliases: tool_aliases_for_client(TOOL_SEARCH_MESSAGES),
         },
         AgentToolDefinition {
             name: TOOL_GET_RECENT_MESSAGES.to_string(),
@@ -188,6 +320,7 @@ async fn list_tools() -> Json<Vec<AgentToolDefinition>> {
                 "inferredFromPrompt": [],
                 "notes": "Limit is bounded by runtime max_messages_limit."
             }),
+            aliases: tool_aliases_for_client(TOOL_GET_RECENT_MESSAGES),
         },
         AgentToolDefinition {
             name: TOOL_MEMBER_STATS.to_string(),
@@ -198,6 +331,7 @@ async fn list_tools() -> Json<Vec<AgentToolDefinition>> {
                 "inferredFromPrompt": [],
                 "notes": "Current implementation returns top members with fixed safety bound."
             }),
+            aliases: tool_aliases_for_client(TOOL_MEMBER_STATS),
         },
         AgentToolDefinition {
             name: TOOL_TIME_STATS.to_string(),
@@ -208,6 +342,7 @@ async fn list_tools() -> Json<Vec<AgentToolDefinition>> {
                 "inferredFromPrompt": [],
                 "notes": "Returns hourly and weekday distributions for current context."
             }),
+            aliases: tool_aliases_for_client(TOOL_TIME_STATS),
         },
         AgentToolDefinition {
             name: TOOL_MEMBER_LIST.to_string(),
@@ -218,6 +353,7 @@ async fn list_tools() -> Json<Vec<AgentToolDefinition>> {
                 "inferredFromPrompt": [],
                 "notes": "Member list is constrained by an internal upper bound."
             }),
+            aliases: tool_aliases_for_client(TOOL_MEMBER_LIST),
         },
         AgentToolDefinition {
             name: TOOL_NICKNAME_HISTORY.to_string(),
@@ -225,9 +361,10 @@ async fn list_tools() -> Json<Vec<AgentToolDefinition>> {
             parameters: serde_json::json!({
                 "required": [],
                 "optional": ["memberId"],
-                "inferredFromPrompt": ["memberId", "ownerInfo.id"],
+                "inferredFromPrompt": ["memberId", "ownerInfo.memberId", "ownerInfo.platformId"],
                 "notes": "memberId is inferred from user prompt numeric ids or owner context."
             }),
+            aliases: tool_aliases_for_client(TOOL_NICKNAME_HISTORY),
         },
         AgentToolDefinition {
             name: TOOL_CONVERSATION_BETWEEN.to_string(),
@@ -238,6 +375,7 @@ async fn list_tools() -> Json<Vec<AgentToolDefinition>> {
                 "inferredFromPrompt": ["memberId1", "memberId2"],
                 "notes": "When member ids are missing, tool returns guidance payload instead of failure."
             }),
+            aliases: tool_aliases_for_client(TOOL_CONVERSATION_BETWEEN),
         },
         AgentToolDefinition {
             name: TOOL_MESSAGE_CONTEXT.to_string(),
@@ -248,6 +386,7 @@ async fn list_tools() -> Json<Vec<AgentToolDefinition>> {
                 "inferredFromPrompt": ["messageId"],
                 "notes": "Supports single message id or multiple message ids."
             }),
+            aliases: tool_aliases_for_client(TOOL_MESSAGE_CONTEXT),
         },
         AgentToolDefinition {
             name: TOOL_SEARCH_SESSIONS.to_string(),
@@ -258,6 +397,7 @@ async fn list_tools() -> Json<Vec<AgentToolDefinition>> {
                 "inferredFromPrompt": [],
                 "notes": "Results are sorted by time span and bounded by safe limit."
             }),
+            aliases: tool_aliases_for_client(TOOL_SEARCH_SESSIONS),
         },
         AgentToolDefinition {
             name: TOOL_GET_SESSION_MESSAGES.to_string(),
@@ -268,6 +408,7 @@ async fn list_tools() -> Json<Vec<AgentToolDefinition>> {
                 "inferredFromPrompt": ["chatSessionId"],
                 "notes": "chatSessionId is inferred from numeric ids in prompt when absent."
             }),
+            aliases: tool_aliases_for_client(TOOL_GET_SESSION_MESSAGES),
         },
         AgentToolDefinition {
             name: TOOL_GET_SESSION_SUMMARY.to_string(),
@@ -278,6 +419,7 @@ async fn list_tools() -> Json<Vec<AgentToolDefinition>> {
                 "inferredFromPrompt": ["chatSessionId"],
                 "notes": "chatSessionId is inferred from numeric ids in prompt when absent."
             }),
+            aliases: tool_aliases_for_client(TOOL_GET_SESSION_SUMMARY),
         },
         AgentToolDefinition {
             name: TOOL_SEMANTIC_SEARCH.to_string(),
@@ -288,6 +430,7 @@ async fn list_tools() -> Json<Vec<AgentToolDefinition>> {
                 "inferredFromPrompt": ["query", "keywords"],
                 "notes": "Query defaults to user prompt and runs local vector similarity search."
             }),
+            aliases: tool_aliases_for_client(TOOL_SEMANTIC_SEARCH),
         },
     ];
     Json(tools)
@@ -320,6 +463,7 @@ async fn run_stream(
             } else {
                 "Please provide a question so the agent can run tools.".to_string()
             },
+            "error.invalid_prompt",
             true,
         ));
         return sse_from_chunks(chunks);
@@ -328,7 +472,11 @@ async fn run_stream(
     let meta_id = match parse_meta_id(&req.context.session_id) {
         Ok(v) => v,
         Err(err) => {
-            chunks.push(error_chunk(err.to_string(), true));
+            chunks.push(error_chunk(
+                err.to_string(),
+                "error.invalid_session_id",
+                true,
+            ));
             return sse_from_chunks(chunks);
         }
     };
@@ -336,10 +484,13 @@ async fn run_stream(
     let pool = match get_pool().await {
         Ok(p) => p,
         Err(err) => {
-            chunks.push(error_chunk(err.to_string(), true));
+            chunks.push(error_chunk(err.to_string(), "error.database", true));
             return sse_from_chunks(chunks);
         }
     };
+
+    let owner_member_id =
+        resolve_owner_member_id(req.context.owner_info.as_ref(), meta_id, pool.as_ref()).await;
 
     chunks.push(AgentStreamChunk {
         chunk_type: "think".to_string(),
@@ -354,6 +505,7 @@ async fn run_stream(
         tool_params: None,
         tool_result: None,
         error: None,
+        error_code: None,
         is_finished: Some(false),
         usage: None,
     });
@@ -363,6 +515,7 @@ async fn run_stream(
         filter: req.context.time_filter.clone(),
         max_messages_limit: i64::from(req.context.max_messages_limit.unwrap_or(50).clamp(10, 500)),
         owner_info: req.context.owner_info.clone(),
+        owner_member_id,
     };
 
     let tool_plan = build_tool_plan(&prompt, req.forced_tools.clone());
@@ -377,6 +530,7 @@ async fn run_stream(
                 } else {
                     format!("Request {} has been aborted.", request_id)
                 },
+                "error.request_aborted",
                 true,
             ));
             clear_abort_marker(&request_id).await;
@@ -393,6 +547,7 @@ async fn run_stream(
             tool_params: Some(params),
             tool_result: None,
             error: None,
+            error_code: None,
             is_finished: Some(false),
             usage: None,
         });
@@ -413,6 +568,7 @@ async fn run_stream(
                     tool_params: None,
                     tool_result: Some(returned),
                     error: None,
+                    error_code: None,
                     is_finished: Some(false),
                     usage: None,
                 });
@@ -432,6 +588,7 @@ async fn run_stream(
                     tool_params: None,
                     tool_result: None,
                     error: Some(err.to_string()),
+                    error_code: Some(api_error_code(&err).to_string()),
                     is_finished: Some(false),
                     usage: None,
                 });
@@ -453,11 +610,14 @@ async fn run_stream(
         tool_params: None,
         tool_result: None,
         error: None,
+        error_code: None,
         is_finished: Some(false),
         usage: None,
     });
 
-    let completion_tokens = (tools_used.len() as u64).saturating_mul(40).saturating_add(32);
+    let completion_tokens = (tools_used.len() as u64)
+        .saturating_mul(40)
+        .saturating_add(32);
     chunks.push(AgentStreamChunk {
         chunk_type: "done".to_string(),
         content: None,
@@ -471,6 +631,7 @@ async fn run_stream(
             "toolRounds": executions.len() as u32,
         })),
         error: None,
+        error_code: None,
         is_finished: Some(true),
         usage: Some(TokenUsage {
             prompt_tokens,
@@ -504,7 +665,7 @@ fn sse_from_chunks(
     Sse::new(stream::iter(events))
 }
 
-fn error_chunk(message: String, finished: bool) -> AgentStreamChunk {
+fn error_chunk(message: String, code: &str, finished: bool) -> AgentStreamChunk {
     AgentStreamChunk {
         chunk_type: "error".to_string(),
         content: None,
@@ -514,6 +675,7 @@ fn error_chunk(message: String, finished: bool) -> AgentStreamChunk {
         tool_params: None,
         tool_result: None,
         error: Some(message),
+        error_code: Some(code.to_string()),
         is_finished: Some(finished),
         usage: None,
     }
@@ -552,8 +714,10 @@ fn build_tool_plan(prompt: &str, forced_tools: Option<Vec<String>>) -> Vec<Strin
     if let Some(forced) = forced_tools {
         let mut dedup = Vec::new();
         for tool in forced {
-            if ALL_TOOLS.contains(&tool.as_str()) && !dedup.iter().any(|x| x == &tool) {
-                dedup.push(tool);
+            if let Some(canonical) = normalize_tool_name(&tool) {
+                if !dedup.iter().any(|x| x == canonical) {
+                    dedup.push(canonical.to_string());
+                }
             }
         }
         if !dedup.is_empty() {
@@ -608,6 +772,149 @@ fn build_tool_plan(prompt: &str, forced_tools: Option<Vec<String>>) -> Vec<Strin
     tools
 }
 
+fn api_error_code(err: &ApiError) -> &'static str {
+    match err {
+        ApiError::InvalidRequest(_) => "error.invalid_request",
+        ApiError::NotFound(_) => "error.not_found",
+        ApiError::Database(_) => "error.database",
+        ApiError::Timeout(_) => "error.timeout",
+        ApiError::Auth(_) => "error.auth",
+        ApiError::Http(_) => "error.http",
+        ApiError::Io(_) | ApiError::Json(_) | ApiError::Internal(_) | ApiError::Core(_) => {
+            "error.internal"
+        }
+        ApiError::NotImplemented(_) => "error.not_implemented",
+        #[cfg(feature = "wechat")]
+        ApiError::WeChat(_) => "error.wechat",
+    }
+}
+
+async fn resolve_owner_member_id(
+    owner_info: Option<&OwnerInfo>,
+    meta_id: i64,
+    pool: &SqlitePool,
+) -> Option<i64> {
+    let owner = owner_info?;
+
+    if let Some(owner_id) = owner.id.filter(|v| *v > 0) {
+        if let Ok(Some(found_id)) = sqlx::query_scalar::<_, i64>(
+            r#"
+            SELECT m.id
+            FROM member m
+            JOIN message msg ON msg.sender_id = m.id
+            WHERE m.id = ?1 AND msg.meta_id = ?2
+            LIMIT 1
+            "#,
+        )
+        .bind(owner_id)
+        .bind(meta_id)
+        .fetch_optional(pool)
+        .await
+        {
+            return Some(found_id);
+        }
+    }
+
+    let platform_id = owner
+        .platform_id
+        .as_ref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())?;
+
+    if let Ok(Some(found_id)) = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT m.id
+        FROM member m
+        JOIN message msg ON msg.sender_id = m.id
+        WHERE m.platform_id = ?1 AND msg.meta_id = ?2
+        ORDER BY msg.ts DESC, msg.id DESC
+        LIMIT 1
+        "#,
+    )
+    .bind(platform_id)
+    .bind(meta_id)
+    .fetch_optional(pool)
+    .await
+    {
+        return Some(found_id);
+    }
+
+    if let Ok(Some(found_id)) = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT id
+        FROM member
+        WHERE platform_id = ?1
+        ORDER BY id DESC
+        LIMIT 1
+        "#,
+    )
+    .bind(platform_id)
+    .fetch_optional(pool)
+    .await
+    {
+        return Some(found_id);
+    }
+
+    None
+}
+
+fn normalize_tool_name(raw: &str) -> Option<&'static str> {
+    let normalized = normalize_tool_alias_input(raw);
+    TOOL_ALIAS_LOOKUP.get(normalized.as_str()).copied()
+}
+
+fn normalize_tool_alias_input(raw: &str) -> String {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+
+    let mut out = String::with_capacity(trimmed.len() + 8);
+    let mut prev_was_sep = false;
+    for ch in trimmed.chars() {
+        if ch.is_ascii_uppercase() {
+            if !out.is_empty() && !prev_was_sep {
+                out.push('_');
+            }
+            out.push(ch.to_ascii_lowercase());
+            prev_was_sep = false;
+            continue;
+        }
+        if ch == '-' || ch == ' ' || ch == '/' {
+            if !out.is_empty() && !prev_was_sep {
+                out.push('_');
+            }
+            prev_was_sep = true;
+            continue;
+        }
+        if ch == '_' {
+            if !out.is_empty() && !prev_was_sep {
+                out.push('_');
+            }
+            prev_was_sep = true;
+            continue;
+        }
+        out.push(ch.to_ascii_lowercase());
+        prev_was_sep = false;
+    }
+    out
+}
+
+fn tool_aliases_for_client(canonical: &str) -> Vec<String> {
+    let mut aliases = vec![canonical.to_string()];
+    if let Some((_, extra_aliases)) = TOOL_ALIAS_ENTRIES
+        .iter()
+        .find(|(name, _)| *name == canonical)
+    {
+        for alias in *extra_aliases {
+            if !aliases.iter().any(|value| value == alias) {
+                aliases.push((*alias).to_string());
+            }
+        }
+    }
+    aliases
+}
+
 fn push_unique(tools: &mut Vec<String>, name: &str) {
     if !tools.iter().any(|x| x == name) {
         tools.push(name.to_string());
@@ -620,8 +927,26 @@ fn contains_any(text: &str, needles: &[&str]) -> bool {
 
 fn tokenize_query(text: &str) -> Vec<String> {
     let stop_words = [
-        "请", "帮", "我", "一下", "一下子", "查看", "分析", "消息", "聊天", "记录", "the", "and",
-        "for", "with", "from", "that", "this", "what", "how", "about",
+        "请",
+        "帮",
+        "我",
+        "一下",
+        "一下子",
+        "查看",
+        "分析",
+        "消息",
+        "聊天",
+        "记录",
+        "the",
+        "and",
+        "for",
+        "with",
+        "from",
+        "that",
+        "this",
+        "what",
+        "how",
+        "about",
     ];
     text.split(|c: char| !c.is_alphanumeric() && !('\u{4e00}' <= c && c <= '\u{9fff}'))
         .map(|s| s.trim().to_lowercase())
@@ -692,7 +1017,7 @@ fn tool_params_preview(
             "memberId": ids
                 .first()
                 .copied()
-                .or_else(|| runtime.owner_info.as_ref().map(|o| i64::from(o.id)))
+                .or(runtime.owner_member_id)
         }),
         TOOL_CONVERSATION_BETWEEN => serde_json::json!({
             "memberId1": ids.first().copied(),
@@ -746,7 +1071,10 @@ async fn execute_tool(
         TOOL_GET_SESSION_MESSAGES => tool_get_session_messages(prompt, runtime, pool).await,
         TOOL_GET_SESSION_SUMMARY => tool_get_session_summary(prompt, runtime, pool).await,
         TOOL_SEMANTIC_SEARCH => tool_semantic_search(prompt, runtime, pool).await,
-        _ => Err(ApiError::InvalidRequest(format!("unknown tool: {}", tool_name))),
+        _ => Err(ApiError::InvalidRequest(format!(
+            "unknown tool: {}",
+            tool_name
+        ))),
     }
 }
 
@@ -756,10 +1084,16 @@ fn apply_time_filter(
     alias: &str,
 ) {
     if let Some(start_ts) = filter.as_ref().and_then(|f| f.start_ts) {
-        qb.push(" AND ").push(alias).push(".ts >= ").push_bind(start_ts);
+        qb.push(" AND ")
+            .push(alias)
+            .push(".ts >= ")
+            .push_bind(start_ts);
     }
     if let Some(end_ts) = filter.as_ref().and_then(|f| f.end_ts) {
-        qb.push(" AND ").push(alias).push(".ts <= ").push_bind(end_ts);
+        qb.push(" AND ")
+            .push(alias)
+            .push(".ts <= ")
+            .push_bind(end_ts);
     }
 }
 
@@ -880,7 +1214,9 @@ async fn tool_member_stats(
     );
     qb.push_bind(runtime.meta_id);
     apply_time_filter(&mut qb, &runtime.filter, "msg");
-    qb.push(" GROUP BY m.id, m.platform_id, COALESCE(m.group_nickname, m.account_name, m.platform_id)");
+    qb.push(
+        " GROUP BY m.id, m.platform_id, COALESCE(m.group_nickname, m.account_name, m.platform_id)",
+    );
     qb.push(" ORDER BY message_count DESC, member_id ASC LIMIT 100");
 
     let rows = qb
@@ -1025,7 +1361,7 @@ fn resolve_member_id_from_prompt(prompt: &str, runtime: &AgentRuntimeContext) ->
     parse_numeric_ids(prompt)
         .into_iter()
         .find(|id| *id > 0)
-        .or_else(|| runtime.owner_info.as_ref().map(|o| i64::from(o.id)))
+        .or(runtime.owner_member_id)
 }
 
 async fn tool_nickname_history(
@@ -1141,7 +1477,11 @@ async fn tool_conversation_between(
         "#,
     );
     qb.push_bind(runtime.meta_id);
-    qb.push(" AND msg.sender_id IN (").push_bind(member_a).push(", ").push_bind(member_b).push(")");
+    qb.push(" AND msg.sender_id IN (")
+        .push_bind(member_a)
+        .push(", ")
+        .push_bind(member_b)
+        .push(")");
     apply_time_filter(&mut qb, &runtime.filter, "msg");
     qb.push(" ORDER BY msg.ts DESC LIMIT ")
         .push_bind(runtime.max_messages_limit.min(120));
@@ -1275,7 +1615,10 @@ async fn tool_message_context(
     .await
     .map_err(|e| ApiError::Database(e.to_string()))?;
 
-    let mut context = before_rows.iter().map(extract_message_json).collect::<Vec<_>>();
+    let mut context = before_rows
+        .iter()
+        .map(extract_message_json)
+        .collect::<Vec<_>>();
     context.reverse();
     context.extend(after_rows.iter().map(extract_message_json));
 
@@ -1421,7 +1764,9 @@ async fn tool_get_session_summary(
 
     let start_ts = chat_row.get::<i64, _>("start_ts");
     let end_ts = chat_row.get::<i64, _>("end_ts");
-    let stored_summary = chat_row.get::<Option<String>, _>("summary").unwrap_or_default();
+    let stored_summary = chat_row
+        .get::<Option<String>, _>("summary")
+        .unwrap_or_default();
 
     let member_rows = sqlx::query(
         r#"
@@ -1685,7 +2030,11 @@ fn build_final_answer(
     let mut lines = Vec::new();
     if locale.starts_with("zh") {
         lines.push(format!("问题：{}", prompt));
-        lines.push(format!("已执行工具（{}）：{}", tools_used.len(), tools_used.join(", ")));
+        lines.push(format!(
+            "已执行工具（{}）：{}",
+            tools_used.len(),
+            tools_used.join(", ")
+        ));
         for exe in executions {
             let count = exe
                 .result

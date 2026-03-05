@@ -216,6 +216,12 @@ pub enum SourceCommand {
         #[arg(short, long, default_value_t = OutputFormat::Text)]
         format_out: OutputFormat,
     },
+    /// Show per-platform source coverage matrix for all legal-safe runtime platforms
+    Matrix {
+        /// Output format
+        #[arg(short, long, default_value_t = OutputFormat::Text)]
+        format_out: OutputFormat,
+    },
 }
 
 /// API server management arguments.
@@ -258,6 +264,10 @@ pub enum ApiCommand {
         /// File gateway response retention in seconds
         #[arg(long, default_value_t = 300)]
         file_gateway_response_ttl_seconds: u64,
+
+        /// Force file-gateway IPC mode for sandbox-coexist operation
+        #[arg(long, alias = "sandbox-coexist", default_value_t = false)]
+        force_file_gateway: bool,
 
         /// Database path
         #[arg(long, env = "XENOBOT_DB_PATH")]
@@ -323,6 +333,48 @@ pub enum ApiCommand {
         path: Option<String>,
     },
 
+    /// Send one request via file-gateway IPC (sandbox-friendly path)
+    GatewayCall {
+        /// File gateway root directory
+        #[arg(long, env = "XENOBOT_FILE_API_DIR")]
+        file_gateway_dir: Option<PathBuf>,
+
+        /// Optional request id override
+        #[arg(long)]
+        request_id: Option<String>,
+
+        /// Request method (HTTP verb or logical method like `health.check`)
+        #[arg(long, default_value = "GET")]
+        method: String,
+
+        /// Optional HTTP path override (used when method is an HTTP verb)
+        #[arg(long)]
+        path: Option<String>,
+
+        /// Optional JSON request body
+        #[arg(long)]
+        body_json: Option<String>,
+
+        /// Wait timeout in milliseconds
+        #[arg(long, default_value_t = 15_000)]
+        timeout_ms: u64,
+
+        /// Output format
+        #[arg(short, long, default_value_t = OutputFormat::Json)]
+        format: OutputFormat,
+    },
+
+    /// Diagnose sandbox runtime constraints and recommend startup mode
+    SandboxDoctor {
+        /// File gateway root directory for writeability probe
+        #[arg(long, env = "XENOBOT_FILE_API_DIR")]
+        file_gateway_dir: Option<PathBuf>,
+
+        /// Output format
+        #[arg(short, long, default_value_t = OutputFormat::Text)]
+        format: OutputFormat,
+    },
+
     /// Run MCP endpoint smoke checks against a running MCP server
     McpSmoke {
         /// MCP server base URL (without trailing slash)
@@ -343,6 +395,75 @@ pub enum ApiCommand {
         /// Integration target id (e.g. claude-desktop, chatwise, opencode)
         #[arg(long, default_value = "claude-desktop")]
         target: String,
+
+        /// Output format
+        #[arg(short, long, default_value_t = OutputFormat::Json)]
+        format: OutputFormat,
+
+        /// Request timeout in milliseconds
+        #[arg(long, default_value_t = 5000)]
+        timeout_ms: u64,
+    },
+
+    /// Call an MCP tool directly via JSON-RPC or HTTP bridge endpoint
+    McpCall {
+        /// MCP server base URL (without trailing slash)
+        #[arg(long, default_value = "http://127.0.0.1:5030")]
+        url: String,
+
+        /// Call transport mode
+        #[arg(long, value_enum, default_value_t = McpCallMode::Rpc)]
+        mode: McpCallMode,
+
+        /// MCP tool name
+        #[arg(long)]
+        tool: String,
+
+        /// JSON object argument payload
+        #[arg(long, default_value = "{}")]
+        args_json: String,
+
+        /// Output format
+        #[arg(short, long, default_value_t = OutputFormat::Json)]
+        format: OutputFormat,
+
+        /// Request timeout in milliseconds
+        #[arg(long, default_value_t = 5000)]
+        timeout_ms: u64,
+    },
+
+    /// List MCP resources via JSON-RPC or HTTP resource endpoint
+    McpResources {
+        /// MCP server base URL (without trailing slash)
+        #[arg(long, default_value = "http://127.0.0.1:5030")]
+        url: String,
+
+        /// Call transport mode
+        #[arg(long, value_enum, default_value_t = McpCallMode::Rpc)]
+        mode: McpCallMode,
+
+        /// Output format
+        #[arg(short, long, default_value_t = OutputFormat::Json)]
+        format: OutputFormat,
+
+        /// Request timeout in milliseconds
+        #[arg(long, default_value_t = 5000)]
+        timeout_ms: u64,
+    },
+
+    /// Read one MCP resource via JSON-RPC or HTTP resource endpoint
+    McpResource {
+        /// MCP server base URL (without trailing slash)
+        #[arg(long, default_value = "http://127.0.0.1:5030")]
+        url: String,
+
+        /// Call transport mode
+        #[arg(long, value_enum, default_value_t = McpCallMode::Rpc)]
+        mode: McpCallMode,
+
+        /// Resource URI (e.g. xenobot://server/info)
+        #[arg(long)]
+        uri: String,
 
         /// Output format
         #[arg(short, long, default_value_t = OutputFormat::Json)]
@@ -705,6 +826,59 @@ pub enum DbCommand {
         #[arg(required = true)]
         path: PathBuf,
     },
+
+    /// Verify core schema and hot-path indexes
+    Verify {
+        /// Database path
+        #[arg(required = true)]
+        path: PathBuf,
+
+        /// Output format
+        #[arg(short, long, default_value_t = OutputFormat::Text)]
+        format: OutputFormat,
+
+        /// Fail command when required checks are missing
+        #[arg(long, default_value_t = false)]
+        strict: bool,
+    },
+
+    /// Inspect incremental source checkpoints
+    Checkpoints {
+        /// Database path
+        #[arg(required = true)]
+        path: PathBuf,
+
+        /// Optional source kind filter
+        #[arg(long)]
+        source_kind: Option<String>,
+
+        /// Optional status filter (for example: completed, failed)
+        #[arg(long)]
+        status: Option<String>,
+
+        /// Max rows to return
+        #[arg(long, default_value_t = 100)]
+        limit: usize,
+
+        /// Output format
+        #[arg(short, long, default_value_t = OutputFormat::Text)]
+        format: OutputFormat,
+    },
+
+    /// Inspect table/column/index/foreign-key schema layout
+    Schema {
+        /// Database path
+        #[arg(required = true)]
+        path: PathBuf,
+
+        /// Include per-table row counts (can be slow on very large datasets)
+        #[arg(long, default_value_t = false)]
+        include_row_count: bool,
+
+        /// Output format
+        #[arg(short, long, default_value_t = OutputFormat::Text)]
+        format: OutputFormat,
+    },
 }
 
 /// WeChat version.
@@ -772,6 +946,24 @@ impl std::fmt::Display for OutputFormat {
             OutputFormat::Csv => write!(f, "csv"),
             OutputFormat::Table => write!(f, "table"),
             OutputFormat::Yaml => write!(f, "yaml"),
+        }
+    }
+}
+
+/// MCP call transport mode.
+#[derive(Debug, Clone, ValueEnum)]
+pub enum McpCallMode {
+    /// JSON-RPC streamable HTTP endpoint (`/mcp`)
+    Rpc,
+    /// Direct HTTP tool endpoint (`/tools/:tool`)
+    Http,
+}
+
+impl std::fmt::Display for McpCallMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            McpCallMode::Rpc => write!(f, "rpc"),
+            McpCallMode::Http => write!(f, "http"),
         }
     }
 }

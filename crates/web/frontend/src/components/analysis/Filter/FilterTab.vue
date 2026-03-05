@@ -352,14 +352,14 @@ function loadHistoryCondition(condition: {
 </script>
 
 <template>
-  <div class="h-full flex flex-col">
+  <div class="xeno-filter-shell h-full flex flex-col">
     <!-- English UI note -->
-    <div class="flex-none flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+    <div class="xeno-filter-header flex-none flex items-center justify-between px-4 py-3">
       <div class="flex items-center gap-4">
         <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ t('analysis.filter.title') }}</h2>
 
         <!-- English UI note -->
-        <div class="flex items-center gap-1 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg">
+        <div class="xeno-filter-mode flex items-center gap-1 p-1 rounded-lg">
           <button
             class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
             :class="
@@ -396,21 +396,23 @@ function loadHistoryCondition(condition: {
     <!-- English UI note -->
     <div class="flex-1 flex overflow-hidden">
       <!-- English UI note -->
-      <div class="w-80 flex-none border-r border-gray-200 dark:border-gray-700 flex flex-col">
+      <div class="xeno-filter-left w-80 flex-none flex flex-col">
         <!-- English UI note -->
         <div class="flex-1 min-h-0 overflow-y-auto">
-          <ConditionPanel
-            v-if="filterMode === 'condition'"
-            v-model:keywords="conditionFilter.keywords"
-            v-model:time-range="conditionFilter.timeRange"
-            v-model:sender-ids="conditionFilter.senderIds"
-            v-model:context-size="conditionFilter.contextSize"
-          />
-          <SessionPanel v-else v-model:selected-ids="selectedSessionIds" />
+          <Transition name="xeno-filter-panel" mode="out-in">
+            <ConditionPanel
+              v-if="filterMode === 'condition'"
+              v-model:keywords="conditionFilter.keywords"
+              v-model:time-range="conditionFilter.timeRange"
+              v-model:sender-ids="conditionFilter.senderIds"
+              v-model:context-size="conditionFilter.contextSize"
+            />
+            <SessionPanel v-else v-model:selected-ids="selectedSessionIds" />
+          </Transition>
         </div>
 
         <!-- English UI note -->
-        <div class="flex-none p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+        <div class="xeno-filter-left-footer flex-none p-4">
           <UButton block color="primary" :loading="isFiltering" :disabled="!canExecuteFilter" @click="executeFilter">
             {{ t('analysis.filter.execute') }}
           </UButton>
@@ -429,39 +431,41 @@ function loadHistoryCondition(condition: {
         />
 
         <!-- English UI note -->
-        <div
-          v-if="filterResult && filterResult.blocks.length > 0"
-          class="flex-none flex flex-col gap-2 px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800"
-        >
-          <!-- English UI note -->
-          <div v-if="isExporting && exportProgress" class="w-full">
-            <div class="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-1">
-              <span>{{ exportProgress.message }}</span>
-              <span>{{ exportProgress.percentage }}%</span>
+        <Transition name="xeno-filter-action">
+          <div
+            v-if="filterResult && filterResult.blocks.length > 0"
+            class="xeno-filter-actions flex-none flex flex-col gap-2 px-4 py-3"
+          >
+            <!-- English UI note -->
+            <div v-if="isExporting && exportProgress" class="w-full">
+              <div class="mb-1 flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
+                <span>{{ exportProgress.message }}</span>
+                <span>{{ exportProgress.percentage }}%</span>
+              </div>
+              <div class="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                <div
+                  class="h-full bg-primary-500 transition-all duration-300"
+                  :style="{ width: `${exportProgress.percentage}%` }"
+                />
+              </div>
             </div>
-            <div class="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-              <div
-                class="h-full bg-primary-500 transition-all duration-300"
-                :style="{ width: `${exportProgress.percentage}%` }"
-              />
+            <!-- English UI note -->
+            <div class="flex items-center justify-end gap-3">
+              <UButton
+                variant="outline"
+                icon="i-heroicons-document-arrow-down"
+                :loading="isExporting"
+                :disabled="isExporting"
+                @click="exportFeedPack"
+              >
+                {{ t('analysis.filter.export') }}
+              </UButton>
+              <UButton color="primary" icon="i-heroicons-sparkles" @click="openLocalAnalysis">
+                {{ t('analysis.filter.localAnalysis') }}
+              </UButton>
             </div>
           </div>
-          <!-- English UI note -->
-          <div class="flex items-center justify-end gap-3">
-            <UButton
-              variant="outline"
-              icon="i-heroicons-document-arrow-down"
-              :loading="isExporting"
-              :disabled="isExporting"
-              @click="exportFeedPack"
-            >
-              {{ t('analysis.filter.export') }}
-            </UButton>
-            <UButton color="primary" icon="i-heroicons-sparkles" @click="openLocalAnalysis">
-              {{ t('analysis.filter.localAnalysis') }}
-            </UButton>
-          </div>
-        </div>
+        </Transition>
       </div>
     </div>
 
@@ -472,3 +476,81 @@ function loadHistoryCondition(condition: {
     <LocalAnalysisModal v-model:open="showAnalysisModal" :filter-result="filterResult" :filter-mode="filterMode" />
   </div>
 </template>
+
+<style scoped>
+.xeno-filter-shell {
+  background: linear-gradient(180deg, transparent, var(--xeno-surface-muted));
+}
+
+.xeno-filter-header {
+  border-bottom: 1px solid var(--xeno-border-soft);
+  background: var(--xeno-surface-muted);
+  backdrop-filter: blur(12px) saturate(126%);
+}
+
+.xeno-filter-mode {
+  border: 1px solid var(--xeno-border-soft);
+  background: var(--xeno-surface-main);
+}
+
+.xeno-filter-left {
+  border-right: 1px solid var(--xeno-border-soft);
+}
+
+.xeno-filter-left-footer {
+  border-top: 1px solid var(--xeno-border-soft);
+  background: var(--xeno-surface-main);
+}
+
+.xeno-filter-actions {
+  border-top: 1px solid var(--xeno-border-soft);
+  background: var(--xeno-surface-muted);
+  backdrop-filter: blur(12px) saturate(125%);
+}
+
+.xeno-filter-panel-enter-active,
+.xeno-filter-panel-leave-active {
+  transition:
+    opacity 0.24s cubic-bezier(0.22, 0.92, 0.3, 1),
+    transform 0.24s cubic-bezier(0.22, 0.92, 0.3, 1),
+    filter 0.24s cubic-bezier(0.22, 0.92, 0.3, 1);
+}
+
+.xeno-filter-panel-enter-from,
+.xeno-filter-panel-leave-to {
+  opacity: 0;
+  transform: translateY(8px) scale(0.996);
+  filter: blur(5px);
+}
+
+.xeno-filter-action-enter-active,
+.xeno-filter-action-leave-active {
+  transition:
+    opacity 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.xeno-filter-action-enter-from,
+.xeno-filter-action-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xeno-filter-panel-enter-active,
+  .xeno-filter-panel-leave-active,
+  .xeno-filter-action-enter-active,
+  .xeno-filter-action-leave-active {
+    transition-duration: 0.01ms !important;
+  }
+
+  .xeno-filter-panel-enter-from,
+  .xeno-filter-panel-leave-to,
+  .xeno-filter-action-enter-from,
+  .xeno-filter-action-leave-to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+</style>

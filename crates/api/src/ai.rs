@@ -543,11 +543,7 @@ fn normalize_embedding(values: &mut [f32]) {
 }
 
 fn embed_text_for_semantic(text: &str) -> Vec<f32> {
-    let chunks = semantic_chunk_text(
-        text,
-        SEMANTIC_CHUNK_MAX_CHARS,
-        SEMANTIC_CHUNK_OVERLAP_CHARS,
-    );
+    let chunks = semantic_chunk_text(text, SEMANTIC_CHUNK_MAX_CHARS, SEMANTIC_CHUNK_OVERLAP_CHARS);
     if chunks.is_empty() {
         return vec![0.0; SEMANTIC_EMBEDDING_DIM];
     }
@@ -893,7 +889,9 @@ async fn semantic_search_messages(
     let rewritten_query = rewrite_semantic_query(&req.query);
     let query = rewritten_query.trim();
     if query.is_empty() {
-        return Err(ApiError::InvalidRequest("query cannot be empty".to_string()));
+        return Err(ApiError::InvalidRequest(
+            "query cannot be empty".to_string(),
+        ));
     }
     let pool = get_pool().await?;
     let threshold = req.threshold.unwrap_or(0.7).clamp(-1.0, 1.0);
@@ -1627,7 +1625,8 @@ mod tests {
     #[test]
     fn semantic_similarity_prefers_related_sentence() {
         let query = embed_text_for_semantic("database migration checkpoint incremental import");
-        let related = embed_text_for_semantic("incremental import checkpoint for database migration");
+        let related =
+            embed_text_for_semantic("incremental import checkpoint for database migration");
         let unrelated = embed_text_for_semantic("holiday beach music and mountain hiking");
         let related_score = cosine_similarity(&query, &related);
         let unrelated_score = cosine_similarity(&query, &unrelated);

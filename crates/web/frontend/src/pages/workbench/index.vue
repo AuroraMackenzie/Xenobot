@@ -7,7 +7,7 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <div class="relative z-0 flex h-full flex-col bg-white pt-4 dark:bg-[var(--color-page-dark)]">
+  <div class="xeno-analysis-shell relative z-0 flex h-full flex-col pt-4">
     <!-- Header -->
     <PageHeader
       :title="t('tools.title')"
@@ -18,7 +18,16 @@ const { t } = useI18n()
 
     <!-- Content -->
     <div class="flex-1 overflow-auto p-6">
-      <BatchManageTab />
+      <div class="xeno-panel rounded-2xl p-4 sm:p-5">
+        <BatchManageTab />
+      </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.xeno-analysis-shell {
+  background: transparent;
+  color: var(--xeno-text-main);
+}
+</style>

@@ -30,6 +30,10 @@ pub enum ApiError {
     #[error("Invalid request: {0}")]
     InvalidRequest(String),
 
+    /// Request timed out.
+    #[error("Request timeout: {0}")]
+    Timeout(String),
+
     /// Resource not found.
     #[error("Resource not found: {0}")]
     NotFound(String),
@@ -65,6 +69,7 @@ impl ApiError {
             ApiError::Database(_) => axum::http::StatusCode::INTERNAL_SERVER_ERROR,
             ApiError::Auth(_) => axum::http::StatusCode::UNAUTHORIZED,
             ApiError::InvalidRequest(_) => axum::http::StatusCode::BAD_REQUEST,
+            ApiError::Timeout(_) => axum::http::StatusCode::REQUEST_TIMEOUT,
             ApiError::NotFound(_) => axum::http::StatusCode::NOT_FOUND,
             ApiError::Internal(_) => axum::http::StatusCode::INTERNAL_SERVER_ERROR,
             ApiError::NotImplemented(_) => axum::http::StatusCode::NOT_IMPLEMENTED,

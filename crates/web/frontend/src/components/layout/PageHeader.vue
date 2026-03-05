@@ -14,7 +14,7 @@ defineProps<{
 </script>
 
 <template>
-  <div class="relative border-b border-gray-200/50 px-6 pb-2 dark:border-gray-800/50">
+  <div class="xeno-page-header relative px-6 pb-2">
     <!-- Drag zone covering top safe-area with platform-aware height.
          macOS: 16px padding + 16px = 32px; Windows/Linux: 32px padding + 16px = 48px -->
     <div class="titlebar-drag-cover" />
@@ -29,10 +29,10 @@ defineProps<{
           <UIcon :name="icon" class="h-5 w-5 text-white" />
         </div>
         <div>
-          <h1 class="text-lg font-semibold text-gray-900 dark:text-white">
+          <h1 class="text-lg font-semibold text-[var(--xeno-text-main)]">
             {{ title }}
           </h1>
-          <p v-if="description" class="text-xs text-gray-500 dark:text-gray-400">
+          <p v-if="description" class="text-xs text-[var(--xeno-text-secondary)]">
             {{ description }}
           </p>
         </div>
@@ -62,5 +62,11 @@ defineProps<{
   top: calc(-1 * var(--titlebar-area-height));
   height: calc(var(--titlebar-area-height) + 1rem);
   -webkit-app-region: drag;
+}
+
+.xeno-page-header {
+  border-bottom: 1px solid var(--xeno-border-soft);
+  background: linear-gradient(180deg, var(--xeno-surface-muted), transparent 78%);
+  backdrop-filter: blur(12px) saturate(126%);
 }
 </style>
