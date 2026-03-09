@@ -69,7 +69,6 @@ fn main() {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs()
-            .to_string()
     );
 
     // Re-run if build script changes

@@ -8,17 +8,17 @@ use crate::protocol::{
     ServerInfo, ToolCallRequest, ToolCallResult, ToolResult,
 };
 use axum::{
+    Json, Router,
     extract::{
-        ws::{Message, WebSocket, WebSocketUpgrade},
         ConnectInfo, Path, State,
+        ws::{Message, WebSocket, WebSocketUpgrade},
     },
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Sse},
     routing::{get, post},
-    Json, Router,
 };
 use futures_util::{SinkExt, StreamExt};
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -26,7 +26,7 @@ use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{RwLock, mpsc};
 use tokio_stream;
 use tracing::{debug, error, info};
 
@@ -170,6 +170,24 @@ impl McpServer {
             .await?;
         self.register_tool("chat_history".to_string(), Box::new(chat_records_tool))
             .await?;
+        self.register_tool("member_stats".to_string(), Box::new(member_stats_tool))
+            .await?;
+        self.register_tool("get_member_stats".to_string(), Box::new(member_stats_tool))
+            .await?;
+        self.register_tool("time_stats".to_string(), Box::new(time_stats_tool))
+            .await?;
+        self.register_tool("get_time_stats".to_string(), Box::new(time_stats_tool))
+            .await?;
+        self.register_tool(
+            "session_summary".to_string(),
+            Box::new(session_summary_tool),
+        )
+        .await?;
+        self.register_tool(
+            "get_session_summary".to_string(),
+            Box::new(session_summary_tool),
+        )
+        .await?;
 
         Ok(())
     }
@@ -199,6 +217,11 @@ impl McpServer {
                     "recent_sessions",
                     "chat_records",
                     "get_current_time"
+                ],
+                "secondBatch": [
+                    "member_stats",
+                    "time_stats",
+                    "session_summary"
                 ]
             },
             "resources": {
@@ -209,7 +232,7 @@ impl McpServer {
         })
         .to_string();
         let integrations_text = serde_json::json!({
-            "targets": ["claude-desktop", "chatwise", "opencode"],
+            "targets": ["claude-desktop", "chatwise", "opencode", "pencil"],
             "hint": "use /integrations/{target} to fetch a transport preset"
         })
         .to_string();
@@ -876,6 +899,144 @@ fn chat_records_tool(args: Value) -> Result<Value> {
     }))
 }
 
+fn member_stats_tool(args: Value) -> Result<Value> {
+    let meta_id = parse_required_i64(&args, "session_id")?;
+    let limit = parse_limit(&args, 20, 500)?;
+    let conn = open_xenobot_db()?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT
+                m.id,
+                COALESCE(msg.sender_group_nickname, msg.sender_account_name, m.group_nickname, m.account_name, m.platform_id, '') as sender_name,
+                CAST(COUNT(*) AS INTEGER) as message_count
+             FROM message msg
+             LEFT JOIN member m ON m.id = msg.sender_id
+             WHERE msg.meta_id = ?1
+             GROUP BY m.id, sender_name
+             ORDER BY message_count DESC, m.id ASC
+             LIMIT ?2",
+        )
+        .map_err(|e| McpError::Tool(format!("prepare member_stats failed: {e}")))?;
+    let rows = stmt
+        .query_map(params![meta_id, limit], |row| {
+            Ok(serde_json::json!({
+                "memberId": row.get::<_, Option<i64>>(0)?,
+                "senderName": row.get::<_, String>(1)?,
+                "messageCount": row.get::<_, i64>(2)?,
+            }))
+        })
+        .map_err(|e| McpError::Tool(format!("query member_stats failed: {e}")))?;
+
+    let mut items = Vec::new();
+    for row in rows {
+        items.push(row.map_err(|e| McpError::Tool(format!("read member_stats row failed: {e}")))?);
+    }
+    Ok(serde_json::json!({
+        "sessionId": meta_id,
+        "count": items.len(),
+        "members": items
+    }))
+}
+
+fn time_stats_tool(args: Value) -> Result<Value> {
+    let meta_id = parse_required_i64(&args, "session_id")?;
+    let granularity = parse_granularity(&args);
+    let conn = open_xenobot_db()?;
+
+    let period_sql = match granularity.as_str() {
+        "hour" => "strftime('%H', datetime(msg.ts, 'unixepoch'))",
+        "weekday" => "strftime('%w', datetime(msg.ts, 'unixepoch'))",
+        "month" => "strftime('%m', datetime(msg.ts, 'unixepoch'))",
+        "year" => "strftime('%Y', datetime(msg.ts, 'unixepoch'))",
+        _ => "strftime('%Y-%m-%d', datetime(msg.ts, 'unixepoch'))",
+    };
+    let sql = format!(
+        "SELECT
+            {period_sql} as period,
+            CAST(COUNT(*) AS INTEGER) as count
+         FROM message msg
+         WHERE msg.meta_id = ?1
+         GROUP BY period
+         ORDER BY period ASC"
+    );
+
+    let mut stmt = conn
+        .prepare(&sql)
+        .map_err(|e| McpError::Tool(format!("prepare time_stats failed: {e}")))?;
+    let rows = stmt
+        .query_map(params![meta_id], |row| {
+            Ok(serde_json::json!({
+                "period": row.get::<_, String>(0)?,
+                "count": row.get::<_, i64>(1)?,
+            }))
+        })
+        .map_err(|e| McpError::Tool(format!("query time_stats failed: {e}")))?;
+
+    let mut buckets = Vec::new();
+    let mut total_messages = 0_i64;
+    for row in rows {
+        let item = row.map_err(|e| McpError::Tool(format!("read time_stats row failed: {e}")))?;
+        total_messages += item["count"].as_i64().unwrap_or(0);
+        buckets.push(item);
+    }
+
+    Ok(serde_json::json!({
+        "sessionId": meta_id,
+        "granularity": granularity,
+        "bucketCount": buckets.len(),
+        "totalMessages": total_messages,
+        "buckets": buckets
+    }))
+}
+
+fn session_summary_tool(args: Value) -> Result<Value> {
+    let meta_id = parse_required_i64(&args, "session_id")?;
+    let conn = open_xenobot_db()?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, name, platform, chat_type, imported_at
+             FROM meta
+             WHERE id = ?1",
+        )
+        .map_err(|e| McpError::Tool(format!("prepare session_summary meta failed: {e}")))?;
+    let meta_row = stmt
+        .query_row(params![meta_id], |row| {
+            Ok(serde_json::json!({
+                "id": row.get::<_, i64>(0)?,
+                "name": row.get::<_, String>(1)?,
+                "platform": row.get::<_, String>(2)?,
+                "chatType": row.get::<_, String>(3)?,
+                "importedAt": row.get::<_, i64>(4)?,
+            }))
+        })
+        .map_err(|e| McpError::Tool(format!("query session_summary meta failed: {e}")))?;
+
+    let (message_count, unique_senders, min_ts, max_ts): (i64, i64, Option<i64>, Option<i64>) =
+        conn.query_row(
+            "SELECT
+                CAST(COUNT(*) AS INTEGER),
+                CAST(COUNT(DISTINCT sender_id) AS INTEGER),
+                MIN(ts),
+                MAX(ts)
+             FROM message
+             WHERE meta_id = ?1",
+            params![meta_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        )
+        .map_err(|e| McpError::Tool(format!("query session_summary stats failed: {e}")))?;
+
+    Ok(serde_json::json!({
+        "session": meta_row,
+        "summary": {
+            "messageCount": message_count,
+            "uniqueSenders": unique_senders,
+            "startTs": min_ts,
+            "endTs": max_ts
+        }
+    }))
+}
+
 fn parse_limit(args: &Value, default_limit: i64, max_limit: i64) -> Result<i64> {
     let limit = parse_optional_i64(args, "limit").unwrap_or(default_limit);
     Ok(limit.max(1).min(max_limit))
@@ -893,6 +1054,14 @@ fn parse_required_i64(args: &Value, key: &str) -> Result<i64> {
 
 fn parse_optional_i64(args: &Value, key: &str) -> Option<i64> {
     arg_value(args, key).and_then(|v| v.as_i64())
+}
+
+fn parse_granularity(args: &Value) -> String {
+    arg_value(args, "granularity")
+        .and_then(|v| v.as_str())
+        .map(|s| s.trim().to_lowercase())
+        .filter(|s| matches!(s.as_str(), "day" | "hour" | "weekday" | "month" | "year"))
+        .unwrap_or_else(|| "day".to_string())
 }
 
 fn parse_optional_keyword(args: &Value) -> Option<String> {
@@ -925,8 +1094,8 @@ fn parse_keyword(args: &Value) -> Result<String> {
 
 fn arg_value<'a>(args: &'a Value, key: &str) -> Option<&'a Value> {
     args.get(key)
-        .or_else(|| args.get(&snake_to_camel(key)))
-        .or_else(|| args.get(&camel_to_snake(key)))
+        .or_else(|| args.get(snake_to_camel(key)))
+        .or_else(|| args.get(camel_to_snake(key)))
 }
 
 fn snake_to_camel(key: &str) -> String {
@@ -993,6 +1162,11 @@ fn integration_catalog() -> Vec<IntegrationCatalogItem> {
             id: "opencode".to_string(),
             name: "Opencode".to_string(),
             description: "Configuration snippet for Opencode MCP integration".to_string(),
+        },
+        IntegrationCatalogItem {
+            id: "pencil".to_string(),
+            name: "Pencil".to_string(),
+            description: "Configuration snippet for Pencil-compatible MCP integration".to_string(),
         },
     ]
 }
@@ -1072,6 +1246,31 @@ fn build_integration_preset(config: &McpServerConfig, target: &str) -> Option<In
             notes: vec![
                 "Map this preset to the MCP server section in your Opencode settings.".to_string(),
                 "If Opencode supports WebSocket MCP in your version, you can also use the ws URL.".to_string(),
+            ],
+        }),
+        "pencil" => Some(IntegrationPreset {
+            id: "pencil".to_string(),
+            name: "Pencil".to_string(),
+            description: "Pencil-compatible MCP configuration using Xenobot SSE endpoint".to_string(),
+            transport: serde_json::json!({
+                "sse": sse_url,
+                "websocket": ws_url,
+                "tools": tools_url,
+            }),
+            configuration: serde_json::json!({
+                "servers": [
+                    {
+                        "name": "xenobot",
+                        "transport": "sse",
+                        "url": sse_url,
+                        "toolsUrl": tools_url
+                    }
+                ]
+            }),
+            notes: vec![
+                "Use this preset when your Pencil build supports custom MCP servers over SSE.".to_string(),
+                "If Pencil expects different UI labels, keep the same SSE URL and map the values manually.".to_string(),
+                "When a direct Pencil tool entry is not available in the current runtime, fetch this preset from Xenobot and apply it in the Pencil host.".to_string(),
             ],
         }),
         _ => None,
@@ -1314,6 +1513,56 @@ fn tool_spec_for_name(name: &str) -> serde_json::Value {
                 "additionalProperties": true
             }),
         ),
+        "member_stats" | "get_member_stats" => (
+            "Aggregate message counts by member in a session.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "sessionId": {"type": "integer"},
+                    "session_id": {"type": "integer"},
+                    "limit": {"type": "integer"}
+                },
+                "anyOf": [
+                    {"required": ["sessionId"]},
+                    {"required": ["session_id"]}
+                ],
+                "additionalProperties": true
+            }),
+        ),
+        "time_stats" | "get_time_stats" => (
+            "Aggregate message distribution by time buckets.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "sessionId": {"type": "integer"},
+                    "session_id": {"type": "integer"},
+                    "granularity": {
+                        "type": "string",
+                        "enum": ["day", "hour", "weekday", "month", "year"]
+                    }
+                },
+                "anyOf": [
+                    {"required": ["sessionId"]},
+                    {"required": ["session_id"]}
+                ],
+                "additionalProperties": true
+            }),
+        ),
+        "session_summary" | "get_session_summary" => (
+            "Return session profile and aggregate counters.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "sessionId": {"type": "integer"},
+                    "session_id": {"type": "integer"}
+                },
+                "anyOf": [
+                    {"required": ["sessionId"]},
+                    {"required": ["session_id"]}
+                ],
+                "additionalProperties": true
+            }),
+        ),
         "recent_sessions" | "query_chats" | "list_sessions" => (
             "List recent sessions.",
             serde_json::json!({
@@ -1366,6 +1615,20 @@ fn tool_spec_for_name(name: &str) -> serde_json::Value {
 
 fn build_tool_specs(names: &[String]) -> Vec<serde_json::Value> {
     names.iter().map(|name| tool_spec_for_name(name)).collect()
+}
+
+fn classify_tool_error_for_streamable(err: &McpError) -> (i64, &'static str) {
+    match err {
+        McpError::Argument(_) => (-32602, "invalid_params"),
+        _ => (-32002, "tool_error"),
+    }
+}
+
+fn classify_tool_error_for_http(err: &McpError) -> (StatusCode, &'static str) {
+    match err {
+        McpError::Argument(_) => (StatusCode::BAD_REQUEST, "invalid_params"),
+        _ => (StatusCode::INTERNAL_SERVER_ERROR, "tool_error"),
+    }
 }
 
 async fn handle_streamable_http_rpc(
@@ -1489,19 +1752,22 @@ async fn handle_streamable_http_rpc(
                     )),
                 )
                     .into_response(),
-                Err(e) => (
-                    StatusCode::OK,
-                    Json(json_rpc_err(
-                        id,
-                        -32002,
-                        "tool_error",
-                        Some(serde_json::json!({
-                            "tool": tool_name,
-                            "error": e.to_string(),
-                        })),
-                    )),
-                )
-                    .into_response(),
+                Err(e) => {
+                    let (code, message) = classify_tool_error_for_streamable(&e);
+                    (
+                        StatusCode::OK,
+                        Json(json_rpc_err(
+                            id,
+                            code,
+                            message,
+                            Some(serde_json::json!({
+                                "tool": tool_name,
+                                "error": e.to_string(),
+                            })),
+                        )),
+                    )
+                        .into_response()
+                }
             }
         }
         "resources/list" | "resource/list" => {
@@ -1604,15 +1870,18 @@ async fn handle_http_tool_call(
                 })),
             )
                 .into_response(),
-            Err(e) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({
-                    "success": false,
-                    "code": "tool_error",
-                    "error": e.to_string()
-                })),
-            )
-                .into_response(),
+            Err(e) => {
+                let (status, code) = classify_tool_error_for_http(&e);
+                (
+                    status,
+                    Json(serde_json::json!({
+                        "success": false,
+                        "code": code,
+                        "error": e.to_string()
+                    })),
+                )
+                    .into_response()
+            }
         },
         None => (
             StatusCode::NOT_FOUND,
@@ -1702,7 +1971,7 @@ fn extract_client_info(headers: &HeaderMap) -> Option<ClientInfo> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::body::{to_bytes, Body};
+    use axum::body::{Body, to_bytes};
     use axum::http::{Method, Request, StatusCode};
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -1869,6 +2138,12 @@ mod tests {
             "query_chats",
             "chat_records",
             "chat_history",
+            "member_stats",
+            "get_member_stats",
+            "time_stats",
+            "get_time_stats",
+            "session_summary",
+            "get_session_summary",
         ] {
             assert!(tools.contains_key(name), "missing tool alias: {name}");
         }
@@ -1990,6 +2265,9 @@ mod tests {
             "query_chats",
             "chat_records",
             "chat_history",
+            "member_stats",
+            "time_stats",
+            "session_summary",
         ] {
             assert!(
                 names.contains(required),
@@ -2049,6 +2327,40 @@ mod tests {
         assert_eq!(query_contacts_json["tool"], "query_contacts");
         assert!(query_contacts_json["result"]["count"].as_u64().unwrap_or(0) >= 1);
 
+        let (status, query_groups_json) = request_json(
+            &app,
+            Method::POST,
+            "/tools/query_groups",
+            Some(serde_json::json!({
+                "limit": 10,
+                "offset": 0
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(query_groups_json["success"], true);
+        assert_eq!(query_groups_json["tool"], "query_groups");
+        assert!(query_groups_json["result"]["count"].as_u64().unwrap_or(0) >= 1);
+
+        let (status, recent_sessions_json) = request_json(
+            &app,
+            Method::POST,
+            "/tools/recent_sessions",
+            Some(serde_json::json!({
+                "limit": 10
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(recent_sessions_json["success"], true);
+        assert_eq!(recent_sessions_json["tool"], "recent_sessions");
+        assert!(
+            recent_sessions_json["result"]["count"]
+                .as_u64()
+                .unwrap_or(0)
+                >= 1
+        );
+
         let (status, history_alias_json) = request_json(
             &app,
             Method::POST,
@@ -2084,6 +2396,56 @@ mod tests {
         assert_eq!(alias_time_json["tool"], "get_current_time");
         assert!(alias_time_json["result"]["unix"].is_number());
 
+        let (status, member_stats_json) = request_json(
+            &app,
+            Method::POST,
+            "/tools/member_stats",
+            Some(serde_json::json!({
+                "sessionId": 1,
+                "limit": 10
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(member_stats_json["success"], true);
+        assert_eq!(member_stats_json["tool"], "member_stats");
+        assert!(member_stats_json["result"]["count"].as_u64().unwrap_or(0) >= 1);
+
+        let (status, time_stats_json) = request_json(
+            &app,
+            Method::POST,
+            "/tools/time_stats",
+            Some(serde_json::json!({
+                "session_id": 1,
+                "granularity": "day"
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(time_stats_json["success"], true);
+        assert_eq!(time_stats_json["tool"], "time_stats");
+        assert!(
+            time_stats_json["result"]["totalMessages"]
+                .as_u64()
+                .unwrap_or(0)
+                >= 1
+        );
+
+        let (status, summary_json) = request_json(
+            &app,
+            Method::POST,
+            "/tools/session_summary",
+            Some(serde_json::json!({
+                "sessionId": 1
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(summary_json["success"], true);
+        assert_eq!(summary_json["tool"], "session_summary");
+        assert_eq!(summary_json["result"]["session"]["id"], 1);
+        assert_eq!(summary_json["result"]["summary"]["messageCount"], 2);
+
         let (status, missing_tool_json) = request_json(
             &app,
             Method::POST,
@@ -2104,12 +2466,14 @@ mod tests {
             })),
         )
         .await;
-        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(status, StatusCode::BAD_REQUEST);
         assert_eq!(bad_args_json["success"], false);
-        assert_eq!(bad_args_json["code"], "tool_error");
-        assert!(bad_args_json["error"]
-            .as_str()
-            .is_some_and(|text| text.contains("missing required integer field")));
+        assert_eq!(bad_args_json["code"], "invalid_params");
+        assert!(
+            bad_args_json["error"]
+                .as_str()
+                .is_some_and(|text| text.contains("missing required integer field"))
+        );
 
         if let Some(previous) = previous_db {
             std::env::set_var("XENOBOT_DB_PATH", previous);
@@ -2156,9 +2520,36 @@ mod tests {
             init_json["result"]["protocolVersion"],
             crate::protocol::MCP_PROTOCOL_VERSION
         );
-        assert!(init_json["result"]["serverInfo"]["name"]
-            .as_str()
-            .is_some_and(|value| !value.trim().is_empty()));
+        assert!(
+            init_json["result"]["serverInfo"]["name"]
+                .as_str()
+                .is_some_and(|value| !value.trim().is_empty())
+        );
+        assert_eq!(
+            init_json["result"]["capabilities"]["tools"]["supported"],
+            true
+        );
+        assert_eq!(
+            init_json["result"]["capabilities"]["tools"]["listChanged"],
+            true
+        );
+        assert_eq!(
+            init_json["result"]["capabilities"]["resources"]["supported"],
+            true
+        );
+        assert_eq!(
+            init_json["result"]["capabilities"]["resources"]["subscribe"],
+            true
+        );
+        assert_eq!(
+            init_json["result"]["capabilities"]["roots"]["supported"],
+            false
+        );
+        assert!(
+            init_json["result"]["instructions"]
+                .as_str()
+                .is_some_and(|text| !text.trim().is_empty())
+        );
 
         let (status, list_json) = request_json(
             &app,
@@ -2178,20 +2569,27 @@ mod tests {
             .iter()
             .filter_map(|tool| tool["name"].as_str())
             .collect::<std::collections::HashSet<_>>();
-        assert!(list_json["result"]["tools"]
-            .as_array()
-            .is_some_and(|arr| arr.iter().all(|tool| tool["inputSchema"].is_object())));
-        assert!(list_json["result"]["tools"]
-            .as_array()
-            .is_some_and(|arr| arr.iter().any(|tool| {
-                tool["name"] == "chat_records"
-                    && tool["inputSchema"]["properties"]["sessionId"].is_object()
-            })));
+        assert!(
+            list_json["result"]["tools"]
+                .as_array()
+                .is_some_and(|arr| arr.iter().all(|tool| tool["inputSchema"].is_object()))
+        );
+        assert!(
+            list_json["result"]["tools"]
+                .as_array()
+                .is_some_and(|arr| arr.iter().any(|tool| {
+                    tool["name"] == "chat_records"
+                        && tool["inputSchema"]["properties"]["sessionId"].is_object()
+                }))
+        );
         for required in [
             "chat_records",
             "query_contacts",
             "query_groups",
             "get_current_time",
+            "member_stats",
+            "time_stats",
+            "session_summary",
         ] {
             assert!(
                 tool_names.contains(required),
@@ -2268,6 +2666,32 @@ mod tests {
         assert_eq!(status, StatusCode::OK);
         assert_eq!(bad_params_json["error"]["code"], -32602);
         assert_eq!(bad_params_json["error"]["message"], "invalid_params");
+
+        let (status, invalid_tool_args_json) = request_json(
+            &app,
+            Method::POST,
+            "/mcp",
+            Some(serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": "call-4",
+                "method": "tools/call",
+                "params": {
+                    "name": "chat_records",
+                    "arguments": {
+                        "keyword": "hello"
+                    }
+                }
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(invalid_tool_args_json["error"]["code"], -32602);
+        assert_eq!(invalid_tool_args_json["error"]["message"], "invalid_params");
+        assert!(
+            invalid_tool_args_json["error"]["data"]["error"]
+                .as_str()
+                .is_some_and(|text| text.contains("missing required integer field"))
+        );
 
         let (status, unknown_method_json) = request_json(
             &app,
@@ -2359,20 +2783,31 @@ mod tests {
 
         let (status, catalog_json) = request_json(&app, Method::GET, "/integrations", None).await;
         assert_eq!(status, StatusCode::OK);
-        assert!(catalog_json["integrations"]
-            .as_array()
-            .is_some_and(|arr| !arr.is_empty()));
-        assert!(catalog_json["integrations"]
-            .as_array()
-            .is_some_and(|arr| arr.iter().any(|item| item["id"] == "claude-desktop")));
+        assert!(
+            catalog_json["integrations"]
+                .as_array()
+                .is_some_and(|arr| !arr.is_empty())
+        );
+        assert!(
+            catalog_json["integrations"]
+                .as_array()
+                .is_some_and(|arr| arr.iter().any(|item| item["id"] == "claude-desktop"))
+        );
+        assert!(
+            catalog_json["integrations"]
+                .as_array()
+                .is_some_and(|arr| arr.iter().any(|item| item["id"] == "pencil"))
+        );
 
         let (status, preset_json) =
             request_json(&app, Method::GET, "/integrations/claude-desktop", None).await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(preset_json["id"], "claude-desktop");
-        assert!(preset_json["transport"]["sse"]
-            .as_str()
-            .is_some_and(|url| url.ends_with("/sse")));
+        assert!(
+            preset_json["transport"]["sse"]
+                .as_str()
+                .is_some_and(|url| url.ends_with("/sse"))
+        );
         assert!(preset_json["configuration"]["mcpServers"]["xenobot"].is_object());
         assert_eq!(
             preset_json["configuration"]["mcpServers"]["xenobot"]["command"],
@@ -2388,23 +2823,46 @@ mod tests {
             request_json(&app, Method::GET, "/integrations/chatwise", None).await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(chatwise_json["id"], "chatwise");
-        assert!(chatwise_json["configuration"]["servers"]
-            .as_array()
-            .is_some_and(|arr| arr.first().is_some_and(|item| item["name"] == "xenobot")));
-        assert!(chatwise_json["configuration"]["servers"]
-            .as_array()
-            .is_some_and(|arr| arr.first().is_some_and(|item| item["transport"] == "sse")));
+        assert!(
+            chatwise_json["configuration"]["servers"]
+                .as_array()
+                .is_some_and(|arr| arr.first().is_some_and(|item| item["name"] == "xenobot"))
+        );
+        assert!(
+            chatwise_json["configuration"]["servers"]
+                .as_array()
+                .is_some_and(|arr| arr.first().is_some_and(|item| item["transport"] == "sse"))
+        );
 
         let (status, opencode_json) =
             request_json(&app, Method::GET, "/integrations/opencode", None).await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(opencode_json["id"], "opencode");
-        assert!(opencode_json["configuration"]["mcpServers"]
-            .as_array()
-            .is_some_and(|arr| arr.first().is_some_and(|item| item["name"] == "xenobot")));
-        assert!(opencode_json["configuration"]["mcpServers"]
-            .as_array()
-            .is_some_and(|arr| arr.first().is_some_and(|item| item["transport"] == "sse")));
+        assert!(
+            opencode_json["configuration"]["mcpServers"]
+                .as_array()
+                .is_some_and(|arr| arr.first().is_some_and(|item| item["name"] == "xenobot"))
+        );
+        assert!(
+            opencode_json["configuration"]["mcpServers"]
+                .as_array()
+                .is_some_and(|arr| arr.first().is_some_and(|item| item["transport"] == "sse"))
+        );
+
+        let (status, pencil_json) =
+            request_json(&app, Method::GET, "/integrations/pencil", None).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(pencil_json["id"], "pencil");
+        assert!(
+            pencil_json["configuration"]["servers"]
+                .as_array()
+                .is_some_and(|arr| arr.first().is_some_and(|item| item["name"] == "xenobot"))
+        );
+        assert!(
+            pencil_json["configuration"]["servers"]
+                .as_array()
+                .is_some_and(|arr| arr.first().is_some_and(|item| item["transport"] == "sse"))
+        );
 
         let (status, unknown_json) = request_json(
             &app,
@@ -2414,9 +2872,11 @@ mod tests {
         )
         .await;
         assert_eq!(status, StatusCode::NOT_FOUND);
-        assert!(unknown_json["supported"]
-            .as_array()
-            .is_some_and(|arr| arr.iter().any(|item| item == "claude-desktop")));
+        assert!(
+            unknown_json["supported"]
+                .as_array()
+                .is_some_and(|arr| arr.iter().any(|item| item == "claude-desktop"))
+        );
     }
 
     fn percent_encode_path(value: &str) -> String {
@@ -2456,9 +2916,11 @@ mod tests {
         assert_eq!(status, StatusCode::OK);
         assert_eq!(read_json["uri"], first_uri);
         assert!(read_json["content"].is_array());
-        assert!(read_json["mimeType"]
-            .as_str()
-            .is_some_and(|mime| mime.contains("json")));
+        assert!(
+            read_json["mimeType"]
+                .as_str()
+                .is_some_and(|mime| mime.contains("json"))
+        );
     }
 
     #[tokio::test]
@@ -2487,6 +2949,23 @@ mod tests {
         assert_eq!(list_json["jsonrpc"], "2.0");
         assert_eq!(list_json["id"], "resources-list-1");
         assert!(list_json["result"]["count"].as_u64().unwrap_or(0) >= 1);
+        let listed_uris = list_json["result"]["resources"]
+            .as_array()
+            .expect("resources/list should return resources array")
+            .iter()
+            .filter_map(|item| item["uri"].as_str())
+            .map(|uri| uri.to_string())
+            .collect::<std::collections::HashSet<_>>();
+        for required_uri in [
+            "xenobot://server/info",
+            "xenobot://server/capabilities",
+            "xenobot://server/integrations",
+        ] {
+            assert!(
+                listed_uris.contains(required_uri),
+                "missing required builtin resource URI: {required_uri}"
+            );
+        }
         let resource_uri = list_json["result"]["resources"]
             .as_array()
             .and_then(|arr| arr.first())
@@ -2512,9 +2991,11 @@ mod tests {
         assert_eq!(read_json["jsonrpc"], "2.0");
         assert_eq!(read_json["id"], "resources-read-1");
         assert!(read_json["result"]["content"].is_array());
-        assert!(read_json["result"]["mimeType"]
-            .as_str()
-            .is_some_and(|mime| mime.contains("json")));
+        assert!(
+            read_json["result"]["mimeType"]
+                .as_str()
+                .is_some_and(|mime| mime.contains("json"))
+        );
 
         let (status, missing_param_json) = request_json(
             &app,
@@ -2586,9 +3067,11 @@ mod tests {
         )
         .await;
         assert_eq!(status, StatusCode::OK);
-        assert!(tool_list_json["result"]["tools"]
-            .as_array()
-            .is_some_and(|arr| arr.iter().any(|item| item["name"] == "get_current_time")));
+        assert!(
+            tool_list_json["result"]["tools"]
+                .as_array()
+                .is_some_and(|arr| arr.iter().any(|item| item["name"] == "get_current_time"))
+        );
 
         let (status, tool_call_json) = request_json(
             &app,
@@ -2667,9 +3150,11 @@ mod tests {
         .await;
         assert_eq!(status, StatusCode::OK);
         assert!(resource_read_json["result"]["content"].is_array());
-        assert!(resource_read_json["result"]["mimeType"]
-            .as_str()
-            .is_some_and(|mime| mime.contains("json")));
+        assert!(
+            resource_read_json["result"]["mimeType"]
+                .as_str()
+                .is_some_and(|mime| mime.contains("json"))
+        );
 
         let (status, nested_resource_read_json) = request_json(
             &app,
@@ -2689,9 +3174,11 @@ mod tests {
         .await;
         assert_eq!(status, StatusCode::OK);
         assert!(nested_resource_read_json["result"]["content"].is_array());
-        assert!(nested_resource_read_json["result"]["mimeType"]
-            .as_str()
-            .is_some_and(|mime| mime.contains("json")));
+        assert!(
+            nested_resource_read_json["result"]["mimeType"]
+                .as_str()
+                .is_some_and(|mime| mime.contains("json"))
+        );
 
         if let Some(previous) = previous_db {
             std::env::set_var("XENOBOT_DB_PATH", previous);
@@ -2724,5 +3211,31 @@ mod tests {
         let preset = build_integration_preset(&config, "opencode").expect("preset should exist");
         assert_eq!(preset.id, "opencode");
         assert!(preset.configuration["mcpServers"][0].is_object());
+    }
+
+    #[test]
+    fn test_build_http_base_url_maps_wildcard_bind_to_loopback() {
+        let mut config = McpServerConfig::default();
+        config.bind_address = "0.0.0.0".to_string();
+        config.port = 19191;
+
+        let base_url = build_http_base_url(&config);
+        assert_eq!(base_url, "http://127.0.0.1:19191");
+    }
+
+    #[test]
+    fn test_build_integration_preset_uses_custom_bind_and_alias_target() {
+        let mut config = McpServerConfig::default();
+        config.bind_address = "192.168.56.10".to_string();
+        config.port = 18081;
+
+        let preset =
+            build_integration_preset(&config, "claude").expect("claude alias preset should exist");
+        assert_eq!(preset.id, "claude-desktop");
+        assert_eq!(preset.transport["sse"], "http://192.168.56.10:18081/sse");
+        assert_eq!(
+            preset.configuration["mcpServers"]["xenobot"]["args"][2],
+            "http://192.168.56.10:18081/sse"
+        );
     }
 }

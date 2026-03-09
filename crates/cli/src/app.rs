@@ -7,6 +7,7 @@ use crate::commands::{
     AccountCommand, AdvancedAnalysis, AnalysisType, Cli, Commands, DecryptArgs, ExportArgs,
     ExportFormat, ImportArgs, KeyArgs, MonitorArgs, OutputFormat, PlatformFormat, QueryArgs,
     QueryType, SourceArgs, SourceCommand, TimeGranularity, WebhookArgs, WebhookCommand,
+    WebhookDispatchCommand,
 };
 use crate::error::{CliError, Result};
 use clap::Parser;
@@ -18,18 +19,17 @@ use std::collections::VecDeque;
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
+use xenobot_core::webhook::{
+    WebhookDeadLetterEntry, overwrite_dead_letter_entries, read_dead_letter_entries,
+};
 #[cfg(all(feature = "analysis", feature = "api"))]
 use xenobot_core::webhook::{
-    append_dead_letter_entry, build_dead_letter_entry, merge_webhook_dispatch_stats,
-    webhook_rule_matches_event, WebhookDispatchStats, WebhookMessageCreatedEvent, WebhookRule,
-};
-use xenobot_core::webhook::{
-    overwrite_dead_letter_entries, read_dead_letter_entries, WebhookDeadLetterEntry,
+    WebhookDispatchStats, WebhookMessageCreatedEvent, WebhookRule, append_dead_letter_entry,
+    build_dead_letter_entry, merge_webhook_dispatch_stats, webhook_rule_matches_event,
 };
 use xenobot_core::{
-    discover_sources_for_all_platforms, discover_sources_for_platform,
-    legal_safe_runtime_platforms, platform_id as core_platform_id, Platform as RuntimePlatform,
-    SourceCandidate,
+    Platform as RuntimePlatform, SourceCandidate, discover_sources_for_all_platforms,
+    discover_sources_for_platform, legal_safe_runtime_platforms, platform_id as core_platform_id,
 };
 
 /// Configuration for the CLI application.
@@ -72,8 +72,10 @@ impl App {
 
     /// Load configuration from file and environment.
     fn load_config(cli: &Cli) -> Result<AppConfig> {
-        let mut config = AppConfig::default();
-        config.verbosity = cli.verbose;
+        let mut config = AppConfig {
+            verbosity: cli.verbose,
+            ..AppConfig::default()
+        };
 
         // Load configuration file if specified
         if let Some(config_path) = &cli.config {
@@ -473,7 +475,7 @@ impl App {
                     *cors,
                     *websocket,
                 ),
-                ApiCommand::Status => print_api_server_status(),
+                ApiCommand::Status { format } => print_api_server_status(format),
                 ApiCommand::Stop { force } => stop_api_server(*force),
                 ApiCommand::Restart { force } => restart_api_server(*force),
                 ApiCommand::Smoke { db_path } => run_api_smoke_check(db_path.clone()),
@@ -542,6 +544,12 @@ impl App {
                     format.clone(),
                     *timeout_ms,
                 ),
+                ApiCommand::McpTools {
+                    url,
+                    mode,
+                    format,
+                    timeout_ms,
+                } => run_mcp_tools_list(url.clone(), mode.clone(), format.clone(), *timeout_ms),
                 ApiCommand::McpResources {
                     url,
                     mode,
@@ -746,11 +754,14 @@ impl App {
                     let format_hint = args.format;
                     let incremental = args.incremental;
                     let merge = args.merge;
-                    let webhook_rules: Vec<WebhookRule> = read_webhook_store()?
+                    let webhook_store = read_webhook_store()?;
+                    let webhook_rules: Vec<WebhookRule> = webhook_store
                         .items
                         .iter()
                         .map(webhook_item_to_rule)
                         .collect();
+                    let webhook_dispatch =
+                        resolve_webhook_dispatch_settings(&webhook_store.dispatch);
                     let import_input = args.input.to_string_lossy().to_string();
                     let total_messages = parsed_chats_for_write
                         .iter()
@@ -820,19 +831,23 @@ impl App {
                             None
                         } else {
                             let client = reqwest::Client::builder()
-                                .timeout(std::time::Duration::from_secs(8))
+                                .timeout(std::time::Duration::from_millis(
+                                    webhook_dispatch.request_timeout_ms,
+                                ))
                                 .build()
                                 .map_err(|e| CliError::Network(e.to_string()))?;
                             Some(spawn_webhook_dispatch_worker(
                                 client,
                                 webhook_rules.clone(),
-                                64,
-                                8,
-                                512,
+                                webhook_dispatch,
                             ))
                         };
                         let mut run_scope_session_ids: std::collections::HashMap<String, i64> =
                             std::collections::HashMap::new();
+                        let mut platform_chat_meta_cache: std::collections::HashMap<
+                            String,
+                            std::collections::HashMap<String, i64>,
+                        > = std::collections::HashMap::new();
 
                         let write_result = async {
                             for (path, chat) in parsed_chats_for_write {
@@ -894,14 +909,22 @@ impl App {
                                     if let Some(id) = run_scope_session_ids.get(&session_key) {
                                         Some(*id)
                                     } else if incremental {
-                                        let candidates = repo
-                                            .list_chats(Some(&platform), 10_000, 0)
-                                            .await
-                                            .map_err(|e| CliError::Database(e.to_string()))?;
-                                        candidates
-                                            .into_iter()
-                                            .find(|meta| meta.name == chat_name)
-                                            .map(|meta| meta.id)
+                                        if !platform_chat_meta_cache.contains_key(&platform) {
+                                            let candidates = repo
+                                                .list_chats(Some(&platform), 10_000, 0)
+                                                .await
+                                                .map_err(|e| CliError::Database(e.to_string()))?;
+                                            let mut name_to_meta = std::collections::HashMap::new();
+                                            for meta in candidates {
+                                                name_to_meta.insert(meta.name, meta.id);
+                                            }
+                                            platform_chat_meta_cache
+                                                .insert(platform.clone(), name_to_meta);
+                                        }
+                                        platform_chat_meta_cache
+                                            .get(&platform)
+                                            .and_then(|name_to_meta| name_to_meta.get(&chat_name))
+                                            .copied()
                                     } else {
                                         None
                                     };
@@ -937,12 +960,18 @@ impl App {
                                     ctx.meta_id = Some(meta_id);
                                 }
                                 run_scope_session_ids.insert(session_key, meta_id);
+                                platform_chat_meta_cache
+                                    .entry(platform.clone())
+                                    .or_default()
+                                    .insert(chat_name.clone(), meta_id);
 
                                 payloads_processed += 1;
                                 let inserted_before = inserted_messages;
                                 let duplicates_before = skipped_duplicates;
                                 let mut dedup_in_batch: std::collections::HashSet<String> =
-                                    std::collections::HashSet::new();
+                                    std::collections::HashSet::with_capacity(
+                                        chat.messages.len().saturating_mul(2).min(262_144),
+                                    );
 
                                 for msg in chat.messages {
                                     processed_messages = processed_messages.saturating_add(1);
@@ -1421,6 +1450,9 @@ impl App {
             WebhookCommand::Add {
                 url,
                 event_type,
+                platform,
+                chat_name,
+                meta_id,
                 sender,
                 keyword,
             } => {
@@ -1432,6 +1464,24 @@ impl App {
                         "webhook url must use http or https".to_string(),
                     ));
                 }
+                if meta_id.is_some_and(|id| id <= 0) {
+                    return Err(CliError::Argument(
+                        "meta-id must be a positive integer".to_string(),
+                    ));
+                }
+
+                let normalize_filter = |input: &Option<String>| {
+                    input
+                        .as_ref()
+                        .map(|v| v.trim().to_string())
+                        .filter(|v| !v.is_empty())
+                };
+                let normalized_platform = platform
+                    .as_ref()
+                    .map(|v| v.trim().to_ascii_lowercase())
+                    .filter(|v| !v.is_empty());
+                let normalized_chat_name = normalize_filter(chat_name);
+
                 let mut store = read_webhook_store()?;
                 let id = format!(
                     "wh_{}_{}",
@@ -1441,9 +1491,12 @@ impl App {
                 let item = WebhookItem {
                     id: id.clone(),
                     url: normalized_url.to_string(),
-                    event_type: event_type.as_ref().map(|v| v.trim().to_string()),
-                    sender: sender.as_ref().map(|v| v.trim().to_string()),
-                    keyword: keyword.as_ref().map(|v| v.trim().to_string()),
+                    event_type: normalize_filter(event_type),
+                    platform: normalized_platform,
+                    chat_name: normalized_chat_name,
+                    meta_id: *meta_id,
+                    sender: normalize_filter(sender),
+                    keyword: normalize_filter(keyword),
                     created_at: chrono::Utc::now().to_rfc3339(),
                 };
                 store.items.push(item.clone());
@@ -1451,6 +1504,17 @@ impl App {
                 println!("webhook added");
                 println!("id: {}", id);
                 println!("url: {}", item.url);
+                println!(
+                    "filters: event={} platform={} chat={} meta_id={} sender={} keyword={}",
+                    item.event_type.as_deref().unwrap_or("-"),
+                    item.platform.as_deref().unwrap_or("-"),
+                    item.chat_name.as_deref().unwrap_or("-"),
+                    item.meta_id
+                        .map(|v| v.to_string())
+                        .unwrap_or_else(|| "-".to_string()),
+                    item.sender.as_deref().unwrap_or("-"),
+                    item.keyword.as_deref().unwrap_or("-"),
+                );
                 Ok(())
             }
             WebhookCommand::List { format } => {
@@ -1464,13 +1528,18 @@ impl App {
                         );
                     }
                     OutputFormat::Csv => {
-                        println!("id,url,event_type,sender,keyword,created_at");
+                        println!(
+                            "id,url,event_type,platform,chat_name,meta_id,sender,keyword,created_at"
+                        );
                         for item in store.items {
                             println!(
-                                "{},{},{},{},{},{}",
+                                "{},{},{},{},{},{},{},{},{}",
                                 csv_escape(&item.id),
                                 csv_escape(&item.url),
                                 csv_escape(item.event_type.as_deref().unwrap_or_default()),
+                                csv_escape(item.platform.as_deref().unwrap_or_default()),
+                                csv_escape(item.chat_name.as_deref().unwrap_or_default()),
+                                item.meta_id.map(|v| v.to_string()).unwrap_or_default(),
                                 csv_escape(item.sender.as_deref().unwrap_or_default()),
                                 csv_escape(item.keyword.as_deref().unwrap_or_default()),
                                 csv_escape(&item.created_at)
@@ -1485,10 +1554,15 @@ impl App {
                         println!("configured webhooks");
                         for item in store.items {
                             println!(
-                                "- {} | {} | event={} sender={} keyword={} created_at={}",
+                                "- {} | {} | event={} platform={} chat={} meta_id={} sender={} keyword={} created_at={}",
                                 item.id,
                                 item.url,
                                 item.event_type.unwrap_or_else(|| "-".to_string()),
+                                item.platform.unwrap_or_else(|| "-".to_string()),
+                                item.chat_name.unwrap_or_else(|| "-".to_string()),
+                                item.meta_id
+                                    .map(|v| v.to_string())
+                                    .unwrap_or_else(|| "-".to_string()),
                                 item.sender.unwrap_or_else(|| "-".to_string()),
                                 item.keyword.unwrap_or_else(|| "-".to_string()),
                                 item.created_at
@@ -1579,6 +1653,8 @@ impl App {
                     println!("no webhook dead-letter entries");
                     return Ok(());
                 }
+                let webhook_dispatch =
+                    resolve_webhook_dispatch_settings(&read_webhook_store()?.dispatch);
 
                 let runtime = tokio::runtime::Builder::new_current_thread()
                     .enable_all()
@@ -1587,7 +1663,9 @@ impl App {
 
                 let (remaining, retried, delivered, failed) = runtime.block_on(async move {
                     let client = reqwest::Client::builder()
-                        .timeout(std::time::Duration::from_secs(8))
+                        .timeout(std::time::Duration::from_millis(
+                            webhook_dispatch.request_timeout_ms,
+                        ))
                         .build()
                         .map_err(|e| CliError::Network(e.to_string()))?;
 
@@ -1595,6 +1673,8 @@ impl App {
                     let mut retried = 0usize;
                     let mut delivered = 0usize;
                     let mut failed = 0usize;
+                    let retry_attempts = webhook_dispatch.retry_attempts.max(1);
+                    let retry_base_delay_ms = webhook_dispatch.retry_base_delay_ms.max(1);
 
                     for mut entry in entries {
                         if retried >= *limit {
@@ -1605,7 +1685,7 @@ impl App {
 
                         let mut ok = false;
                         let mut last_error = String::new();
-                        for attempt in 0..3u32 {
+                        for attempt in 0..retry_attempts {
                             let resp = client
                                 .post(&entry.webhook_url)
                                 .header("X-Xenobot-Event", &entry.event.event_type)
@@ -1620,18 +1700,20 @@ impl App {
                                 }
                                 Ok(r) => {
                                     last_error = format!("http status {}", r.status());
-                                    if attempt < 2 {
+                                    if attempt.saturating_add(1) < retry_attempts {
                                         tokio::time::sleep(std::time::Duration::from_millis(
-                                            150_u64 * (1_u64 << attempt),
+                                            retry_base_delay_ms
+                                                .saturating_mul(1_u64 << attempt.min(10)),
                                         ))
                                         .await;
                                     }
                                 }
                                 Err(err) => {
                                     last_error = err.to_string();
-                                    if attempt < 2 {
+                                    if attempt.saturating_add(1) < retry_attempts {
                                         tokio::time::sleep(std::time::Duration::from_millis(
-                                            150_u64 * (1_u64 << attempt),
+                                            retry_base_delay_ms
+                                                .saturating_mul(1_u64 << attempt.min(10)),
                                         ))
                                         .await;
                                     }
@@ -1676,6 +1758,41 @@ impl App {
                 println!("removed entries: {}", count);
                 Ok(())
             }
+            WebhookCommand::Dispatch { command } => match command {
+                WebhookDispatchCommand::Show { format } => {
+                    let store = read_webhook_store()?;
+                    let effective = resolve_webhook_dispatch_settings(&store.dispatch);
+                    print_webhook_dispatch_settings(&store.dispatch, effective, format)
+                }
+                WebhookDispatchCommand::Set {
+                    reset,
+                    batch_size,
+                    max_concurrency,
+                    request_timeout_ms,
+                    flush_interval_ms,
+                    retry_attempts,
+                    retry_base_delay_ms,
+                    format,
+                } => {
+                    let mut store = read_webhook_store()?;
+                    apply_webhook_dispatch_update(
+                        &mut store.dispatch,
+                        WebhookDispatchUpdate {
+                            reset: *reset,
+                            batch_size: *batch_size,
+                            max_concurrency: *max_concurrency,
+                            request_timeout_ms: *request_timeout_ms,
+                            flush_interval_ms: *flush_interval_ms,
+                            retry_attempts: *retry_attempts,
+                            retry_base_delay_ms: *retry_base_delay_ms,
+                        },
+                    );
+
+                    write_webhook_store(&store)?;
+                    let effective = resolve_webhook_dispatch_settings(&store.dispatch);
+                    print_webhook_dispatch_settings(&store.dispatch, effective, format)
+                }
+            },
         }
     }
 
@@ -1813,15 +1930,182 @@ struct KeyStore {
 struct WebhookItem {
     id: String,
     url: String,
+    #[serde(default, alias = "eventType")]
     event_type: Option<String>,
+    #[serde(default)]
+    platform: Option<String>,
+    #[serde(default, alias = "chatName")]
+    chat_name: Option<String>,
+    #[serde(default, alias = "metaId")]
+    meta_id: Option<i64>,
+    #[serde(default)]
     sender: Option<String>,
+    #[serde(default)]
     keyword: Option<String>,
+    #[serde(default, alias = "createdAt")]
     created_at: String,
+}
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+struct WebhookDispatchSettings {
+    #[serde(default, alias = "batchSize")]
+    batch_size: Option<usize>,
+    #[serde(default, alias = "maxConcurrency")]
+    max_concurrency: Option<usize>,
+    #[serde(default, alias = "requestTimeoutMs")]
+    request_timeout_ms: Option<u64>,
+    #[serde(default, alias = "flushIntervalMs")]
+    flush_interval_ms: Option<u64>,
+    #[serde(default, alias = "retryAttempts")]
+    retry_attempts: Option<u32>,
+    #[serde(default, alias = "retryBaseDelayMs")]
+    retry_base_delay_ms: Option<u64>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ResolvedWebhookDispatchSettings {
+    batch_size: usize,
+    max_concurrency: usize,
+    queue_capacity: usize,
+    request_timeout_ms: u64,
+    flush_interval_ms: u64,
+    retry_attempts: u32,
+    retry_base_delay_ms: u64,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct WebhookDispatchUpdate {
+    reset: bool,
+    batch_size: Option<usize>,
+    max_concurrency: Option<usize>,
+    request_timeout_ms: Option<u64>,
+    flush_interval_ms: Option<u64>,
+    retry_attempts: Option<u32>,
+    retry_base_delay_ms: Option<u64>,
+}
+
+fn apply_webhook_dispatch_update(
+    target: &mut WebhookDispatchSettings,
+    update: WebhookDispatchUpdate,
+) {
+    if update.reset {
+        *target = WebhookDispatchSettings::default();
+    }
+
+    if let Some(value) = update.batch_size {
+        target.batch_size = Some(value);
+    }
+    if let Some(value) = update.max_concurrency {
+        target.max_concurrency = Some(value);
+    }
+    if let Some(value) = update.request_timeout_ms {
+        target.request_timeout_ms = Some(value);
+    }
+    if let Some(value) = update.flush_interval_ms {
+        target.flush_interval_ms = Some(value);
+    }
+    if let Some(value) = update.retry_attempts {
+        target.retry_attempts = Some(value);
+    }
+    if let Some(value) = update.retry_base_delay_ms {
+        target.retry_base_delay_ms = Some(value);
+    }
+}
+
+fn resolve_webhook_dispatch_settings(
+    settings: &WebhookDispatchSettings,
+) -> ResolvedWebhookDispatchSettings {
+    let batch_size = settings.batch_size.unwrap_or(64).clamp(1, 512);
+    let max_concurrency = settings.max_concurrency.unwrap_or(8).clamp(1, 64);
+    let request_timeout_ms = settings
+        .request_timeout_ms
+        .unwrap_or(8_000)
+        .clamp(500, 120_000);
+    let flush_interval_ms = settings.flush_interval_ms.unwrap_or(250).clamp(10, 10_000);
+    let retry_attempts = settings.retry_attempts.unwrap_or(3).clamp(1, 8);
+    let retry_base_delay_ms = settings.retry_base_delay_ms.unwrap_or(150).clamp(10, 5_000);
+    let queue_capacity = batch_size
+        .saturating_mul(max_concurrency)
+        .saturating_mul(4)
+        .clamp(32, 8192);
+
+    ResolvedWebhookDispatchSettings {
+        batch_size,
+        max_concurrency,
+        queue_capacity,
+        request_timeout_ms,
+        flush_interval_ms,
+        retry_attempts,
+        retry_base_delay_ms,
+    }
+}
+
+fn print_webhook_dispatch_settings(
+    raw: &WebhookDispatchSettings,
+    effective: ResolvedWebhookDispatchSettings,
+    format: &OutputFormat,
+) -> Result<()> {
+    match format {
+        OutputFormat::Json => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "raw": {
+                        "batchSize": raw.batch_size,
+                        "maxConcurrency": raw.max_concurrency,
+                        "requestTimeoutMs": raw.request_timeout_ms,
+                        "flushIntervalMs": raw.flush_interval_ms,
+                        "retryAttempts": raw.retry_attempts,
+                        "retryBaseDelayMs": raw.retry_base_delay_ms
+                    },
+                    "effective": {
+                        "batchSize": effective.batch_size,
+                        "maxConcurrency": effective.max_concurrency,
+                        "queueCapacity": effective.queue_capacity,
+                        "requestTimeoutMs": effective.request_timeout_ms,
+                        "flushIntervalMs": effective.flush_interval_ms,
+                        "retryAttempts": effective.retry_attempts,
+                        "retryBaseDelayMs": effective.retry_base_delay_ms
+                    }
+                }))
+                .map_err(|e| CliError::Parse(e.to_string()))?
+            );
+        }
+        OutputFormat::Csv => {
+            println!(
+                "batch_size,max_concurrency,queue_capacity,request_timeout_ms,flush_interval_ms,retry_attempts,retry_base_delay_ms"
+            );
+            println!(
+                "{},{},{},{},{},{},{}",
+                effective.batch_size,
+                effective.max_concurrency,
+                effective.queue_capacity,
+                effective.request_timeout_ms,
+                effective.flush_interval_ms,
+                effective.retry_attempts,
+                effective.retry_base_delay_ms
+            );
+        }
+        _ => {
+            println!("webhook dispatch settings");
+            println!("batch size: {}", effective.batch_size);
+            println!("max concurrency: {}", effective.max_concurrency);
+            println!("queue capacity: {}", effective.queue_capacity);
+            println!("request timeout(ms): {}", effective.request_timeout_ms);
+            println!("flush interval(ms): {}", effective.flush_interval_ms);
+            println!("retry attempts: {}", effective.retry_attempts);
+            println!("retry base delay(ms): {}", effective.retry_base_delay_ms);
+        }
+    }
+    Ok(())
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct WebhookStore {
+    #[serde(default)]
     items: Vec<WebhookItem>,
+    #[serde(default)]
+    dispatch: WebhookDispatchSettings,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2040,9 +2324,16 @@ fn webhook_item_to_rule(item: &WebhookItem) -> WebhookRule {
         id: item.id.clone(),
         url: item.url.clone(),
         event_type: item.event_type.clone(),
+        platform: item.platform.clone(),
+        chat_name: item.chat_name.clone(),
+        meta_id: item.meta_id,
         sender: item.sender.clone(),
         keyword: item.keyword.clone(),
-        created_at: Some(item.created_at.clone()),
+        created_at: if item.created_at.trim().is_empty() {
+            None
+        } else {
+            Some(item.created_at.clone())
+        },
     }
 }
 
@@ -2074,29 +2365,60 @@ impl WebhookDispatchWorker {
 fn spawn_webhook_dispatch_worker(
     client: reqwest::Client,
     items: Vec<WebhookRule>,
-    batch_size: usize,
-    max_concurrency: usize,
-    queue_capacity: usize,
+    dispatch: ResolvedWebhookDispatchSettings,
 ) -> WebhookDispatchWorker {
     let (sender, mut receiver) =
-        tokio::sync::mpsc::channel::<WebhookMessageCreatedEvent>(queue_capacity.max(1));
+        tokio::sync::mpsc::channel::<WebhookMessageCreatedEvent>(dispatch.queue_capacity.max(1));
     let join_handle = tokio::spawn(async move {
         let mut total = WebhookDispatchStats::default();
         let mut buffer = Vec::new();
+        let flush_interval = std::time::Duration::from_millis(dispatch.flush_interval_ms.max(1));
 
-        while let Some(event) = receiver.recv().await {
-            buffer.push(event);
-            if buffer.len() >= batch_size.max(1) {
-                let stats =
-                    flush_webhook_queue(&client, items.as_slice(), &mut buffer, max_concurrency)
+        loop {
+            match tokio::time::timeout(flush_interval, receiver.recv()).await {
+                Ok(Some(event)) => {
+                    buffer.push(event);
+                    if buffer.len() >= dispatch.batch_size.max(1) {
+                        let stats = flush_webhook_queue(
+                            &client,
+                            items.as_slice(),
+                            &mut buffer,
+                            dispatch.max_concurrency,
+                            dispatch.retry_attempts,
+                            dispatch.retry_base_delay_ms,
+                        )
                         .await;
-                merge_webhook_dispatch_stats(&mut total, &stats);
+                        merge_webhook_dispatch_stats(&mut total, &stats);
+                    }
+                }
+                Ok(None) => break,
+                Err(_) => {
+                    if !buffer.is_empty() {
+                        let stats = flush_webhook_queue(
+                            &client,
+                            items.as_slice(),
+                            &mut buffer,
+                            dispatch.max_concurrency,
+                            dispatch.retry_attempts,
+                            dispatch.retry_base_delay_ms,
+                        )
+                        .await;
+                        merge_webhook_dispatch_stats(&mut total, &stats);
+                    }
+                }
             }
         }
 
         if !buffer.is_empty() {
-            let stats =
-                flush_webhook_queue(&client, items.as_slice(), &mut buffer, max_concurrency).await;
+            let stats = flush_webhook_queue(
+                &client,
+                items.as_slice(),
+                &mut buffer,
+                dispatch.max_concurrency,
+                dispatch.retry_attempts,
+                dispatch.retry_base_delay_ms,
+            )
+            .await;
             merge_webhook_dispatch_stats(&mut total, &stats);
         }
 
@@ -2114,8 +2436,11 @@ async fn dispatch_webhook_message_created(
     client: &reqwest::Client,
     items: &[WebhookRule],
     event: &WebhookMessageCreatedEvent,
+    retry_attempts: u32,
+    retry_base_delay_ms: u64,
 ) -> WebhookDispatchStats {
     let mut stats = WebhookDispatchStats::default();
+    let attempts = retry_attempts.max(1);
     for item in items {
         if !webhook_rule_matches_event(item, event) {
             stats.filtered += 1;
@@ -2126,7 +2451,7 @@ async fn dispatch_webhook_message_created(
         let mut delivered = false;
         let mut attempts_used = 0u32;
         let mut last_error = "unknown delivery failure".to_string();
-        for attempt in 0..3u32 {
+        for attempt in 0..attempts {
             attempts_used = attempt.saturating_add(1);
             let send_result = client
                 .post(&item.url)
@@ -2144,15 +2469,15 @@ async fn dispatch_webhook_message_created(
                 }
                 Ok(resp) => {
                     last_error = format!("http status {}", resp.status());
-                    if attempt < 2 {
-                        let wait_ms = 150_u64 * (1_u64 << attempt);
+                    if attempt.saturating_add(1) < attempts {
+                        let wait_ms = retry_base_delay_ms.saturating_mul(1_u64 << attempt.min(10));
                         tokio::time::sleep(std::time::Duration::from_millis(wait_ms)).await;
                     }
                 }
                 Err(err) => {
                     last_error = err.to_string();
-                    if attempt < 2 {
-                        let wait_ms = 150_u64 * (1_u64 << attempt);
+                    if attempt.saturating_add(1) < attempts {
+                        let wait_ms = retry_base_delay_ms.saturating_mul(1_u64 << attempt.min(10));
                         tokio::time::sleep(std::time::Duration::from_millis(wait_ms)).await;
                     }
                 }
@@ -2179,6 +2504,8 @@ async fn flush_webhook_queue(
     items: &[WebhookRule],
     queue: &mut Vec<WebhookMessageCreatedEvent>,
     max_concurrency: usize,
+    retry_attempts: u32,
+    retry_base_delay_ms: u64,
 ) -> WebhookDispatchStats {
     if queue.is_empty() {
         return WebhookDispatchStats::default();
@@ -2192,9 +2519,18 @@ async fn flush_webhook_queue(
         let client_clone = client.clone();
         let items_clone = shared_items.clone();
         let semaphore_clone = semaphore.clone();
+        let attempts = retry_attempts.max(1);
+        let base_delay_ms = retry_base_delay_ms.max(1);
         set.spawn(async move {
             let _permit = semaphore_clone.acquire_owned().await.ok();
-            dispatch_webhook_message_created(&client_clone, items_clone.as_slice(), &event).await
+            dispatch_webhook_message_created(
+                &client_clone,
+                items_clone.as_slice(),
+                &event,
+                attempts,
+                base_delay_ms,
+            )
+            .await
         });
     }
 
@@ -2294,13 +2630,13 @@ fn resolve_keys_for_runtime(
 ) -> Result<(String, String)> {
     match (data_key, image_key) {
         (Some(data), Some(image)) => {
-            return Ok((data.trim().to_string(), image.trim().to_string()))
+            return Ok((data.trim().to_string(), image.trim().to_string()));
         }
         (None, None) => {}
         _ => {
             return Err(CliError::Argument(
                 "data_key and image_key must be provided together".to_string(),
-            ))
+            ));
         }
     }
 
@@ -2972,11 +3308,13 @@ fn persist_monitor_chat_to_db(
         db_config.sqlite_path = path.clone();
     }
 
-    let webhook_rules: Vec<WebhookRule> = read_webhook_store()?
+    let webhook_store = read_webhook_store()?;
+    let webhook_rules: Vec<WebhookRule> = webhook_store
         .items
         .iter()
         .map(webhook_item_to_rule)
         .collect();
+    let webhook_dispatch = resolve_webhook_dispatch_settings(&webhook_store.dispatch);
 
     let source_hint = source_path.to_string_lossy().to_string();
     let source_fingerprint = build_source_file_fingerprint(source_path)?;
@@ -3061,15 +3399,15 @@ fn persist_monitor_chat_to_db(
             None
         } else {
             let client = reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(8))
+                .timeout(std::time::Duration::from_millis(
+                    webhook_dispatch.request_timeout_ms,
+                ))
                 .build()
                 .map_err(|e| CliError::Network(e.to_string()))?;
             Some(spawn_webhook_dispatch_worker(
                 client,
                 webhook_rules,
-                64,
-                8,
-                512,
+                webhook_dispatch,
             ))
         };
 
@@ -3078,7 +3416,9 @@ fn persist_monitor_chat_to_db(
             ..Default::default()
         };
         let mut dedup_in_batch: std::collections::HashSet<String> =
-            std::collections::HashSet::new();
+            std::collections::HashSet::with_capacity(
+                chat.messages.len().saturating_mul(2).min(262_144),
+            );
         let mut worker = webhook_worker;
 
         for msg in chat.messages {
@@ -3561,7 +3901,9 @@ fn print_db_info(info: &DbInfoRow, format: &OutputFormat) -> Result<()> {
             );
         }
         OutputFormat::Csv => {
-            println!("path,size_bytes,table_count,message_count,member_count,chat_count,migration_versions");
+            println!(
+                "path,size_bytes,table_count,message_count,member_count,chat_count,migration_versions"
+            );
             println!(
                 "{},{},{},{},{},{},{}",
                 csv_escape(&info.path),
@@ -3670,7 +4012,7 @@ fn collect_db_verification(
 
     // Optional but expected for import/incremental diagnostics.
     let optional_tables = ["import_progress", "import_source_checkpoint"];
-    let optional_indexes = ["idx_message_meta_id_sender_ts", "idx_message_meta_id_ts"];
+    let optional_indexes = ["idx_message_dedup_lookup", "idx_meta_platform_name"];
 
     let mut checks = Vec::new();
 
@@ -3837,7 +4179,7 @@ fn collect_db_checkpoints(
         .map(str::trim)
         .filter(|v| !v.is_empty())
         .map(ToOwned::to_owned);
-    let capped_limit = limit.max(1).min(10_000);
+    let capped_limit = limit.clamp(1, 10_000);
 
     if !sqlite_object_exists(conn, "table", "import_source_checkpoint")? {
         return Ok(DbCheckpointReport {
@@ -3961,7 +4303,9 @@ fn print_db_checkpoints(report: &DbCheckpointReport, format: &OutputFormat) -> R
                 report.total_rows,
                 report.returned_rows
             );
-            println!("id,source_kind,source_path,status,platform,chat_name,meta_id,last_processed_at,last_inserted,last_duplicate,file_size,modified_at,fingerprint,error_message");
+            println!(
+                "id,source_kind,source_path,status,platform,chat_name,meta_id,last_processed_at,last_inserted,last_duplicate,file_size,modified_at,fingerprint,error_message"
+            );
             for row in &report.rows {
                 println!(
                     "{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
@@ -4511,13 +4855,7 @@ fn run_advanced_analysis(
         AdvancedAnalysis::DragonKing => {
             run_ranked_sender_analysis(conn, "dragon_king", "1=1", true, 20)
         }
-        AdvancedAnalysis::Diving => run_ranked_sender_analysis(
-            conn,
-            "diving",
-            "1=1",
-            false,
-            20,
-        ),
+        AdvancedAnalysis::Diving => run_ranked_sender_analysis(conn, "diving", "1=1", false, 20),
         AdvancedAnalysis::Mention => run_ranked_sender_analysis(
             conn,
             "mention",
@@ -5704,90 +6042,15 @@ fn looks_like_bind_permission_issue(err: &CliError) -> bool {
 }
 
 #[cfg(all(feature = "api", unix))]
-fn unix_socket_max_path_bytes() -> usize {
-    if cfg!(target_os = "macos") {
-        103
-    } else {
-        107
-    }
-}
-
-#[cfg(all(feature = "api", unix))]
-fn unix_socket_path_within_limit(path: &Path) -> bool {
-    use std::os::unix::ffi::OsStrExt;
-    path.as_os_str().as_bytes().len() <= unix_socket_max_path_bytes()
-}
-
-#[cfg(all(feature = "api", unix))]
 fn select_sandbox_safe_unix_socket_path() -> Result<PathBuf> {
-    let mut candidate_dirs = Vec::new();
-    if let Ok(explicit_dir) = std::env::var("XENOBOT_API_SOCKET_DIR") {
-        let trimmed = explicit_dir.trim();
-        if !trimmed.is_empty() {
-            candidate_dirs.push(PathBuf::from(trimmed));
-        }
-    }
-    if let Ok(tmpdir) = std::env::var("TMPDIR") {
-        let trimmed = tmpdir.trim();
-        if !trimmed.is_empty() {
-            candidate_dirs.push(PathBuf::from(trimmed));
-        }
-    }
-    candidate_dirs.push(PathBuf::from("/tmp"));
-
-    let pid = std::process::id();
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .subsec_nanos();
-
-    let mut chosen: Option<PathBuf> = None;
-    for dir in candidate_dirs {
-        if std::fs::create_dir_all(&dir).is_err() {
-            continue;
-        }
-        for name in [
-            format!("xb-{}-{}.sock", pid, nanos % 100_000),
-            format!("xb-{}.sock", pid),
-            "xb.sock".to_string(),
-        ] {
-            let candidate = dir.join(name);
-            if unix_socket_path_within_limit(&candidate) {
-                chosen = Some(candidate);
-                break;
-            }
-        }
-        if chosen.is_some() {
-            break;
-        }
-    }
-
-    chosen.ok_or_else(|| {
-        CliError::Argument(format!(
-            "cannot build unix socket path within {}-byte limit; set XENOBOT_API_SOCKET_DIR to a short writable directory",
-            unix_socket_max_path_bytes()
-        ))
-    })
+    xenobot_core::sandbox::select_sandbox_safe_unix_socket_path()
+        .map_err(|e| CliError::Argument(e.to_string()))
 }
 
 #[cfg(feature = "api")]
 fn select_file_gateway_root(explicit: Option<PathBuf>) -> Result<PathBuf> {
-    if let Some(path) = explicit {
-        return Ok(path);
-    }
-    if let Ok(env_dir) = std::env::var("XENOBOT_FILE_API_DIR") {
-        let trimmed = env_dir.trim();
-        if !trimmed.is_empty() {
-            return Ok(PathBuf::from(trimmed));
-        }
-    }
-    if let Ok(tmpdir) = std::env::var("TMPDIR") {
-        let trimmed = tmpdir.trim();
-        if !trimmed.is_empty() {
-            return Ok(PathBuf::from(trimmed).join("xenobot-file-api"));
-        }
-    }
-    Ok(PathBuf::from("/tmp").join("xenobot-file-api"))
+    xenobot_core::sandbox::select_file_gateway_root(explicit)
+        .map_err(|e| CliError::Argument(e.to_string()))
 }
 
 #[cfg(feature = "api")]
@@ -6549,7 +6812,7 @@ fn start_api_server_foreground(
 }
 
 #[cfg(feature = "api")]
-fn print_api_server_status() -> Result<()> {
+fn print_api_server_status(format: &OutputFormat) -> Result<()> {
     use std::net::SocketAddr;
     use std::net::TcpStream;
     use std::time::Duration;
@@ -6580,48 +6843,24 @@ fn print_api_server_status() -> Result<()> {
                 .map(|addr| TcpStream::connect_timeout(&addr, Duration::from_millis(400)).is_ok())
                 .unwrap_or(false)
         };
-
-        if transport == "unix" {
-            let path = state.unix_socket_path.as_deref().unwrap_or_default();
-            println!("api transport: unix");
-            println!("api socket: {}", path);
-            println!("api socket mode: {}", state.unix_socket_mode);
-        } else if transport == "file-gateway" {
-            let dir = state.file_gateway_dir.as_deref().unwrap_or_default();
-            println!("api transport: file-gateway");
-            println!("api gateway dir: {}", dir);
-            println!("api gateway poll(ms): {}", state.file_gateway_poll_ms);
-            println!(
-                "api gateway response ttl(s): {}",
-                state.file_gateway_response_ttl_seconds
-            );
-            let metrics_path = std::path::Path::new(dir).join("gateway_metrics.json");
-            if let Ok(raw) = std::fs::read_to_string(&metrics_path) {
-                if let Ok(metrics) = serde_json::from_str::<serde_json::Value>(&raw) {
-                    let total_processed = metrics
-                        .get("total_processed")
-                        .and_then(|v| v.as_u64())
-                        .unwrap_or(0);
-                    let latency_p95 = metrics
-                        .get("latency_p95_ms")
-                        .and_then(|v| v.as_u64())
-                        .unwrap_or(0);
-                    let queue_depth = metrics
-                        .get("queue_depth")
-                        .and_then(|v| v.as_u64())
-                        .unwrap_or(0);
-                    println!("api gateway metrics file: {}", metrics_path.display());
-                    println!("api gateway metrics total processed: {}", total_processed);
-                    println!("api gateway metrics queue depth: {}", queue_depth);
-                    println!("api gateway metrics latency p95(ms): {}", latency_p95);
-                }
-            }
+        let status_snapshot =
+            if transport == "tcp" && endpoint_alive {
+                state.bind_addr.parse::<SocketAddr>().ok().and_then(|addr| {
+                    fetch_status_snapshot_via_tcp(addr, Duration::from_millis(800))
+                })
+            } else {
+                None
+            };
+        let gateway_metrics = if transport == "file-gateway" {
+            state.file_gateway_dir.as_ref().and_then(|dir| {
+                let metrics_path = std::path::Path::new(dir).join("gateway_metrics.json");
+                std::fs::read_to_string(&metrics_path)
+                    .ok()
+                    .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+            })
         } else {
-            println!("api transport: tcp");
-            println!("api addr: {}", state.bind_addr);
-        }
-        println!("pid: {}", state.pid);
-        println!("state file: present");
+            None
+        };
         let status = if transport == "file-gateway" {
             if endpoint_alive && pid_alive {
                 "running"
@@ -6639,11 +6878,91 @@ fn print_api_server_status() -> Result<()> {
         } else {
             "stopped"
         };
-        println!("status: {}", status);
-        println!("cors enabled: {}", state.cors_enabled);
-        println!("websocket enabled: {}", state.websocket_enabled);
-        if let Some(path) = state.db_path {
-            println!("db path: {}", path);
+
+        let mut report = serde_json::json!({
+            "transport": transport,
+            "apiAddr": state.bind_addr,
+            "pid": state.pid,
+            "stateFile": "present",
+            "status": status,
+            "pidAlive": pid_alive,
+            "endpointAlive": endpoint_alive,
+            "corsEnabled": state.cors_enabled,
+            "websocketEnabled": state.websocket_enabled,
+            "dbPath": state.db_path,
+            "unixSocketPath": state.unix_socket_path,
+            "unixSocketMode": state.unix_socket_mode,
+            "fileGatewayDir": state.file_gateway_dir,
+            "fileGatewayPollMs": state.file_gateway_poll_ms,
+            "fileGatewayResponseTtlSeconds": state.file_gateway_response_ttl_seconds,
+            "gatewayMetrics": gateway_metrics,
+        });
+        if let Some(snapshot) = status_snapshot.clone() {
+            if let Some(map) = report.as_object_mut() {
+                map.insert("statusSnapshot".to_string(), snapshot);
+            }
+        }
+
+        if matches!(
+            format,
+            OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Csv
+        ) {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&report)
+                    .map_err(|e| CliError::Internal(format!("format api status failed: {}", e)))?
+            );
+        } else {
+            if transport == "unix" {
+                let path = state.unix_socket_path.as_deref().unwrap_or_default();
+                println!("api transport: unix");
+                println!("api socket: {}", path);
+                println!("api socket mode: {}", state.unix_socket_mode);
+            } else if transport == "file-gateway" {
+                let dir = state.file_gateway_dir.as_deref().unwrap_or_default();
+                println!("api transport: file-gateway");
+                println!("api gateway dir: {}", dir);
+                println!("api gateway poll(ms): {}", state.file_gateway_poll_ms);
+                println!(
+                    "api gateway response ttl(s): {}",
+                    state.file_gateway_response_ttl_seconds
+                );
+                let metrics_path = std::path::Path::new(dir).join("gateway_metrics.json");
+                if let Some(metrics) = gateway_metrics {
+                    let total_processed = metrics
+                        .get("total_processed")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0);
+                    let latency_p95 = metrics
+                        .get("latency_p95_ms")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0);
+                    let queue_depth = metrics
+                        .get("queue_depth")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0);
+                    println!("api gateway metrics file: {}", metrics_path.display());
+                    println!("api gateway metrics total processed: {}", total_processed);
+                    println!("api gateway metrics queue depth: {}", queue_depth);
+                    println!("api gateway metrics latency p95(ms): {}", latency_p95);
+                }
+            } else {
+                println!("api transport: tcp");
+                println!("api addr: {}", state.bind_addr);
+                if let Some(snapshot) = status_snapshot {
+                    print_status_snapshot(&snapshot);
+                } else if endpoint_alive {
+                    println!("api status endpoint: unavailable_or_non_json");
+                }
+            }
+            println!("pid: {}", state.pid);
+            println!("state file: present");
+            println!("status: {}", status);
+            println!("cors enabled: {}", state.cors_enabled);
+            println!("websocket enabled: {}", state.websocket_enabled);
+            if let Some(path) = state.db_path {
+                println!("db path: {}", path);
+            }
         }
         return Ok(());
     }
@@ -6653,10 +6972,98 @@ fn print_api_server_status() -> Result<()> {
         .parse::<SocketAddr>()
         .map_err(|e| CliError::Argument(format!("invalid XENOBOT_API_ADDR '{}': {}", target, e)))?;
     let alive = TcpStream::connect_timeout(&parsed, Duration::from_millis(400)).is_ok();
-    println!("api addr: {}", parsed);
-    println!("state file: missing");
-    println!("status: {}", if alive { "running" } else { "stopped" });
+    let status_snapshot = if alive {
+        fetch_status_snapshot_via_tcp(parsed, Duration::from_millis(800))
+    } else {
+        None
+    };
+    let mut report = serde_json::json!({
+        "transport": "tcp",
+        "apiAddr": parsed.to_string(),
+        "stateFile": "missing",
+        "status": if alive { "running" } else { "stopped" },
+        "endpointAlive": alive,
+    });
+    if let Some(snapshot) = status_snapshot.clone() {
+        if let Some(map) = report.as_object_mut() {
+            map.insert("statusSnapshot".to_string(), snapshot);
+        }
+    }
+
+    if matches!(
+        format,
+        OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Csv
+    ) {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&report)
+                .map_err(|e| CliError::Internal(format!("format api status failed: {}", e)))?
+        );
+    } else {
+        println!("api addr: {}", parsed);
+        if let Some(snapshot) = status_snapshot {
+            print_status_snapshot(&snapshot);
+        } else if alive {
+            println!("api status endpoint: unavailable_or_non_json");
+        }
+        println!("state file: missing");
+        println!("status: {}", if alive { "running" } else { "stopped" });
+    }
     Ok(())
+}
+
+#[cfg(feature = "api")]
+fn fetch_status_snapshot_via_tcp(
+    addr: std::net::SocketAddr,
+    timeout: std::time::Duration,
+) -> Option<serde_json::Value> {
+    use std::io::{Read, Write};
+    let mut stream = std::net::TcpStream::connect_timeout(&addr, timeout).ok()?;
+    stream.set_read_timeout(Some(timeout)).ok()?;
+    stream.set_write_timeout(Some(timeout)).ok()?;
+    let request = format!(
+        "GET /status HTTP/1.1\r\nHost: {}\r\nAccept: application/json\r\nConnection: close\r\n\r\n",
+        addr
+    );
+    stream.write_all(request.as_bytes()).ok()?;
+    let mut raw = Vec::new();
+    stream.read_to_end(&mut raw).ok()?;
+    parse_http_json_response_body(&raw)
+}
+
+#[cfg(feature = "api")]
+fn parse_http_json_response_body(raw: &[u8]) -> Option<serde_json::Value> {
+    let header_end = raw.windows(4).position(|w| w == b"\r\n\r\n")?;
+    let body = raw.get(header_end + 4..)?;
+    if body.is_empty() {
+        return None;
+    }
+    serde_json::from_slice::<serde_json::Value>(body).ok()
+}
+
+#[cfg(feature = "api")]
+fn print_status_snapshot(snapshot: &serde_json::Value) {
+    println!("api status endpoint: /status");
+    if let Some(service) = snapshot.get("service").and_then(|v| v.as_str()) {
+        println!("api service: {}", service);
+    }
+    if let Some(version) = snapshot.get("version").and_then(|v| v.as_str()) {
+        println!("api version: {}", version);
+    }
+    if let Some(runtime_arch) = snapshot
+        .get("runtime")
+        .and_then(|v| v.get("arch"))
+        .and_then(|v| v.as_str())
+    {
+        println!("api runtime arch: {}", runtime_arch);
+    }
+    if let Some(features) = snapshot.get("features").and_then(|v| v.as_object()) {
+        let enabled = features
+            .values()
+            .filter(|value| value.as_bool().unwrap_or(false))
+            .count();
+        println!("api features enabled: {}/{}", enabled, features.len());
+    }
 }
 
 #[cfg(feature = "api")]
@@ -6825,137 +7232,19 @@ fn send_stop_signal(pid: i32, force: bool) -> Result<()> {
 }
 
 #[cfg(feature = "api")]
-fn shell_quote_arg(value: &str) -> String {
-    if value
-        .chars()
-        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.' | '/' | ':' | '+'))
-    {
-        return value.to_string();
-    }
-    format!("'{}'", value.replace('\'', "'\"'\"'"))
-}
-
-#[cfg(feature = "api")]
-fn build_sandbox_start_recommendation(
-    tcp_allowed: bool,
-    uds_allowed: bool,
-    gateway_root: &std::path::Path,
-) -> (String, String) {
-    let mode = if tcp_allowed {
-        "tcp"
-    } else if uds_allowed {
-        "unix"
-    } else {
-        "file-gateway"
-    };
-
-    let command = match mode {
-        "tcp" => "cargo run -p xenobot-cli --features \"api,analysis\" -- api start --host 127.0.0.1 --port 5030 --db-path /tmp/xenobot.db".to_string(),
-        "unix" => "cargo run -p xenobot-cli --features \"api,analysis\" -- api start --unix-socket /tmp/xenobot.sock --db-path /tmp/xenobot.db".to_string(),
-        _ => format!(
-            "cargo run -p xenobot-cli --features \"api,analysis\" -- api start --force-file-gateway --file-gateway-dir {} --db-path /tmp/xenobot.db",
-            shell_quote_arg(&gateway_root.to_string_lossy())
-        ),
-    };
-
-    (mode.to_string(), command)
-}
-
-#[cfg(feature = "api")]
 fn run_api_sandbox_doctor(file_gateway_dir: Option<PathBuf>, format: OutputFormat) -> Result<()> {
     let now = chrono::Utc::now();
-    let (tcp_allowed, tcp_error) = match std::net::TcpListener::bind("127.0.0.1:0") {
-        Ok(listener) => {
-            drop(listener);
-            (true, None)
-        }
-        Err(err) => (false, Some(err.to_string())),
-    };
-
-    #[cfg(unix)]
-    let (uds_supported, uds_allowed, uds_path, uds_error) = {
-        match select_sandbox_safe_unix_socket_path() {
-            Ok(path) => {
-                let _ = std::fs::remove_file(&path);
-                match std::os::unix::net::UnixListener::bind(&path) {
-                    Ok(listener) => {
-                        drop(listener);
-                        let _ = std::fs::remove_file(&path);
-                        (
-                            true,
-                            true,
-                            Some(path.to_string_lossy().to_string()),
-                            None::<String>,
-                        )
-                    }
-                    Err(err) => (
-                        true,
-                        false,
-                        Some(path.to_string_lossy().to_string()),
-                        Some(err.to_string()),
-                    ),
-                }
-            }
-            Err(err) => (true, false, None, Some(err.to_string())),
-        }
-    };
-
-    #[cfg(not(unix))]
-    let (uds_supported, uds_allowed, uds_path, uds_error): (
-        bool,
-        bool,
-        Option<String>,
-        Option<String>,
-    ) = (
-        false,
-        false,
-        None,
-        Some("unix sockets are not supported on this platform".to_string()),
-    );
-
-    let gateway_root = select_file_gateway_root(file_gateway_dir)?;
-    let (gateway_writable, gateway_error) = match std::fs::create_dir_all(&gateway_root) {
-        Ok(_) => {
-            let probe = gateway_root.join(format!(
-                ".xenobot_probe_{}_{}",
-                std::process::id(),
-                now.timestamp_micros()
-            ));
-            match std::fs::write(&probe, b"xenobot-sandbox-probe") {
-                Ok(_) => {
-                    let _ = std::fs::remove_file(&probe);
-                    (true, None)
-                }
-                Err(err) => (false, Some(err.to_string())),
-            }
-        }
-        Err(err) => (false, Some(err.to_string())),
-    };
-
-    let (recommended_mode, recommended_command) =
-        build_sandbox_start_recommendation(tcp_allowed, uds_allowed, &gateway_root);
+    let report = xenobot_core::sandbox::diagnose_sandbox(file_gateway_dir)
+        .map_err(|e| CliError::Internal(e.to_string()))?;
+    let recommended_mode = report.recommended.mode.clone();
+    let recommended_command = report.recommended.command.clone();
 
     let payload = serde_json::json!({
         "timestamp": now.to_rfc3339(),
-        "tcp": {
-            "allowed": tcp_allowed,
-            "error": tcp_error,
-        },
-        "uds": {
-            "supported": uds_supported,
-            "allowed": uds_allowed,
-            "path": uds_path,
-            "error": uds_error,
-        },
-        "fileGateway": {
-            "dir": gateway_root,
-            "writable": gateway_writable,
-            "error": gateway_error,
-        },
-        "recommended": {
-            "mode": recommended_mode,
-            "command": recommended_command,
-        }
+        "tcp": report.tcp,
+        "uds": report.uds,
+        "fileGateway": report.file_gateway,
+        "recommended": report.recommended,
     });
 
     match format {
@@ -6970,21 +7259,21 @@ fn run_api_sandbox_doctor(file_gateway_dir: Option<PathBuf>, format: OutputForma
         }
         OutputFormat::Text | OutputFormat::Table => {
             println!("sandbox doctor");
-            println!("tcp allowed: {}", tcp_allowed);
-            if let Some(err) = tcp_error.as_ref() {
+            println!("tcp allowed: {}", report.tcp.allowed);
+            if let Some(err) = report.tcp.error.as_ref() {
                 println!("tcp error: {}", err);
             }
-            println!("uds supported: {}", uds_supported);
-            println!("uds allowed: {}", uds_allowed);
-            if let Some(path) = uds_path.as_ref() {
+            println!("uds supported: {}", report.uds.supported);
+            println!("uds allowed: {}", report.uds.allowed);
+            if let Some(path) = report.uds.path.as_ref() {
                 println!("uds path probe: {}", path);
             }
-            if let Some(err) = uds_error.as_ref() {
+            if let Some(err) = report.uds.error.as_ref() {
                 println!("uds error: {}", err);
             }
-            println!("file gateway dir: {}", gateway_root.display());
-            println!("file gateway writable: {}", gateway_writable);
-            if let Some(err) = gateway_error.as_ref() {
+            println!("file gateway dir: {}", report.file_gateway.dir);
+            println!("file gateway writable: {}", report.file_gateway.writable);
+            if let Some(err) = report.file_gateway.error.as_ref() {
                 println!("file gateway error: {}", err);
             }
             println!("recommended mode: {}", recommended_mode);
@@ -6992,7 +7281,7 @@ fn run_api_sandbox_doctor(file_gateway_dir: Option<PathBuf>, format: OutputForma
         }
     }
 
-    if recommended_mode == "file-gateway" && !gateway_writable {
+    if recommended_mode == "file-gateway" && !report.file_gateway.writable {
         return Err(CliError::Internal(
             "sandbox doctor detected listener restrictions and non-writable file gateway path"
                 .to_string(),
@@ -7413,6 +7702,7 @@ fn run_api_file_gateway_stress(
 #[cfg(feature = "api")]
 fn run_api_smoke_check(db_path: Option<PathBuf>) -> Result<()> {
     use tower::util::ServiceExt;
+    use xenobot_api::database::repository::{ChatMeta, Repository};
 
     if let Some(path) = db_path.as_ref() {
         std::env::set_var("XENOBOT_DB_PATH", path.as_os_str());
@@ -7423,44 +7713,193 @@ fn run_api_smoke_check(db_path: Option<PathBuf>) -> Result<()> {
         .build()
         .map_err(|e| CliError::Internal(e.to_string()))?;
 
-    let (status, body) = runtime.block_on(async move {
-        xenobot_api::database::init_database()
-            .await
-            .map_err(|e| CliError::Database(e.to_string()))?;
+    let (health_status, health_body, generate_status, generated_sql, execute_status, execute_body) =
+        runtime.block_on(async move {
+            xenobot_api::database::init_database()
+                .await
+                .map_err(|e| CliError::Database(e.to_string()))?;
 
-        let config = xenobot_api::config::ApiConfig::default();
-        let app = xenobot_api::router::build_router(&config);
-        let request: axum::http::Request<axum::body::Body> = axum::http::Request::builder()
-            .method("GET")
-            .uri("/health")
-            .body(axum::body::Body::empty())
-            .map_err(|e| CliError::Internal(format!("failed to build request: {}", e)))?;
-        let response: axum::response::Response = app
-            .oneshot(request)
-            .await
-            .unwrap_or_else(|err| match err {});
-        let status: axum::http::StatusCode = response.status();
-        let body_bytes = axum::body::to_bytes(response.into_body(), 1024 * 1024)
-            .await
-            .map_err(|e| CliError::Internal(format!("failed to read response body: {}", e)))?;
-        let body = String::from_utf8_lossy(&body_bytes).to_string();
-        Ok::<(axum::http::StatusCode, String), CliError>((status, body))
-    })?;
+            let pool = xenobot_api::database::get_pool()
+                .await
+                .map_err(|e| CliError::Database(e.to_string()))?;
+            let repo = Repository::new(pool);
+            let session_id = repo
+                .create_chat(&ChatMeta {
+                    id: 0,
+                    name: "api_smoke_session".to_string(),
+                    platform: "wechat".to_string(),
+                    chat_type: "group".to_string(),
+                    imported_at: 1_700_000_000,
+                    group_id: None,
+                    group_avatar: None,
+                    owner_id: None,
+                    schema_version: 3,
+                    session_gap_threshold: 1800,
+                })
+                .await
+                .map_err(|e| CliError::Database(e.to_string()))?;
+
+            let config = xenobot_api::config::ApiConfig::default();
+            let app = xenobot_api::router::build_router(&config);
+            let health_request: axum::http::Request<axum::body::Body> =
+                axum::http::Request::builder()
+                    .method("GET")
+                    .uri("/health")
+                    .body(axum::body::Body::empty())
+                    .map_err(|e| CliError::Internal(format!("failed to build request: {}", e)))?;
+            let health_response: axum::response::Response = app
+                .clone()
+                .oneshot(health_request)
+                .await
+                .unwrap_or_else(|err| match err {});
+            let health_status: axum::http::StatusCode = health_response.status();
+            let health_body_bytes = axum::body::to_bytes(health_response.into_body(), 1024 * 1024)
+                .await
+                .map_err(|e| CliError::Internal(format!("failed to read response body: {}", e)))?;
+            let health_body = String::from_utf8_lossy(&health_body_bytes).to_string();
+
+            let generate_endpoint = format!("/chat/sessions/{}/generate-sql", session_id);
+            let generate_request: axum::http::Request<axum::body::Body> =
+                axum::http::Request::builder()
+                    .method("POST")
+                    .uri(&generate_endpoint)
+                    .header("content-type", "application/json")
+                    .body(axum::body::Body::from(
+                        serde_json::json!({
+                            "prompt": "最近消息",
+                            "maxRows": 5
+                        })
+                        .to_string(),
+                    ))
+                    .map_err(|e| {
+                        CliError::Internal(format!("failed to build generate-sql request: {}", e))
+                    })?;
+            let generate_response: axum::response::Response = app
+                .clone()
+                .oneshot(generate_request)
+                .await
+                .unwrap_or_else(|err| match err {});
+            let generate_status: axum::http::StatusCode = generate_response.status();
+            let generate_body_bytes =
+                axum::body::to_bytes(generate_response.into_body(), 2 * 1024 * 1024)
+                    .await
+                    .map_err(|e| {
+                        CliError::Internal(format!(
+                            "failed to read generate-sql response body: {}",
+                            e
+                        ))
+                    })?;
+            if generate_status != axum::http::StatusCode::OK {
+                let generate_body_text = String::from_utf8_lossy(&generate_body_bytes).to_string();
+                return Err(CliError::Internal(format!(
+                    "smoke check failed: generate-sql expected 200, got {} with body {}",
+                    generate_status, generate_body_text
+                )));
+            }
+            if generate_body_bytes.is_empty() {
+                return Err(CliError::Internal(
+                    "smoke check failed: generate-sql returned empty body".to_string(),
+                ));
+            }
+            let generate_body_json: serde_json::Value =
+                serde_json::from_slice(&generate_body_bytes).map_err(|e| {
+                    CliError::Internal(format!("failed to parse generate-sql response body: {}", e))
+                })?;
+            let generated_sql = generate_body_json
+                .get("sql")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string();
+
+            let expected_scope = format!("msg.meta_id = {}", session_id);
+            if !generated_sql.contains(&expected_scope) {
+                return Err(CliError::Internal(format!(
+                    "smoke check failed: generated SQL missing session scope '{}'",
+                    expected_scope
+                )));
+            }
+
+            let execute_endpoint = format!("/chat/sessions/{}/execute-sql", session_id);
+            let execute_request: axum::http::Request<axum::body::Body> =
+                axum::http::Request::builder()
+                    .method("POST")
+                    .uri(&execute_endpoint)
+                    .header("content-type", "application/json")
+                    .body(axum::body::Body::from(
+                        serde_json::json!({
+                            "sql": generated_sql
+                        })
+                        .to_string(),
+                    ))
+                    .map_err(|e| {
+                        CliError::Internal(format!("failed to build execute-sql request: {}", e))
+                    })?;
+            let execute_response: axum::response::Response = app
+                .clone()
+                .oneshot(execute_request)
+                .await
+                .unwrap_or_else(|err| match err {});
+            let execute_status: axum::http::StatusCode = execute_response.status();
+            let execute_body_bytes =
+                axum::body::to_bytes(execute_response.into_body(), 2 * 1024 * 1024)
+                    .await
+                    .map_err(|e| {
+                        CliError::Internal(format!(
+                            "failed to read execute-sql response body: {}",
+                            e
+                        ))
+                    })?;
+            let execute_body = String::from_utf8_lossy(&execute_body_bytes).to_string();
+
+            Ok::<
+                (
+                    axum::http::StatusCode,
+                    String,
+                    axum::http::StatusCode,
+                    String,
+                    axum::http::StatusCode,
+                    String,
+                ),
+                CliError,
+            >((
+                health_status,
+                health_body,
+                generate_status,
+                generated_sql,
+                execute_status,
+                execute_body,
+            ))
+        })?;
 
     println!("api smoke check completed");
     println!("route: GET /health");
-    println!("status: {}", status.as_u16());
-    println!("body: {}", body);
-    if status != axum::http::StatusCode::OK {
+    println!("status: {}", health_status.as_u16());
+    println!("body: {}", health_body);
+    println!("route: POST /chat/sessions/:session_id/generate-sql");
+    println!("status: {}", generate_status.as_u16());
+    println!("contract: generated SQL includes session scope filter");
+    println!(
+        "sql preview: {}",
+        generated_sql.chars().take(120).collect::<String>()
+    );
+    println!("route: POST /chat/sessions/:session_id/execute-sql");
+    println!("status: {}", execute_status.as_u16());
+    if health_status != axum::http::StatusCode::OK {
         return Err(CliError::Internal(format!(
             "smoke check failed: expected 200, got {}",
-            status
+            health_status
         )));
     }
-    if !body.trim().eq_ignore_ascii_case("ok") {
+    if !health_body.trim().eq_ignore_ascii_case("ok") {
         return Err(CliError::Internal(format!(
             "smoke check failed: expected body 'OK', got '{}'",
-            body.trim()
+            health_body.trim()
+        )));
+    }
+    if execute_status != axum::http::StatusCode::OK {
+        return Err(CliError::Internal(format!(
+            "smoke check failed: execute-sql expected 200, got {} with body {}",
+            execute_status, execute_body
         )));
     }
 
@@ -7595,6 +8034,27 @@ fn validate_mcp_integration_preset_contract(
             if name != "xenobot" || transport_value != "sse" || url.is_none() {
                 return Err(CliError::Internal(
                     "mcp smoke failed: opencode preset missing mcpServers[0] contract".to_string(),
+                ));
+            }
+        }
+        "pencil" => {
+            let first = payload
+                .get("configuration")
+                .and_then(|v| v.get("servers"))
+                .and_then(|v| v.as_array())
+                .and_then(|arr| arr.first());
+            let name = first
+                .and_then(|v| v.get("name"))
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
+            let transport_value = first
+                .and_then(|v| v.get("transport"))
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
+            let url = first.and_then(|v| v.get("url")).and_then(|v| v.as_str());
+            if name != "xenobot" || transport_value != "sse" || url.is_none() {
+                return Err(CliError::Internal(
+                    "mcp smoke failed: pencil preset missing servers[0] contract".to_string(),
                 ));
             }
         }
@@ -8531,6 +8991,27 @@ fn run_mcp_smoke_check(base_url: String, timeout_ms: u64) -> Result<()> {
 }
 
 #[cfg(feature = "api")]
+fn normalize_mcp_preset_target(target: &str) -> Result<String> {
+    let normalized = target.trim().to_ascii_lowercase();
+    if normalized.is_empty() {
+        return Err(CliError::Argument(
+            "mcp preset requires a non-empty --target".to_string(),
+        ));
+    }
+
+    match normalized.as_str() {
+        "claude-desktop" | "claude_desktop" | "claude" => Ok("claude-desktop".to_string()),
+        "chatwise" => Ok("chatwise".to_string()),
+        "opencode" => Ok("opencode".to_string()),
+        "pencil" => Ok("pencil".to_string()),
+        _ => Err(CliError::Argument(format!(
+            "mcp preset target '{}' is not supported; use one of: claude-desktop, chatwise, opencode, pencil",
+            target.trim()
+        ))),
+    }
+}
+
+#[cfg(feature = "api")]
 fn run_mcp_integration_preset_fetch(
     base_url: String,
     target: String,
@@ -8543,12 +9024,7 @@ fn run_mcp_integration_preset_fetch(
             "mcp preset requires a non-empty --url".to_string(),
         ));
     }
-    let target = target.trim().to_string();
-    if target.is_empty() {
-        return Err(CliError::Argument(
-            "mcp preset requires a non-empty --target".to_string(),
-        ));
-    }
+    let target = normalize_mcp_preset_target(&target)?;
 
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -8778,6 +9254,168 @@ fn run_mcp_tool_call(
     {
         return Err(CliError::Internal(
             "mcp call returned JSON-RPC error payload".to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
+#[cfg(feature = "api")]
+fn run_mcp_tools_list(
+    base_url: String,
+    mode: crate::commands::McpCallMode,
+    format: OutputFormat,
+    timeout_ms: u64,
+) -> Result<()> {
+    let base = base_url.trim().trim_end_matches('/').to_string();
+    if base.is_empty() {
+        return Err(CliError::Argument(
+            "mcp tools requires a non-empty --url".to_string(),
+        ));
+    }
+
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| CliError::Internal(e.to_string()))?;
+
+    let mode_for_request = mode.clone();
+    let response = runtime.block_on(async move {
+        let timeout = std::time::Duration::from_millis(timeout_ms.max(500));
+        let client = reqwest::Client::builder()
+            .timeout(timeout)
+            .build()
+            .map_err(|e| CliError::Internal(format!("failed to build HTTP client: {}", e)))?;
+
+        let request = match mode_for_request {
+            crate::commands::McpCallMode::Rpc => {
+                client
+                    .post(format!("{}/mcp", base))
+                    .json(&serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": "xenobot-mcp-tools-list",
+                        "method": "tools/list"
+                    }))
+            }
+            crate::commands::McpCallMode::Http => client.get(format!("{}/tools", base)),
+        };
+
+        let resp = request
+            .send()
+            .await
+            .map_err(|e| CliError::Internal(format!("mcp tools request failed: {}", e)))?;
+        let status = resp.status();
+        let json: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| CliError::Internal(format!("mcp tools decode failed: {}", e)))?;
+        Ok::<(reqwest::StatusCode, serde_json::Value), CliError>((status, json))
+    })?;
+
+    let (status, payload) = response;
+
+    let (tool_names, tools_with_schema) = match mode {
+        crate::commands::McpCallMode::Rpc => {
+            let items = payload
+                .get("result")
+                .and_then(|v| v.get("tools"))
+                .and_then(|v| v.as_array())
+                .cloned()
+                .unwrap_or_default();
+            let names = items
+                .iter()
+                .filter_map(|item| {
+                    item.get("name")
+                        .and_then(|v| v.as_str())
+                        .or_else(|| item.as_str())
+                        .map(str::to_string)
+                })
+                .collect::<Vec<_>>();
+            let with_schema = items
+                .iter()
+                .filter(|item| item.get("inputSchema").is_some_and(|v| v.is_object()))
+                .count();
+            (names, with_schema)
+        }
+        crate::commands::McpCallMode::Http => {
+            let names = payload
+                .get("tools")
+                .and_then(|v| v.as_array())
+                .cloned()
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|item| item.as_str().map(str::to_string))
+                .collect::<Vec<_>>();
+            let with_schema = payload
+                .get("toolSpecs")
+                .and_then(|v| v.as_array())
+                .map(|items| {
+                    items
+                        .iter()
+                        .filter(|item| item.get("inputSchema").is_some_and(|v| v.is_object()))
+                        .count()
+                })
+                .unwrap_or(0);
+            (names, with_schema)
+        }
+    };
+
+    let output = serde_json::json!({
+        "mode": mode.to_string(),
+        "status": status.as_u16(),
+        "ok": status.is_success(),
+        "toolCount": tool_names.len(),
+        "toolsWithSchema": tools_with_schema,
+        "tools": tool_names,
+        "response": payload,
+    });
+
+    match format {
+        OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Csv => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&output).map_err(|e| CliError::Internal(format!(
+                    "format mcp tools output failed: {}",
+                    e
+                )))?
+            );
+        }
+        OutputFormat::Text | OutputFormat::Table => {
+            println!("mcp tools");
+            println!("mode: {}", mode);
+            println!("status: {}", output["status"].as_u64().unwrap_or_default());
+            println!("ok: {}", output["ok"].as_bool().unwrap_or(false));
+            println!(
+                "tool count: {}",
+                output["toolCount"].as_u64().unwrap_or_default()
+            );
+            println!(
+                "tools with schema: {}",
+                output["toolsWithSchema"].as_u64().unwrap_or_default()
+            );
+            println!("tools:");
+            for name in output["tools"].as_array().cloned().unwrap_or_default() {
+                if let Some(tool_name) = name.as_str() {
+                    println!("- {}", tool_name);
+                }
+            }
+        }
+    }
+
+    if !status.is_success() {
+        return Err(CliError::Internal(format!(
+            "mcp tools failed with status {}",
+            status
+        )));
+    }
+
+    if output
+        .get("response")
+        .and_then(|value| value.get("error"))
+        .is_some()
+    {
+        return Err(CliError::Internal(
+            "mcp tools returned JSON-RPC error payload".to_string(),
         ));
     }
 
@@ -9043,18 +9681,20 @@ mod tests {
     fn validate_select_sql_rejects_non_select_statement() {
         let sql = "DELETE FROM message";
         let err = validate_select_sql(sql).expect_err("non-select must be rejected");
-        assert!(err
-            .to_string()
-            .contains("only SELECT statements are allowed"));
+        assert!(
+            err.to_string()
+                .contains("only SELECT statements are allowed")
+        );
     }
 
     #[test]
     fn validate_select_sql_rejects_multiple_statements() {
         let sql = "SELECT 1; SELECT 2;";
         let err = validate_select_sql(sql).expect_err("multiple statements must be rejected");
-        assert!(err
-            .to_string()
-            .contains("multiple SQL statements are not allowed"));
+        assert!(
+            err.to_string()
+                .contains("multiple SQL statements are not allowed")
+        );
     }
 
     #[cfg(feature = "api")]
@@ -9071,9 +9711,10 @@ mod tests {
     fn parse_mcp_tool_args_json_rejects_non_object_payload() {
         let err =
             parse_mcp_tool_args_json(r#"[1,2,3]"#).expect_err("array json should be rejected");
-        assert!(err
-            .to_string()
-            .contains("--args-json must be a JSON object"));
+        assert!(
+            err.to_string()
+                .contains("--args-json must be a JSON object")
+        );
     }
 
     #[cfg(feature = "api")]
@@ -9096,6 +9737,25 @@ mod tests {
         let err = parse_optional_json_body(Some("{not-json}".to_string()))
             .expect_err("invalid json should be rejected");
         assert!(err.to_string().contains("invalid --body-json"));
+    }
+
+    #[cfg(feature = "api")]
+    #[test]
+    fn parse_http_json_response_body_accepts_valid_http_json_payload() {
+        let raw = b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"service\":\"xenobot-api\",\"version\":\"0.1.0\"}";
+        let parsed = parse_http_json_response_body(raw).expect("json body should parse");
+        assert_eq!(parsed["service"], "xenobot-api");
+        assert_eq!(parsed["version"], "0.1.0");
+    }
+
+    #[cfg(feature = "api")]
+    #[test]
+    fn parse_http_json_response_body_rejects_non_json_payload() {
+        let raw = b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nOK";
+        assert!(
+            parse_http_json_response_body(raw).is_none(),
+            "non-json payload should be rejected"
+        );
     }
 
     #[cfg(feature = "api")]
@@ -9140,9 +9800,23 @@ mod tests {
             1500,
         )
         .expect_err("non-object args should fail before network execution");
-        assert!(err
-            .to_string()
-            .contains("--args-json must be a JSON object"));
+        assert!(
+            err.to_string()
+                .contains("--args-json must be a JSON object")
+        );
+    }
+
+    #[cfg(feature = "api")]
+    #[test]
+    fn run_mcp_tools_list_rejects_empty_url_before_network() {
+        let err = run_mcp_tools_list(
+            "   ".to_string(),
+            crate::commands::McpCallMode::Rpc,
+            OutputFormat::Json,
+            1500,
+        )
+        .expect_err("empty url must fail before network execution");
+        assert!(err.to_string().contains("non-empty --url"));
     }
 
     #[cfg(feature = "api")]
@@ -9150,34 +9824,6 @@ mod tests {
     fn encode_http_path_component_percent_encodes_reserved_chars() {
         let encoded = encode_http_path_component("xenobot://server/info name");
         assert_eq!(encoded, "xenobot%3A%2F%2Fserver%2Finfo%20name");
-    }
-
-    #[cfg(feature = "api")]
-    #[test]
-    fn build_sandbox_start_recommendation_prefers_tcp_when_available() {
-        let gateway = std::path::Path::new("/tmp/xenobot gateway");
-        let (mode, command) = build_sandbox_start_recommendation(true, true, gateway);
-        assert_eq!(mode, "tcp");
-        assert!(command.contains("--host 127.0.0.1"));
-    }
-
-    #[cfg(feature = "api")]
-    #[test]
-    fn build_sandbox_start_recommendation_uses_unix_when_tcp_blocked() {
-        let gateway = std::path::Path::new("/tmp/xenobot gateway");
-        let (mode, command) = build_sandbox_start_recommendation(false, true, gateway);
-        assert_eq!(mode, "unix");
-        assert!(command.contains("--unix-socket /tmp/xenobot.sock"));
-    }
-
-    #[cfg(feature = "api")]
-    #[test]
-    fn build_sandbox_start_recommendation_uses_file_gateway_and_quotes_path() {
-        let gateway = std::path::Path::new("/tmp/xenobot gateway/with spaces");
-        let (mode, command) = build_sandbox_start_recommendation(false, false, gateway);
-        assert_eq!(mode, "file-gateway");
-        assert!(command.contains("--force-file-gateway"));
-        assert!(command.contains("--file-gateway-dir '/tmp/xenobot gateway/with spaces'"));
     }
 
     #[cfg(feature = "api")]
@@ -9237,6 +9883,90 @@ mod tests {
         assert!(err.to_string().contains("method must not be empty"));
     }
 
+    #[cfg(feature = "api")]
+    #[test]
+    fn run_api_smoke_check_validates_health_and_sql_contracts() {
+        let temp_db = std::env::temp_dir().join(format!(
+            "xenobot-cli-api-smoke-{}.db",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock should be after unix epoch")
+                .as_nanos()
+        ));
+        let result = run_api_smoke_check(Some(temp_db.clone()));
+        let _ = std::fs::remove_file(&temp_db);
+        assert!(
+            result.is_ok(),
+            "api smoke should pass health + sql contracts: {:?}",
+            result.err()
+        );
+    }
+
+    #[test]
+    fn resolve_webhook_dispatch_settings_applies_defaults() {
+        let settings = WebhookDispatchSettings::default();
+        let resolved = resolve_webhook_dispatch_settings(&settings);
+        assert_eq!(resolved.batch_size, 64);
+        assert_eq!(resolved.max_concurrency, 8);
+        assert_eq!(resolved.request_timeout_ms, 8_000);
+        assert_eq!(resolved.flush_interval_ms, 250);
+        assert_eq!(resolved.retry_attempts, 3);
+        assert_eq!(resolved.retry_base_delay_ms, 150);
+        assert!(resolved.queue_capacity >= 32);
+    }
+
+    #[test]
+    fn apply_webhook_dispatch_update_resets_then_applies_fields() {
+        let mut settings = WebhookDispatchSettings {
+            batch_size: Some(12),
+            max_concurrency: Some(3),
+            request_timeout_ms: Some(4_000),
+            flush_interval_ms: Some(500),
+            retry_attempts: Some(2),
+            retry_base_delay_ms: Some(90),
+        };
+
+        apply_webhook_dispatch_update(
+            &mut settings,
+            WebhookDispatchUpdate {
+                reset: true,
+                batch_size: Some(256),
+                max_concurrency: None,
+                request_timeout_ms: Some(20_000),
+                flush_interval_ms: None,
+                retry_attempts: Some(5),
+                retry_base_delay_ms: None,
+            },
+        );
+
+        assert_eq!(settings.batch_size, Some(256));
+        assert_eq!(settings.max_concurrency, None);
+        assert_eq!(settings.request_timeout_ms, Some(20_000));
+        assert_eq!(settings.flush_interval_ms, None);
+        assert_eq!(settings.retry_attempts, Some(5));
+        assert_eq!(settings.retry_base_delay_ms, None);
+    }
+
+    #[test]
+    fn resolve_webhook_dispatch_settings_clamps_out_of_range_values() {
+        let settings = WebhookDispatchSettings {
+            batch_size: Some(0),
+            max_concurrency: Some(999),
+            request_timeout_ms: Some(100),
+            flush_interval_ms: Some(50_000),
+            retry_attempts: Some(999),
+            retry_base_delay_ms: Some(0),
+        };
+        let resolved = resolve_webhook_dispatch_settings(&settings);
+        assert_eq!(resolved.batch_size, 1);
+        assert_eq!(resolved.max_concurrency, 64);
+        assert_eq!(resolved.request_timeout_ms, 500);
+        assert_eq!(resolved.flush_interval_ms, 10_000);
+        assert_eq!(resolved.retry_attempts, 8);
+        assert_eq!(resolved.retry_base_delay_ms, 10);
+        assert!((32..=8192).contains(&resolved.queue_capacity));
+    }
+
     #[cfg(all(feature = "analysis", feature = "api"))]
     #[test]
     fn webhook_rule_matches_event_filters_by_event_sender_keyword() {
@@ -9244,6 +9974,9 @@ mod tests {
             id: "wh_1".to_string(),
             url: "http://127.0.0.1:65535/hook".to_string(),
             event_type: Some("message.created".to_string()),
+            platform: None,
+            chat_name: None,
+            meta_id: None,
             sender: Some("alice".to_string()),
             keyword: Some("urgent".to_string()),
             created_at: "2026-02-23T00:00:00Z".to_string(),
@@ -9267,6 +10000,52 @@ mod tests {
         };
         assert!(webhook_rule_matches_event(&rule, &event_ok));
         assert!(!webhook_rule_matches_event(&rule, &event_bad_keyword));
+    }
+
+    #[cfg(all(feature = "analysis", feature = "api"))]
+    #[test]
+    fn webhook_rule_matches_event_filters_by_platform_chat_and_meta_id() {
+        let item = WebhookItem {
+            id: "wh_2".to_string(),
+            url: "http://127.0.0.1:65535/hook".to_string(),
+            event_type: Some("message.created".to_string()),
+            platform: Some("whatsapp".to_string()),
+            chat_name: Some("Team Chat".to_string()),
+            meta_id: Some(42),
+            sender: None,
+            keyword: None,
+            created_at: "2026-03-05T00:00:00Z".to_string(),
+        };
+        let rule = webhook_item_to_rule(&item);
+        let event_ok = WebhookMessageCreatedEvent {
+            event_type: "message.created".to_string(),
+            platform: "whatsapp".to_string(),
+            chat_name: "Team Chat".to_string(),
+            meta_id: 42,
+            message_id: 100,
+            sender_id: 1,
+            sender_name: Some("Alice".to_string()),
+            ts: 1_772_000_000,
+            msg_type: 0,
+            content: Some("hello".to_string()),
+        };
+        let event_bad_platform = WebhookMessageCreatedEvent {
+            platform: "telegram".to_string(),
+            ..event_ok.clone()
+        };
+        let event_bad_chat = WebhookMessageCreatedEvent {
+            chat_name: "Another Chat".to_string(),
+            ..event_ok.clone()
+        };
+        let event_bad_meta = WebhookMessageCreatedEvent {
+            meta_id: 7,
+            ..event_ok.clone()
+        };
+
+        assert!(webhook_rule_matches_event(&rule, &event_ok));
+        assert!(!webhook_rule_matches_event(&rule, &event_bad_platform));
+        assert!(!webhook_rule_matches_event(&rule, &event_bad_chat));
+        assert!(!webhook_rule_matches_event(&rule, &event_bad_meta));
     }
 
     #[cfg(all(feature = "analysis", feature = "api"))]
@@ -9480,9 +10259,11 @@ mod tests {
             payload["analysis"].as_str().unwrap_or_default(),
             "time_distribution_daily"
         );
-        assert!(payload["rows"]
-            .as_array()
-            .is_some_and(|rows| !rows.is_empty()));
+        assert!(
+            payload["rows"]
+                .as_array()
+                .is_some_and(|rows| !rows.is_empty())
+        );
     }
 
     #[test]
@@ -9610,10 +10391,71 @@ mod tests {
             collect_db_verification(std::path::Path::new(":memory:"), &conn).expect("verify db");
         assert!(!report.ok);
         assert!(report.missing_required > 0);
-        assert!(report
-            .checks
-            .iter()
-            .any(|row| row.required && row.name == "sessions" && !row.exists));
+        assert!(
+            report
+                .checks
+                .iter()
+                .any(|row| row.required && row.name == "sessions" && !row.exists)
+        );
+    }
+
+    #[test]
+    fn collect_db_verification_tracks_optional_indexes_from_migrations() {
+        let conn = rusqlite::Connection::open_in_memory().expect("open in-memory db");
+        conn.execute_batch(
+            r#"
+            CREATE TABLE meta (
+                id INTEGER PRIMARY KEY,
+                platform TEXT,
+                name TEXT
+            );
+            CREATE TABLE member (id INTEGER PRIMARY KEY, platform_id TEXT);
+            CREATE TABLE message (
+                id INTEGER PRIMARY KEY,
+                sender_id INTEGER,
+                meta_id INTEGER,
+                ts INTEGER,
+                msg_type INTEGER,
+                content TEXT
+            );
+            CREATE TABLE sessions (id INTEGER PRIMARY KEY, meta_id INTEGER, created_at INTEGER);
+            CREATE TABLE message_context (id INTEGER PRIMARY KEY, session_id INTEGER, message_id INTEGER);
+            CREATE TABLE member_name_history (
+                id INTEGER PRIMARY KEY,
+                member_id INTEGER,
+                start_ts INTEGER
+            );
+            CREATE TABLE import_progress (id INTEGER PRIMARY KEY);
+            CREATE TABLE import_source_checkpoint (id INTEGER PRIMARY KEY);
+
+            CREATE INDEX idx_message_meta_ts_id ON message(meta_id, ts, id);
+            CREATE INDEX idx_message_meta_sender_ts_id ON message(meta_id, sender_id, ts, id);
+            CREATE INDEX idx_sessions_meta_created_at ON sessions(meta_id, created_at);
+            CREATE INDEX idx_member_name_history_member_start_ts ON member_name_history(member_id, start_ts);
+            CREATE INDEX idx_message_context_session_message ON message_context(session_id, message_id);
+            CREATE INDEX idx_chat_session_meta_start_ts_id ON sessions(meta_id, created_at, id);
+            CREATE INDEX idx_message_dedup_lookup ON message(meta_id, sender_id, ts, msg_type, content);
+            CREATE INDEX idx_meta_platform_name ON meta(platform, name);
+            "#,
+        )
+        .expect("seed schema including optional indexes");
+
+        let report =
+            collect_db_verification(std::path::Path::new(":memory:"), &conn).expect("verify db");
+        assert!(report.ok);
+        assert_eq!(report.missing_optional, 0);
+        assert!(
+            report
+                .checks
+                .iter()
+                .any(|row| !row.required && row.name == "idx_message_dedup_lookup" && row.exists)
+        );
+        assert!(
+            report
+                .checks
+                .iter()
+                .any(|row| !row.required && row.name == "idx_meta_platform_name" && row.exists)
+        );
     }
 
     #[test]
@@ -9713,14 +10555,18 @@ mod tests {
             .iter()
             .find(|t| t.name == "child")
             .expect("child table");
-        assert!(child
-            .columns
-            .iter()
-            .any(|c| c.name == "id" && c.primary_key));
-        assert!(child
-            .indexes
-            .iter()
-            .any(|idx| idx.name == "idx_child_parent_id"));
+        assert!(
+            child
+                .columns
+                .iter()
+                .any(|c| c.name == "id" && c.primary_key)
+        );
+        assert!(
+            child
+                .indexes
+                .iter()
+                .any(|idx| idx.name == "idx_child_parent_id")
+        );
         assert!(child.foreign_keys.iter().any(|fk| fk.table == "parent"));
         assert!(child.row_count.is_none());
     }
@@ -9747,6 +10593,45 @@ mod tests {
             .find(|t| t.name == "sample")
             .expect("sample table");
         assert_eq!(sample.row_count, Some(3));
+    }
+
+    #[cfg(feature = "api")]
+    #[test]
+    fn normalize_mcp_preset_target_accepts_aliases() {
+        assert_eq!(
+            normalize_mcp_preset_target("claude").expect("claude alias should normalize"),
+            "claude-desktop"
+        );
+        assert_eq!(
+            normalize_mcp_preset_target("claude_desktop")
+                .expect("claude_desktop alias should normalize"),
+            "claude-desktop"
+        );
+        assert_eq!(
+            normalize_mcp_preset_target("chatwise").expect("chatwise should normalize"),
+            "chatwise"
+        );
+        assert_eq!(
+            normalize_mcp_preset_target("opencode").expect("opencode should normalize"),
+            "opencode"
+        );
+        assert_eq!(
+            normalize_mcp_preset_target("pencil").expect("pencil should normalize"),
+            "pencil"
+        );
+    }
+
+    #[cfg(feature = "api")]
+    #[test]
+    fn run_mcp_preset_rejects_unknown_target_before_network() {
+        let err = run_mcp_integration_preset_fetch(
+            "http://127.0.0.1:65535".to_string(),
+            "unknown-target".to_string(),
+            OutputFormat::Json,
+            1500,
+        )
+        .expect_err("unknown target should fail before network execution");
+        assert!(err.to_string().contains("is not supported"));
     }
 
     #[cfg(feature = "api")]
@@ -9780,6 +10665,15 @@ mod tests {
         });
         validate_mcp_integration_preset_contract("opencode", &opencode)
             .expect("opencode preset should validate");
+
+        let pencil = serde_json::json!({
+            "id": "pencil",
+            "transport": { "sse": "http://127.0.0.1:8081/sse", "websocket": "ws://127.0.0.1:8081/ws", "tools": "http://127.0.0.1:8081/tools" },
+            "configuration": { "servers": [{ "name": "xenobot", "transport": "sse", "url": "http://127.0.0.1:8081/sse", "toolsUrl": "http://127.0.0.1:8081/tools" }] },
+            "notes": ["n1"]
+        });
+        validate_mcp_integration_preset_contract("pencil", &pencil)
+            .expect("pencil preset should validate");
     }
 
     #[cfg(feature = "api")]

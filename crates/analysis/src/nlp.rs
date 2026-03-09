@@ -11,6 +11,12 @@ pub struct ChineseSegmenter {
     max_custom_term_chars: usize,
 }
 
+impl Default for ChineseSegmenter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ChineseSegmenter {
     /// Create a new ChineseSegmenter with default dictionary.
     pub fn new() -> Self {
@@ -98,13 +104,13 @@ impl ChineseSegmenter {
             let mut best: Option<(usize, String)> = None;
             let mut total_chars = 0_usize;
 
-            for j in i..tokens.len() {
-                total_chars += tokens[j].chars().count();
+            for (j, token) in tokens.iter().enumerate().skip(i) {
+                total_chars += token.chars().count();
                 if self.max_custom_term_chars > 0 && total_chars > self.max_custom_term_chars {
                     break;
                 }
 
-                current.push_str(&tokens[j]);
+                current.push_str(token);
                 if self.custom_terms.contains(&current) {
                     best = Some((j + 1, current.clone()));
                 }
@@ -126,6 +132,12 @@ impl ChineseSegmenter {
 /// Stopwords filter for Chinese text.
 pub struct ChineseStopwords {
     stopwords: HashSet<String>,
+}
+
+impl Default for ChineseStopwords {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ChineseStopwords {

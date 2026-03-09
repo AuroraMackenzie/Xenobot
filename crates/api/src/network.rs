@@ -3,6 +3,7 @@
 //! Provides HTTP endpoints equivalent to Xenobot's `networkApi` IPC methods.
 
 use axum::{
+    extract::Query,
     routing::{get, post},
     Json, Router,
 };
@@ -18,6 +19,7 @@ pub fn router() -> Router {
         .route("/proxy-config", get(get_proxy_config))
         .route("/proxy-config", post(save_proxy_config))
         .route("/test-proxy-connection", post(test_proxy_connection))
+        .route("/sandbox-doctor", get(get_sandbox_doctor))
 }
 
 // Request/Response types
@@ -46,6 +48,13 @@ pub struct SaveProxyConfigRequest {
 pub struct TestProxyConnectionRequest {
     pub proxy_url: Option<String>,
     pub proxy_url_camel: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SandboxDoctorQuery {
+    pub file_gateway_dir: Option<String>,
+    pub file_gateway_dir_camel: Option<String>,
 }
 
 // Handler functions
@@ -234,5 +243,57 @@ pub async fn test_proxy_connection(
             "error": err.to_string(),
             "latencyMs": elapsed_ms,
         }))),
+    }
+}
+
+#[axum::debug_handler]
+#[instrument]
+pub async fn get_sandbox_doctor(
+    Query(query): Query<SandboxDoctorQuery>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let explicit_gateway = query
+        .file_gateway_dir
+        .or(query.file_gateway_dir_camel)
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from);
+
+    let report = xenobot_core::sandbox::diagnose_sandbox(explicit_gateway)
+        .map_err(|err| ApiError::Internal(err.to_string()))?;
+
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "report": report,
+    })))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::{to_bytes, Body};
+    use axum::http::{Method, Request, StatusCode};
+    use tower::util::ServiceExt;
+
+    #[tokio::test]
+    async fn sandbox_doctor_route_returns_recommendation_and_gateway_probe() {
+        let app = router();
+        let request = Request::builder()
+            .method(Method::GET)
+            .uri("/sandbox-doctor")
+            .body(Body::empty())
+            .expect("build request");
+        let response = app.oneshot(request).await.expect("route response");
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let bytes = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("read body");
+        let json: serde_json::Value = serde_json::from_slice(&bytes).expect("json body");
+
+        assert_eq!(json["success"], true);
+        assert!(json["report"]["recommended"]["mode"].is_string());
+        assert!(json["report"]["recommended"]["command"].is_string());
+        assert!(json["report"]["fileGateway"]["dir"].is_string());
+        assert!(json["report"]["fileGateway"]["writable"].is_boolean());
     }
 }

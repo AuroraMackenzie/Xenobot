@@ -54,13 +54,13 @@ impl ModelManager {
 
     /// Load sentiment analysis model from path.
     pub fn load_sentiment_model(&mut self, _model_path: &Path) -> AnalysisResult<()> {
-        self.sentiment_model = Some(Arc::new(LexiconClassificationModel::default()));
+        self.sentiment_model = Some(Arc::new(LexiconClassificationModel));
         Ok(())
     }
 
     /// Load topic modeling model from path.
     pub fn load_topic_model(&mut self, _model_path: &Path) -> AnalysisResult<()> {
-        self.topic_model = Some(Arc::new(FrequencyTopicModel::default()));
+        self.topic_model = Some(Arc::new(FrequencyTopicModel));
         Ok(())
     }
 

@@ -337,3 +337,152 @@ async fn test_media_dat_decrypt_validates_payload_when_wechat_enabled(
     let _ = fs::remove_dir_all(&test_root);
     Ok(())
 }
+
+#[cfg(feature = "wechat")]
+#[tokio::test]
+async fn test_media_dat_decrypt_rejects_invalid_base64_when_wechat_enabled(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let _guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+    let test_root = unique_test_root();
+    fs::create_dir_all(&test_root)?;
+
+    let db_path = test_root.join("xenobot_media_dat_invalid_base64.db");
+    let mut db_config = DatabaseConfig::default();
+    db_config.sqlite_path = db_path;
+    xenobot_api::database::init_database_with_config(&db_config).await?;
+
+    let app = build_router(&ApiConfig::default());
+    let resp = post_json_response(
+        &app,
+        "/media/decrypt/dat",
+        serde_json::json!({
+            "payloadBase64": "not-base64@@@"
+        }),
+    )
+    .await?;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    let body = to_bytes(resp.into_body(), usize::MAX).await?;
+    let json: serde_json::Value = serde_json::from_slice(&body)?;
+    assert_eq!(json["code"], 400);
+    assert!(json["error"]
+        .as_str()
+        .is_some_and(|text| text.contains("invalid payloadBase64")));
+
+    let _ = fs::remove_dir_all(&test_root);
+    Ok(())
+}
+
+#[cfg(feature = "wechat")]
+#[tokio::test]
+async fn test_media_audio_transcode_contract_when_wechat_enabled_without_payload(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let _guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+    let test_root = unique_test_root();
+    fs::create_dir_all(&test_root)?;
+
+    let db_path = test_root.join("xenobot_media_audio_validate.db");
+    let mut db_config = DatabaseConfig::default();
+    db_config.sqlite_path = db_path;
+    xenobot_api::database::init_database_with_config(&db_config).await?;
+
+    let app = build_router(&ApiConfig::default());
+    let resp =
+        post_json_response(&app, "/media/transcode/audio/mp3", serde_json::json!({})).await?;
+    let status = resp.status();
+    let body = to_bytes(resp.into_body(), usize::MAX).await?;
+    let json: serde_json::Value = serde_json::from_slice(&body)?;
+
+    // Contract:
+    // - if ffmpeg is unavailable in runtime, endpoint should report 501 with ffmpeg guidance.
+    // - if ffmpeg exists, endpoint should validate payload and return 400.
+    assert!(
+        status == StatusCode::NOT_IMPLEMENTED || status == StatusCode::BAD_REQUEST,
+        "unexpected status for transcode contract: {status}"
+    );
+    if status == StatusCode::NOT_IMPLEMENTED {
+        assert_eq!(json["code"], 501);
+        assert!(json["error"]
+            .as_str()
+            .is_some_and(|text| text.to_ascii_lowercase().contains("ffmpeg")));
+    } else {
+        assert_eq!(json["code"], 400);
+        assert!(json["error"]
+            .as_str()
+            .is_some_and(|text| text.contains("path or payloadBase64")));
+    }
+
+    let _ = fs::remove_dir_all(&test_root);
+    Ok(())
+}
+
+#[cfg(feature = "wechat")]
+#[tokio::test]
+async fn test_media_audio_transcode_rejects_empty_ffmpeg_path(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let _guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+    let test_root = unique_test_root();
+    fs::create_dir_all(&test_root)?;
+
+    let db_path = test_root.join("xenobot_media_audio_empty_ffmpeg_path.db");
+    let mut db_config = DatabaseConfig::default();
+    db_config.sqlite_path = db_path;
+    xenobot_api::database::init_database_with_config(&db_config).await?;
+
+    let app = build_router(&ApiConfig::default());
+    let resp = post_json_response(
+        &app,
+        "/media/transcode/audio/mp3",
+        serde_json::json!({
+            "ffmpegPath": "   "
+        }),
+    )
+    .await?;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    let body = to_bytes(resp.into_body(), usize::MAX).await?;
+    let json: serde_json::Value = serde_json::from_slice(&body)?;
+    assert_eq!(json["code"], 400);
+    assert!(json["error"]
+        .as_str()
+        .is_some_and(|text| text.contains("ffmpegPath cannot be empty")));
+
+    let _ = fs::remove_dir_all(&test_root);
+    Ok(())
+}
+
+#[cfg(feature = "wechat")]
+#[tokio::test]
+async fn test_media_audio_transcode_reports_missing_custom_ffmpeg_binary(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let _guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+    let test_root = unique_test_root();
+    fs::create_dir_all(&test_root)?;
+
+    let db_path = test_root.join("xenobot_media_audio_missing_ffmpeg_custom_binary.db");
+    let mut db_config = DatabaseConfig::default();
+    db_config.sqlite_path = db_path;
+    xenobot_api::database::init_database_with_config(&db_config).await?;
+
+    let app = build_router(&ApiConfig::default());
+    let missing_binary = test_root
+        .join("missing-ffmpeg")
+        .to_string_lossy()
+        .to_string();
+    let resp = post_json_response(
+        &app,
+        "/media/transcode/audio/mp3",
+        serde_json::json!({
+            "ffmpegPath": missing_binary
+        }),
+    )
+    .await?;
+    assert_eq!(resp.status(), StatusCode::NOT_IMPLEMENTED);
+    let body = to_bytes(resp.into_body(), usize::MAX).await?;
+    let json: serde_json::Value = serde_json::from_slice(&body)?;
+    assert_eq!(json["code"], 501);
+    assert!(json["error"]
+        .as_str()
+        .is_some_and(|text| text.contains("binary is unavailable")));
+
+    let _ = fs::remove_dir_all(&test_root);
+    Ok(())
+}

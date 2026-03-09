@@ -25,7 +25,7 @@ async fn main() -> anyhow::Result<()> {
     info!("Starting Xenobot web server...");
 
     // Load configuration
-    let _config = XenobotConfig::default().unwrap_or_default();
+    let _config = XenobotConfig::from_system_dirs().unwrap_or_default();
     let api_config = ApiConfig::default();
     let _replay_worker = spawn_webhook_dead_letter_replayer(&api_config);
 

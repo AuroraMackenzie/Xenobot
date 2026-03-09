@@ -53,29 +53,45 @@ usage() {
 Usage:
   xb root
   xb cargo <args...>
+  xb repo hygiene [--strict-source] [--apply] [--prune-empty-dirs] [--remove-target] [--remove-node-modules]
   xb mcp start [--host <host>] [--port <port>] [--db-path <path>] [--no-sse] [--no-streamable-http]
   xb mcp smoke [--url <base-url>] [--timeout-ms <ms>]
   xb mcp preset [--url <base-url>] --target <claude-desktop|chatwise|opencode> [--format <text|json|yaml|csv|table>]
+  xb mcp tools [--url <base-url>] [--mode <rpc|http>] [--format <text|json|yaml|csv|table>] [--timeout-ms <ms>]
+  xb gpu bench [--size <n>] [--iters <n>] [--format <text|json>]
+  xb gpu check [--size <n>] [--iters <n>]
+  xb perf baseline [--messages <n>] [--db-path <path>] [--gpu-size <n>] [--gpu-iters <n>] [--skip-gpu] [--output <path>]
+  xb perf check [--input <path>] [--max-db-create-ms <n>] [--max-import-ms <n>] [--max-merge-import-ms <n>] [--max-query-ms <n>] [--max-total-ms <n>] [--max-gpu-ms <n>] [--require-gpu]
+  xb quality gate [--skip-platform] [--skip-perf] [--skip-smoke] [--skip-mcp] [--messages <n>] [--db-path <path>] [--perf-output <path>] [--smoke-db-path <path>] [--max-db-create-ms <n>] [--max-import-ms <n>] [--max-merge-import-ms <n>] [--max-query-ms <n>] [--max-total-ms <n>] [--max-gpu-ms <n>] [--require-gpu]
   xb api sandbox-doctor [--file-gateway-dir <path>] [--format <text|json|yaml|csv|table>]
   xb api sandbox-up [--db-path <path>] [--file-gateway-dir <path>] [--file-gateway-poll-ms <ms>] [--file-gateway-response-ttl-seconds <seconds>]
   xb api sandbox-health [--file-gateway-dir <path>] [--timeout-ms <ms>] [--format <text|json|yaml|csv|table>]
-  xb web doctor [--fix-dns] [--dns1 <ip>] [--dns2 <ip>] [--service <name>]...
+  xb web doctor [--fix-dns] [--fix-dns-sudo] [--dns1 <ip>] [--dns2 <ip>] [--service <name>]...
   xb web bootstrap [--strict] [--with-typecheck] [--extreme] [--offline-bundle <path>]
   xb web bundle create [--output <path>]
   xb web bundle restore [--input <path>]
   xb web bundle info [--input <path>]
+  xb web bundle verify [--input <path>]
   xb web deps-update [--refresh-lockfile] [--skip-typecheck] [--bundle-output <path>]
   xb <xenobot-cli args...>
 
 Examples:
   xb api status
   xb api start --db-path /tmp/xenobot.db
+  xb repo hygiene
+  xb repo hygiene --apply --remove-target
   xb api sandbox-doctor
   xb api sandbox-up --db-path /tmp/xenobot.db
   xb api sandbox-health
   xb mcp start --db-path /tmp/xenobot.db
   xb mcp smoke --url http://127.0.0.1:8081
   xb mcp preset --url http://127.0.0.1:8081 --target claude-desktop --format json
+  xb mcp tools --url http://127.0.0.1:8081 --mode rpc --format json
+  xb gpu bench --size 256 --iters 8 --format json
+  xb gpu check --size 64 --iters 2
+  xb perf baseline --messages 20000 --db-path /tmp/xenobot-perf.db
+  xb perf check --max-import-ms 90000 --max-query-ms 10000
+  xb quality gate --skip-platform --messages 600
   xb web doctor --fix-dns
   xb web bundle create
   xb web bootstrap --extreme --offline-bundle .xenobot/offline/frontend-offline-bundle.tar.gz
@@ -101,19 +117,73 @@ main() {
     root)
       printf "%s\n" "$root"
       ;;
+    repo)
+      shift || true
+      case "${1:-}" in
+        hygiene)
+          shift || true
+          local args=()
+          while [[ $# -gt 0 ]]; do
+            case "$1" in
+              --strict-source|--apply|--prune-empty-dirs|--remove-target|--remove-node-modules|-h|--help)
+                args+=("$1")
+                ;;
+              *)
+                echo "error: unknown repo hygiene option '$1'" >&2
+                exit 2
+                ;;
+            esac
+            shift
+          done
+          if [[ "${#args[@]}" -gt 0 ]]; then
+            exec "$root/scripts/repo_hygiene.sh" "${args[@]}"
+          fi
+          exec "$root/scripts/repo_hygiene.sh"
+          ;;
+        "")
+          echo "error: missing xb repo subcommand. Use: xb repo hygiene [options]" >&2
+          exit 2
+          ;;
+        *)
+          echo "error: unsupported xb repo subcommand. Use: xb repo hygiene" >&2
+          exit 2
+          ;;
+      esac
+      ;;
     web)
       shift
       case "${1:-}" in
         doctor)
           shift || true
+          web_doctor_usage() {
+            cat <<'EOF'
+Usage:
+  xb web doctor [--fix-dns] [--fix-dns-sudo] [--dns1 <ip>] [--dns2 <ip>] [--service <name>]...
+
+Options:
+  --fix-dns        Attempt DNS update without sudo (explicit opt-in).
+  --fix-dns-sudo   Attempt DNS update with sudo (explicit opt-in).
+  --dns1, --dns2   DNS server IPs used with --fix-dns/--fix-dns-sudo.
+  --service        Network service name (repeatable). Default includes Wi-Fi.
+EOF
+          }
           local apply_fix_dns=0
+          local apply_fix_dns_with_sudo=0
           local dns1="223.5.5.5"
           local dns2="8.8.8.8"
           local declared_services=()
           while [[ $# -gt 0 ]]; do
             case "$1" in
+              -h|--help)
+                web_doctor_usage
+                exit 0
+                ;;
               --fix-dns)
                 apply_fix_dns=1
+                ;;
+              --fix-dns-sudo)
+                apply_fix_dns=1
+                apply_fix_dns_with_sudo=1
                 ;;
               --dns1)
                 shift
@@ -173,10 +243,20 @@ main() {
             echo "[xb web doctor] applying DNS fix (explicit opt-in): ${dns1}, ${dns2}"
             local svc
             for svc in "${target_services[@]}"; do
-              if networksetup -setdnsservers "${svc}" "${dns1}" "${dns2}" >/dev/null 2>&1; then
-                echo "[xb web doctor] DNS updated for service: ${svc}"
+              if [[ ${apply_fix_dns_with_sudo} -eq 1 ]]; then
+                if sudo networksetup -setdnsservers "${svc}" "${dns1}" "${dns2}" >/dev/null 2>&1; then
+                  echo "[xb web doctor] DNS updated for service (sudo): ${svc}"
+                else
+                  echo "[xb web doctor] notice: failed to update DNS for service with sudo: ${svc}"
+                  echo "[xb web doctor] hint: try manually -> sudo networksetup -setdnsservers \"${svc}\" \"${dns1}\" \"${dns2}\""
+                fi
               else
-                echo "[xb web doctor] notice: failed to update DNS for service: ${svc}"
+                if networksetup -setdnsservers "${svc}" "${dns1}" "${dns2}" >/dev/null 2>&1; then
+                  echo "[xb web doctor] DNS updated for service: ${svc}"
+                else
+                  echo "[xb web doctor] notice: failed to update DNS for service: ${svc}"
+                  echo "[xb web doctor] hint: retry with admin permission -> xb web doctor --fix-dns-sudo --service \"${svc}\""
+                fi
               fi
             done
           fi
@@ -223,6 +303,15 @@ main() {
           fi
           if [[ -f "$bundle_path" ]]; then
             echo "[xb web doctor] offline bundle: present ($bundle_path)"
+            if [[ -x "$root/scripts/frontend_offline_bundle.sh" ]]; then
+              if "$root/scripts/frontend_offline_bundle.sh" verify --input "$bundle_path" >/dev/null 2>&1; then
+                echo "[xb web doctor] offline bundle integrity: OK (manifest + checksum)"
+              else
+                echo "[xb web doctor] offline bundle integrity: FAIL (run: xb web bundle verify --input \"$bundle_path\")"
+              fi
+            else
+              echo "[xb web doctor] offline bundle integrity: skip (bundle script missing)"
+            fi
           else
             echo "[xb web doctor] offline bundle: missing ($bundle_path)"
           fi
@@ -244,13 +333,13 @@ main() {
         bundle)
           shift || true
           case "${1:-}" in
-            create|restore|info)
+            create|restore|info|verify)
               local action="$1"
               shift || true
               exec "$root/scripts/frontend_offline_bundle.sh" "$action" "$@"
               ;;
             *)
-              echo "error: unsupported xb web bundle subcommand. Use: xb web bundle create|restore|info [options]" >&2
+              echo "error: unsupported xb web bundle subcommand. Use: xb web bundle create|restore|info|verify [options]" >&2
               exit 2
               ;;
           esac
@@ -261,6 +350,161 @@ main() {
           ;;
         *)
           echo "error: unsupported xb web subcommand. Use: xb web doctor | xb web bootstrap ... | xb web bundle ..." >&2
+          exit 2
+          ;;
+      esac
+      ;;
+    gpu)
+      shift || true
+      case "${1:-}" in
+        bench)
+          shift || true
+          local args=()
+          while [[ $# -gt 0 ]]; do
+            case "$1" in
+              --size|--iters|--iterations|--format)
+                local opt="$1"
+                args+=("$opt")
+                shift
+                [[ $# -gt 0 ]] || {
+                  echo "error: missing value for $opt" >&2
+                  exit 2
+                }
+                args+=("$1")
+                ;;
+              *)
+                echo "error: unknown gpu bench option '$1'" >&2
+                exit 2
+                ;;
+            esac
+            shift
+          done
+          exec cargo run --manifest-path "$root/Cargo.toml" -q -p xenobot-gpu --bin xenobot-gpu-bench --offline -- "${args[@]}"
+          ;;
+        check)
+          shift || true
+          local size="64"
+          local iters="2"
+          while [[ $# -gt 0 ]]; do
+            case "$1" in
+              --size)
+                shift
+                [[ $# -gt 0 ]] || {
+                  echo "error: missing value for --size" >&2
+                  exit 2
+                }
+                size="$1"
+                ;;
+              --iters|--iterations)
+                shift
+                [[ $# -gt 0 ]] || {
+                  echo "error: missing value for --iters" >&2
+                  exit 2
+                }
+                iters="$1"
+                ;;
+              *)
+                echo "error: unknown gpu check option '$1'" >&2
+                exit 2
+                ;;
+            esac
+            shift
+          done
+          exec "$root/scripts/check_gpu_bench_contract.sh" "$size" "$iters"
+          ;;
+        "")
+          echo "error: missing xb gpu subcommand. Use: xb gpu bench [--size N] [--iters N] [--format text|json] | xb gpu check [--size N] [--iters N]" >&2
+          exit 2
+          ;;
+        *)
+          echo "error: unsupported xb gpu subcommand. Use: xb gpu bench|check" >&2
+          exit 2
+          ;;
+      esac
+      ;;
+    perf)
+      shift || true
+      case "${1:-}" in
+        baseline)
+          shift || true
+          exec "$root/scripts/perf_baseline.sh" "$@"
+          ;;
+        check)
+          shift || true
+          local args=()
+          while [[ $# -gt 0 ]]; do
+            case "$1" in
+              --input|--max-db-create-ms|--max-import-ms|--max-merge-import-ms|--max-query-ms|--max-total-ms|--max-gpu-ms)
+                local opt="$1"
+                args+=("$opt")
+                shift
+                [[ $# -gt 0 ]] || {
+                  echo "error: missing value for $opt" >&2
+                  exit 2
+                }
+                args+=("$1")
+                ;;
+              --require-gpu)
+                args+=("$1")
+                ;;
+              *)
+                echo "error: unknown perf check option '$1'" >&2
+                exit 2
+                ;;
+            esac
+            shift
+          done
+          exec "$root/scripts/check_perf_baseline_contract.sh" "${args[@]}"
+          ;;
+        "")
+          echo "error: missing xb perf subcommand. Use: xb perf baseline [options] | xb perf check [options]" >&2
+          exit 2
+          ;;
+        *)
+          echo "error: unsupported xb perf subcommand. Use: xb perf baseline|check" >&2
+          exit 2
+          ;;
+      esac
+      ;;
+    quality)
+      shift || true
+      case "${1:-}" in
+        gate)
+          shift || true
+          local args=()
+          while [[ $# -gt 0 ]]; do
+            case "$1" in
+              -h|--help)
+                args+=("$1")
+                ;;
+              --skip-platform|--skip-perf|--skip-smoke|--skip-mcp|--require-gpu)
+                args+=("$1")
+                ;;
+              --messages|--db-path|--perf-output|--smoke-db-path|--max-db-create-ms|--max-import-ms|--max-merge-import-ms|--max-query-ms|--max-total-ms|--max-gpu-ms)
+                local opt="$1"
+                args+=("$opt")
+                shift
+                [[ $# -gt 0 ]] || {
+                  echo "error: missing value for $opt" >&2
+                  exit 2
+                }
+                args+=("$1")
+                ;;
+              *)
+                echo "error: unknown quality gate option '$1'" >&2
+                exit 2
+                ;;
+            esac
+            shift
+          done
+          exec "$root/scripts/check_quality_gate.sh" "${args[@]}"
+          ;;
+        "")
+          echo "error: missing xb quality subcommand. Use: xb quality gate [options]" >&2
+          exit 2
+          ;;
+        *)
+          echo "error: unsupported xb quality subcommand. Use: xb quality gate" >&2
           exit 2
           ;;
       esac
@@ -413,11 +657,61 @@ main() {
           exec cargo run --manifest-path "$root/Cargo.toml" -p xenobot-cli --features "api,analysis" -- \
             api mcp-preset --url "$url" --target "$target" --format "$format" --timeout-ms "$timeout_ms"
           ;;
+        tools)
+          shift || true
+          local url="http://127.0.0.1:8081"
+          local mode="rpc"
+          local format="json"
+          local timeout_ms="5000"
+          while [[ $# -gt 0 ]]; do
+            case "$1" in
+              --url)
+                shift
+                [[ $# -gt 0 ]] || {
+                  echo "error: missing value for --url" >&2
+                  exit 2
+                }
+                url="$1"
+                ;;
+              --mode)
+                shift
+                [[ $# -gt 0 ]] || {
+                  echo "error: missing value for --mode" >&2
+                  exit 2
+                }
+                mode="$1"
+                ;;
+              --format)
+                shift
+                [[ $# -gt 0 ]] || {
+                  echo "error: missing value for --format" >&2
+                  exit 2
+                }
+                format="$1"
+                ;;
+              --timeout-ms)
+                shift
+                [[ $# -gt 0 ]] || {
+                  echo "error: missing value for --timeout-ms" >&2
+                  exit 2
+                }
+                timeout_ms="$1"
+                ;;
+              *)
+                echo "error: unknown mcp tools option '$1'" >&2
+                exit 2
+                ;;
+            esac
+            shift
+          done
+          exec cargo run --manifest-path "$root/Cargo.toml" -p xenobot-cli --features "api,analysis" -- \
+            api mcp-tools --url "$url" --mode "$mode" --format "$format" --timeout-ms "$timeout_ms"
+          ;;
         "")
           exec cargo run --manifest-path "$root/Cargo.toml" -p xenobot-mcp -- --help
           ;;
         *)
-          echo "error: unsupported xb mcp subcommand. Use: start|smoke|preset" >&2
+          echo "error: unsupported xb mcp subcommand. Use: start|smoke|preset|tools" >&2
           exit 2
           ;;
       esac

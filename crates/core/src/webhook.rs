@@ -14,6 +14,9 @@ pub struct WebhookRule {
     pub id: String,
     pub url: String,
     pub event_type: Option<String>,
+    pub platform: Option<String>,
+    pub chat_name: Option<String>,
+    pub meta_id: Option<i64>,
     pub sender: Option<String>,
     pub keyword: Option<String>,
     pub created_at: Option<String>,
@@ -175,6 +178,36 @@ pub fn webhook_rule_matches_event(rule: &WebhookRule, event: &WebhookMessageCrea
         }
     }
 
+    let platform_rule = rule
+        .platform
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(|v| v.to_ascii_lowercase());
+    if let Some(v) = platform_rule {
+        if v != event.platform.to_ascii_lowercase() {
+            return false;
+        }
+    }
+
+    let chat_name_rule = rule
+        .chat_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(|v| v.to_ascii_lowercase());
+    if let Some(v) = chat_name_rule {
+        if v != event.chat_name.to_ascii_lowercase() {
+            return false;
+        }
+    }
+
+    if let Some(expected_meta_id) = rule.meta_id {
+        if expected_meta_id != event.meta_id {
+            return false;
+        }
+    }
+
     let sender_rule = rule
         .sender
         .as_deref()
@@ -223,6 +256,9 @@ mod tests {
             id: "wh_1".to_string(),
             url: "http://127.0.0.1:65535/hook".to_string(),
             event_type: Some("message.created".to_string()),
+            platform: None,
+            chat_name: None,
+            meta_id: None,
             sender: Some("alice".to_string()),
             keyword: Some("urgent".to_string()),
             created_at: Some("2026-02-23T00:00:00Z".to_string()),
@@ -253,6 +289,9 @@ mod tests {
             id: "wh_2".to_string(),
             url: "http://127.0.0.1:65535/hook".to_string(),
             event_type: Some("message.created".to_string()),
+            platform: None,
+            chat_name: None,
+            meta_id: None,
             sender: None,
             keyword: None,
             created_at: None,
@@ -297,5 +336,54 @@ mod tests {
         assert_eq!(total.delivered, 2);
         assert_eq!(total.failed, 2);
         assert_eq!(total.filtered, 6);
+    }
+
+    #[test]
+    fn webhook_rule_match_by_platform_chat_name_and_meta_id() {
+        let rule = WebhookRule {
+            id: "wh_3".to_string(),
+            url: "http://127.0.0.1:65535/hook".to_string(),
+            event_type: Some("message.created".to_string()),
+            platform: Some("wechat".to_string()),
+            chat_name: Some("core team".to_string()),
+            meta_id: Some(42),
+            sender: None,
+            keyword: None,
+            created_at: None,
+        };
+        let event = WebhookMessageCreatedEvent {
+            event_type: "message.created".to_string(),
+            platform: "WeChat".to_string(),
+            chat_name: "Core Team".to_string(),
+            meta_id: 42,
+            message_id: 99,
+            sender_id: 7,
+            sender_name: Some("Alice".to_string()),
+            ts: 1_771_800_000,
+            msg_type: 0,
+            content: Some("hello".to_string()),
+        };
+        assert!(webhook_rule_matches_event(&rule, &event));
+        assert!(!webhook_rule_matches_event(
+            &rule,
+            &WebhookMessageCreatedEvent {
+                platform: "line".to_string(),
+                ..event.clone()
+            }
+        ));
+        assert!(!webhook_rule_matches_event(
+            &rule,
+            &WebhookMessageCreatedEvent {
+                chat_name: "other".to_string(),
+                ..event.clone()
+            }
+        ));
+        assert!(!webhook_rule_matches_event(
+            &rule,
+            &WebhookMessageCreatedEvent {
+                meta_id: 100,
+                ..event
+            }
+        ));
     }
 }

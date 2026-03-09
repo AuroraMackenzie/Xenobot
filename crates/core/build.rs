@@ -47,7 +47,6 @@ fn main() {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs()
-            .to_string()
     );
 
     // Git version info (if available)

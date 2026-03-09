@@ -201,11 +201,17 @@ function getSessionAvatar(session: AnalysisSession): string | null {
         :class="[isCollapsed ? 'justify-center' : 'justify-between']"
         style="-webkit-app-region: drag"
       >
-        <div v-if="!isCollapsed" class="ml-2 flex items-baseline">
-          <div class="text-2xl font-black tracking-tight text-cyan-600 dark:text-cyan-400">
-            {{ t('layout.brand') }}
+        <div v-if="!isCollapsed" class="xeno-sidebar-brand ml-2">
+          <div class="xeno-sidebar-brand-mark">
+            <span class="xeno-sidebar-brand-dot" />
+            <div class="text-2xl font-black tracking-tight text-cyan-600 dark:text-cyan-400">
+              {{ t('layout.brand') }}
+            </div>
           </div>
-          <span class="ml-2 text-xs text-gray-400">v{{ version }}</span>
+          <div class="xeno-sidebar-brand-meta">
+            <span class="xeno-sidebar-version">v{{ version }}</span>
+            <span v-if="sessions.length > 0" class="xeno-sidebar-count">{{ sessions.length }}</span>
+          </div>
         </div>
         <UTooltip
           :text="isCollapsed ? t('layout.tooltip.expand') : t('layout.tooltip.collapse')"
@@ -231,7 +237,7 @@ function getSessionAvatar(session: AnalysisSession): string | null {
     <div class="flex-1 relative min-h-0 flex flex-col">
       <!-- English UI note -->
       <div v-if="!isCollapsed && sessions.length > 0" class="px-4 mb-2">
-        <div class="flex items-center justify-between">
+        <div class="xeno-sidebar-section-head flex items-center justify-between">
           <UTooltip :text="t('layout.tooltip.hint')" :popper="{ placement: 'right' }">
             <div class="flex items-center gap-1 pl-3">
               <div class="text-sm font-medium text-gray-500">{{ t('layout.chatHistory') }}</div>
@@ -249,7 +255,7 @@ function getSessionAvatar(session: AnalysisSession): string | null {
           </UTooltip>
         </div>
         <!-- English UI note -->
-        <div v-if="showSearch" class="mt-2">
+        <div v-if="showSearch" class="xeno-sidebar-search mt-2">
           <UInput
             v-model="searchQuery"
             :placeholder="t('layout.searchPlaceholder')"
@@ -261,7 +267,7 @@ function getSessionAvatar(session: AnalysisSession): string | null {
       </div>
 
       <!-- English UI note -->
-      <div class="flex-1 overflow-y-auto">
+      <div class="xeno-sidebar-scroll flex-1 overflow-y-auto">
         <div v-if="sessions.length === 0 && !isCollapsed" class="py-8 text-center text-sm text-gray-500">
           {{ t('layout.noRecords') }}
         </div>
@@ -289,11 +295,12 @@ function getSessionAvatar(session: AnalysisSession): string | null {
                     ? 'xeno-session-item-active text-gray-900 dark:text-primary-100'
                     : 'xeno-session-item-idle text-gray-700 dark:text-gray-200',
                   isCollapsed
-                    ? 'justify-center cursor-pointer h-13 w-13 rounded-full ml-3.5'
-                    : 'cursor-pointer w-full rounded-full',
+                    ? 'justify-center cursor-pointer h-13 w-13 rounded-[1.35rem] ml-3.5'
+                    : 'cursor-pointer w-full rounded-2xl',
                 ]"
                 @click="router.push({ name: getSessionRouteName(session), params: { id: session.id } })"
               >
+                <span class="xeno-session-item-rail" aria-hidden="true" />
                 <!-- English UI note -->
                 <!-- English UI note -->
                 <img
@@ -398,9 +405,37 @@ function getSessionAvatar(session: AnalysisSession): string | null {
 
 <style scoped>
 .xeno-sidebar-shell {
+  position: relative;
   border-right: 1px solid var(--xeno-border-strong);
   background: var(--xeno-sidebar-bg);
   backdrop-filter: blur(16px) saturate(130%);
+  box-shadow:
+    inset -1px 0 0 rgba(255, 255, 255, 0.04),
+    18px 0 42px -34px rgba(2, 6, 23, 0.38);
+  overflow: hidden;
+}
+
+.xeno-sidebar-shell::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.34), transparent);
+  opacity: 0.78;
+}
+
+.xeno-sidebar-shell::after {
+  content: '';
+  position: absolute;
+  top: -7rem;
+  right: -7rem;
+  width: 16rem;
+  height: 16rem;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.12), transparent 72%);
+  filter: blur(16px);
+  opacity: 0.8;
+  pointer-events: none;
 }
 
 .xeno-sidebar-home {
@@ -412,17 +447,110 @@ function getSessionAvatar(session: AnalysisSession): string | null {
 }
 
 .xeno-session-item {
+  overflow: hidden;
   border: 1px solid transparent;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 130%),
+    transparent;
+  backdrop-filter: blur(10px) saturate(122%);
+}
+
+.xeno-sidebar-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.xeno-sidebar-brand-mark {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.xeno-sidebar-brand-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, rgba(45, 212, 191, 0.92), rgba(14, 165, 233, 0.9));
+  box-shadow: 0 0 0 4px rgba(34, 211, 238, 0.1);
+}
+
+.xeno-sidebar-brand-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-left: 1.1rem;
+}
+
+.xeno-sidebar-version,
+.xeno-sidebar-count {
+  border: 1px solid var(--xeno-border-soft);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 9999px;
+  padding: 0.1rem 0.48rem;
+  font-size: 0.66rem;
+  line-height: 1rem;
+  color: var(--xeno-text-secondary);
+}
+
+.xeno-sidebar-section-head {
+  min-height: 2rem;
+}
+
+.xeno-sidebar-search :deep(input) {
+  border-radius: 1rem;
+}
+
+.xeno-sidebar-scroll {
+  position: relative;
+}
+
+.xeno-session-item-rail {
+  position: absolute;
+  left: 0;
+  top: 0.55rem;
+  bottom: 0.55rem;
+  width: 2px;
+  border-radius: 9999px;
+  background: linear-gradient(180deg, rgba(45, 212, 191, 0.88), rgba(56, 189, 248, 0.92));
+  opacity: 0;
+  transform: translateX(-4px);
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+.xeno-session-item::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.12), transparent 56%);
+  opacity: 0.5;
 }
 
 .xeno-session-item-idle:hover {
   border-color: var(--xeno-border-soft);
-  background: var(--xeno-hover-bg);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 120%),
+    var(--xeno-hover-bg);
 }
 
 .xeno-session-item-active {
   border-color: var(--xeno-active-border);
-  background: var(--xeno-active-bg);
+  background:
+    linear-gradient(180deg, rgba(56, 189, 248, 0.08), transparent 120%),
+    var(--xeno-active-bg);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 14px 32px -26px rgba(14, 165, 233, 0.52);
+}
+
+.xeno-session-item:hover .xeno-session-item-rail,
+.xeno-session-item-active .xeno-session-item-rail {
+  opacity: 1;
+  transform: translateX(0);
 }
 
 .xeno-sidebar-fade {

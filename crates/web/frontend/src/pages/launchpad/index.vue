@@ -59,23 +59,35 @@ const features = computed(() => [
 
         <div class="w-full max-w-6xl">
           <div class="xeno-hero-panel xeno-reveal xeno-reveal-1">
-            <div class="mb-4 inline-flex items-center gap-2 rounded-full border border-cyan-200/70 bg-white/80 px-4 py-1.5 text-xs font-semibold text-cyan-700 backdrop-blur-sm dark:border-cyan-500/30 dark:bg-slate-900/50 dark:text-cyan-300">
+            <div class="xeno-hero-kicker mb-4 inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-semibold backdrop-blur-sm">
               <UIcon name="i-heroicons-bolt" class="h-3.5 w-3.5" />
-              <span>LOCAL-FIRST • AI READY • MULTI-PLATFORM</span>
+              <span>AUTHORIZED INPUTS • SANDBOX-AWARE • OPERATIONAL AI</span>
             </div>
 
-            <h1 class="select-none text-4xl font-black tracking-tight text-slate-900 sm:text-5xl lg:text-6xl dark:text-slate-100">
-              {{ t('home.title') }}
-            </h1>
-            <p class="mt-3 max-w-2xl text-base text-slate-600 sm:text-lg dark:text-slate-300">
-              {{ t('home.subtitle') }}
-            </p>
+            <div class="xeno-hero-layout">
+              <div class="xeno-hero-copy">
+                <h1 class="select-none text-4xl font-black tracking-tight text-slate-900 sm:text-5xl lg:text-6xl dark:text-slate-100">
+                  {{ t('home.title') }}
+                </h1>
+                <p class="mt-3 max-w-2xl text-base text-slate-600 sm:text-lg dark:text-slate-300">
+                  {{ t('home.subtitle') }}
+                </p>
+              </div>
+
+              <div class="xeno-hero-signal">
+                <div class="xeno-hero-signal-label">SYSTEM SIGNAL</div>
+                <div class="xeno-hero-signal-value">Rust-first surface, original local workflow.</div>
+                <div class="xeno-hero-signal-note">
+                  Parser intake, sandbox routing, analytics, and MCP guidance move through one operational shell.
+                </div>
+              </div>
+            </div>
 
             <div class="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-3">
               <article
                 v-for="(feature, idx) in features"
                 :key="feature.title"
-                class="group xeno-card-reveal rounded-2xl border border-white/60 bg-white/70 p-4 shadow-sm backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:border-slate-700/60 dark:bg-slate-900/60"
+                class="group xeno-card-reveal xeno-feature-card p-4 transition-all duration-200 hover:-translate-y-0.5"
                 :style="{ '--xeno-card-delay': `${120 + idx * 80}ms` }"
               >
                 <div class="mb-3 inline-flex h-9 w-9 items-center justify-center rounded-xl bg-linear-to-br text-white" :class="feature.color">
@@ -88,7 +100,7 @@ const features = computed(() => [
           </div>
         </div>
 
-        <div class="mt-8 xeno-reveal xeno-reveal-2 w-full max-w-6xl rounded-3xl border border-white/60 bg-white/72 px-4 py-6 shadow-lg backdrop-blur-sm dark:border-slate-700/60 dark:bg-slate-900/62 sm:px-6">
+        <div class="xeno-import-shell mt-8 xeno-reveal xeno-reveal-2 w-full max-w-6xl px-4 py-6 sm:px-6">
           <ImportArea />
         </div>
       </div>
@@ -105,7 +117,7 @@ const features = computed(() => [
 <style scoped>
 .xeno-hero-panel {
   position: relative;
-  border: 1px solid rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--xeno-border-strong);
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.84), rgba(255, 255, 255, 0.58));
   border-radius: 1.5rem;
@@ -131,9 +143,88 @@ const features = computed(() => [
   animation: xeno-sheen 10s linear infinite;
 }
 
+.xeno-hero-kicker {
+  border: 1px solid rgba(103, 211, 255, 0.28);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 120%),
+    rgba(9, 27, 40, 0.08);
+  color: #0f6f8d;
+}
+
+.xeno-hero-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(18rem, 0.9fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.xeno-hero-copy {
+  min-width: 0;
+}
+
+.xeno-hero-signal {
+  border: 1px solid var(--xeno-border-soft);
+  border-radius: 1.25rem;
+  padding: 1rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 120%),
+    var(--xeno-surface-main);
+  box-shadow: var(--xeno-shadow-soft);
+}
+
+.xeno-hero-signal-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: #2b89a8;
+}
+
+.xeno-hero-signal-value {
+  margin-top: 0.5rem;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.15rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--xeno-text-main);
+}
+
+.xeno-hero-signal-note {
+  margin-top: 0.55rem;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--xeno-text-secondary);
+}
+
+.xeno-feature-card {
+  border: 1px solid var(--xeno-border-soft);
+  border-radius: 1.25rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 120%),
+    var(--xeno-surface-main);
+  box-shadow: var(--xeno-shadow-soft);
+  backdrop-filter: blur(12px) saturate(124%);
+}
+
+.xeno-import-shell {
+  border: 1px solid var(--xeno-border-strong);
+  border-radius: 1.5rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 120%),
+    var(--xeno-surface-main);
+  box-shadow: var(--xeno-shadow-panel);
+  backdrop-filter: blur(14px) saturate(126%);
+}
+
 @media (min-width: 640px) {
   .xeno-hero-panel {
     padding: 2rem;
+  }
+}
+
+@media (max-width: 900px) {
+  .xeno-hero-layout {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -144,6 +235,10 @@ const features = computed(() => [
   box-shadow:
     0 30px 70px -42px rgba(2, 6, 23, 0.72),
     inset 0 1px 0 rgba(148, 163, 184, 0.18);
+}
+
+:root.dark .xeno-hero-kicker {
+  color: #7edcff;
 }
 
 .xeno-orb {

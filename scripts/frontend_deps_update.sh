@@ -92,5 +92,5 @@ echo "[frontend-deps-update] creating offline bundle..."
 
 echo "[frontend-deps-update] completed"
 echo "[frontend-deps-update] next recommended commands:"
-echo "  git add ${FRONTEND_DIR}/pnpm-lock.yaml ${BUNDLE_OUTPUT} ${BUNDLE_OUTPUT}.sha256"
+echo "  git add ${FRONTEND_DIR}/pnpm-lock.yaml ${BUNDLE_OUTPUT} ${BUNDLE_OUTPUT}.sha256 ${BUNDLE_OUTPUT}.manifest.json"
 echo "  git status --short"

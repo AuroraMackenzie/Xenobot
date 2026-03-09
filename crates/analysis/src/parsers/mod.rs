@@ -1646,6 +1646,38 @@ fn parse_viber_timestamp(s: Option<&str>) -> Option<i64> {
         .map(|dt| dt.timestamp())
 }
 
+macro_rules! impl_default_parser_via_new {
+    ($($parser:ty),+ $(,)?) => {
+        $(
+            impl Default for $parser {
+                fn default() -> Self {
+                    Self::new()
+                }
+            }
+        )+
+    };
+}
+
+impl_default_parser_via_new!(
+    WhatsAppParser,
+    LINEParser,
+    QQParser,
+    TelegramParser,
+    DiscordParser,
+    WeChatParser,
+    InstagramParser,
+    IMessageParser,
+    MessengerParser,
+    KakaoTalkParser,
+    SlackParser,
+    TeamsParser,
+    SignalParser,
+    SkypeParser,
+    GoogleChatParser,
+    ZoomParser,
+    ViberParser,
+);
+
 #[cfg(test)]
 mod tests {
     use super::{ParseError, ParserRegistry};

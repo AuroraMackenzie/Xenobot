@@ -36,12 +36,12 @@ impl MpsMatrixMultiplication {
         &self,
         a: &[f32],
         b: &[f32],
-        m: usize,
-        k: usize,
-        n: usize,
+        shape: (usize, usize, usize),
         alpha: f32,
         beta: f32,
     ) -> Result<Vec<f32>> {
+        let (m, k, n) = shape;
+
         // Validate input dimensions
         if a.len() != m * k {
             return Err(GpuError::Mps(format!(
@@ -168,13 +168,13 @@ mod tests {
                         let b = vec![5.0, 6.0, 7.0, 8.0]; // 2x2
 
                         // Expected result: [[19, 22], [43, 50]]
-                        match mps_mmul.multiply(&a, &b, 2, 2, 2, 1.0, 0.0) {
+                        match mps_mmul.multiply(&a, &b, (2, 2, 2), 1.0, 0.0) {
                             Ok(c) => {
                                 // Check dimensions
                                 assert_eq!(c.len(), 4);
 
                                 // Verify matrix multiplication result (within floating point tolerance)
-                                let expected = vec![19.0, 22.0, 43.0, 50.0];
+                                let expected = [19.0, 22.0, 43.0, 50.0];
                                 for (i, (actual, expected)) in
                                     c.iter().zip(expected.iter()).enumerate()
                                 {

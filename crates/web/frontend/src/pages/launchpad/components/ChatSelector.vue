@@ -1,32 +1,17 @@
 <script setup lang="ts">
-/**
- * English note.
- * English note.
- * English note.
- *
- * English note.
- * English note.
- */
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-/** English note.
 export interface ChatInfo {
-  /** English note.
   index: number
-  /** English note.
   name: string
-  /** English note.
   type: string
-  /** English note.
   id: number
-  /** English note.
   messageCount: number
 }
 
 const props = defineProps<{
   open: boolean
-  /** English note.
   filePath: string
 }>()
 
@@ -57,7 +42,6 @@ const isAllSelected = computed(() => chats.value.length > 0 && selectedIndexes.v
 
 // English engineering note.
 
-/** English note.
 function getChatTypeIcon(type: string): string {
   const t = type.toLowerCase()
   if (t.includes('personal') || t.includes('private_chat') || t.includes('bot') || t.includes('saved')) {
@@ -69,7 +53,6 @@ function getChatTypeIcon(type: string): string {
   return 'i-heroicons-chat-bubble-left-right'
 }
 
-/** English note.
 function formatTypeLabel(type: string): string {
   return type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
@@ -140,15 +123,15 @@ function handleClose() {
 <template>
   <UModal v-model:open="isOpen" :title="t('home.chatSelector.title')">
     <template #body>
-      <div class="min-h-[200px]">
+      <div class="xeno-chat-selector min-h-[200px]">
         <!-- English UI note -->
-        <div v-if="loading" class="flex flex-col items-center justify-center py-12">
+        <div v-if="loading" class="xeno-chat-selector-state flex flex-col items-center justify-center py-12">
           <UIcon name="i-heroicons-arrow-path" class="mb-4 h-8 w-8 animate-spin text-pink-500" />
           <p class="text-gray-500 dark:text-gray-400">{{ t('home.chatSelector.scanning') }}</p>
         </div>
 
         <!-- English UI note -->
-        <div v-else-if="error" class="flex flex-col items-center justify-center py-12">
+        <div v-else-if="error" class="xeno-chat-selector-state flex flex-col items-center justify-center py-12">
           <UIcon name="i-heroicons-exclamation-circle" class="mb-4 h-8 w-8 text-red-500" />
           <p class="text-red-600 dark:text-red-400">{{ error }}</p>
           <UButton class="mt-4" size="sm" variant="soft" @click="scan">
@@ -159,7 +142,7 @@ function handleClose() {
         <!-- English UI note -->
         <div v-else-if="chats.length > 0">
           <!-- English UI note -->
-          <div class="mb-2 flex items-center justify-between">
+          <div class="xeno-chat-selector-toolbar mb-2 flex items-center justify-between">
             <div class="flex items-center gap-2">
               <UCheckbox
                 :model-value="isAllSelected"
@@ -177,11 +160,11 @@ function handleClose() {
           </div>
 
           <!-- English UI note -->
-          <div class="max-h-[420px] space-y-0.5 overflow-y-auto pr-1">
+          <div class="xeno-chat-selector-list max-h-[420px] space-y-0.5 overflow-y-auto pr-1">
             <div
               v-for="chat in chats"
               :key="chat.index"
-              class="flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 transition-colors"
+              class="xeno-chat-selector-row flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 transition-colors"
               :class="
                 selectedIndexes.has(chat.index)
                   ? 'bg-pink-50 dark:bg-pink-500/10'
@@ -220,7 +203,7 @@ function handleClose() {
         </div>
 
         <!-- English UI note -->
-        <div v-else class="flex flex-col items-center justify-center py-12">
+        <div v-else class="xeno-chat-selector-state flex flex-col items-center justify-center py-12">
           <UIcon name="i-heroicons-chat-bubble-left-right" class="mb-4 h-8 w-8 text-gray-400" />
           <p class="text-gray-500 dark:text-gray-400">{{ t('home.chatSelector.noChats') }}</p>
         </div>
@@ -239,3 +222,51 @@ function handleClose() {
     </template>
   </UModal>
 </template>
+
+<style scoped>
+.xeno-chat-selector {
+  color: var(--xeno-text-main);
+}
+
+.xeno-chat-selector-state,
+.xeno-chat-selector-toolbar,
+.xeno-chat-selector-list {
+  border: 1px solid var(--xeno-border-soft);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 130%),
+    var(--xeno-surface-muted);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.xeno-chat-selector-state,
+.xeno-chat-selector-toolbar {
+  border-radius: 1rem;
+  padding: 0.8rem 0.9rem;
+}
+
+.xeno-chat-selector-list {
+  border-radius: 1rem;
+  padding: 0.4rem;
+}
+
+.xeno-chat-selector-row {
+  position: relative;
+}
+
+.xeno-chat-selector-row::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 20%;
+  bottom: 20%;
+  width: 2px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(111, 218, 255, 0), rgba(111, 218, 255, 0.72), rgba(111, 218, 255, 0));
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.xeno-chat-selector-row:hover::before {
+  opacity: 0.85;
+}
+</style>

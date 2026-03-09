@@ -1302,6 +1302,107 @@ async fn test_import_batch_merged_mode_mixed_failure_and_retry_reconciliation(
 }
 
 #[tokio::test]
+async fn test_import_batch_merged_mode_does_not_apply_separate_retry_loop(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let _test_guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+    let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .canonicalize()?;
+    let _cwd_guard = WorkingDirGuard::change_to(&workspace_root)?;
+
+    let test_root = unique_test_root();
+    fs::create_dir_all(&test_root)?;
+    let db_path = test_root.join("xenobot_api_import_batch_merged_retry_boundary.db");
+
+    let mut db_config = DatabaseConfig::default();
+    db_config.sqlite_path = db_path;
+    xenobot_api::database::init_database_with_config(&db_config).await?;
+    let repo = Repository::new(xenobot_api::database::get_pool().await?);
+    let app = chat::router();
+
+    let ok_path = test_root.join("telegram_merged_retry_boundary_ok.json");
+    let bad_path = test_root.join("telegram_merged_retry_boundary_bad.json");
+    write_json_file(
+        &ok_path,
+        &json!({
+            "name": "Merged Retry Boundary OK",
+            "type": "group",
+            "messages": [
+                {
+                    "sender_id": "ok_u",
+                    "sender_name": "Ok U",
+                    "timestamp": 2660000001u64,
+                    "msg_type": 0,
+                    "content": "ok"
+                }
+            ]
+        }),
+    )?;
+    fs::write(&bad_path, b"bad-json-payload")?;
+
+    let (status, resp) = post_json(
+        &app,
+        "/import-batch",
+        json!({
+            "filePaths": [
+                ok_path.to_string_lossy().to_string(),
+                bad_path.to_string_lossy().to_string()
+            ],
+            "merge": true,
+            "retryFailed": true,
+            "maxRetries": 8,
+            "mergedSessionName": "Merged Retry Boundary"
+        }),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(resp["mode"], "merged");
+    assert_eq!(resp["success"], true);
+    assert_eq!(resp["importedFiles"], 1);
+    assert_eq!(resp["failedFiles"], 1);
+    assert_eq!(resp["skippedFiles"], 0);
+
+    let items = resp["items"]
+        .as_array()
+        .expect("merged response should include per-file items");
+    assert_eq!(items.len(), 2);
+
+    let ok_item = items
+        .iter()
+        .find(|item| item["filePath"] == ok_path.to_string_lossy().to_string())
+        .expect("ok item should exist");
+    assert_eq!(ok_item["success"], true);
+    assert!(
+        ok_item.get("attemptsUsed").is_none(),
+        "merged mode should not expose separate-mode retry counters"
+    );
+
+    let failed_item = items
+        .iter()
+        .find(|item| item["filePath"] == bad_path.to_string_lossy().to_string())
+        .expect("failed item should exist");
+    assert_eq!(failed_item["success"], false);
+    assert!(
+        failed_item.get("attemptsUsed").is_none(),
+        "merged mode should not expose separate-mode retry counters"
+    );
+
+    let failed_checkpoint = repo
+        .get_import_source_checkpoint(
+            "api-import-batch-merged",
+            bad_path.to_string_lossy().as_ref(),
+        )
+        .await?
+        .expect("failed merged source checkpoint should exist");
+    assert_eq!(failed_checkpoint.status, "failed");
+    assert!(failed_checkpoint.meta_id.is_none());
+
+    let _ = fs::remove_dir_all(&test_root);
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_import_batch_separate_mode_retry_and_checkpoint_skip(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let _test_guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
@@ -1981,6 +2082,106 @@ async fn test_import_batch_merged_mode_dedup_and_checkpoint_consistency_in_singl
     assert_eq!(checkpoint_b.meta_id, Some(session_id));
     assert_eq!(checkpoint_b.last_inserted_messages, 1);
     assert_eq!(checkpoint_b.last_duplicate_messages, 1);
+
+    let _ = fs::remove_dir_all(&test_root);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_import_batch_merged_mode_preserves_distinct_platform_message_ids(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let _test_guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+    let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .canonicalize()?;
+    let _cwd_guard = WorkingDirGuard::change_to(&workspace_root)?;
+
+    let test_root = unique_test_root();
+    fs::create_dir_all(&test_root)?;
+    let db_path = test_root.join("xenobot_api_import_batch_merged_platform_message_id.db");
+
+    let mut db_config = DatabaseConfig::default();
+    db_config.sqlite_path = db_path;
+    xenobot_api::database::init_database_with_config(&db_config).await?;
+    let pool = xenobot_api::database::get_pool().await?;
+    let app = chat::router();
+
+    let file_a_path = test_root.join("whatsapp_merged_pm_id_a.json");
+    let file_b_path = test_root.join("whatsapp_merged_pm_id_b.json");
+
+    write_json_file(
+        &file_a_path,
+        &json!({
+            "name": "Merged PM-ID A",
+            "type": "group",
+            "messages": [
+                {
+                    "sender_id": "wa_pm_id_sender",
+                    "sender_name": "Sender A",
+                    "timestamp": 2600000001u64,
+                    "msg_type": 0,
+                    "content": "same-content",
+                    "platform_message_id": "wa-msg-1"
+                }
+            ]
+        }),
+    )?;
+    write_json_file(
+        &file_b_path,
+        &json!({
+            "name": "Merged PM-ID B",
+            "type": "group",
+            "messages": [
+                {
+                    "sender_id": "wa_pm_id_sender",
+                    "sender_name": "Sender A",
+                    "timestamp": 2600000001u64,
+                    "msg_type": 0,
+                    "content": "same-content",
+                    "platform_message_id": "wa-msg-2"
+                }
+            ]
+        }),
+    )?;
+
+    let (status, batch_resp) = post_json(
+        &app,
+        "/import-batch",
+        json!({
+            "filePaths": [
+                file_a_path.to_string_lossy().to_string(),
+                file_b_path.to_string_lossy().to_string()
+            ],
+            "merge": true,
+            "mergedSessionName": "Merged PM-ID Distinctness"
+        }),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(batch_resp["success"], true);
+    assert_eq!(batch_resp["mode"], "merged");
+    assert_eq!(batch_resp["totalInsertedMessages"], 2);
+    assert_eq!(batch_resp["totalDuplicateMessages"], 0);
+
+    let session_id = batch_resp["mergedSessionId"]
+        .as_str()
+        .and_then(|v| v.parse::<i64>().ok())
+        .expect("merged import should return mergedSessionId");
+
+    let total_messages: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM message WHERE meta_id = ?1")
+        .bind(session_id)
+        .fetch_one(&*pool)
+        .await?;
+    assert_eq!(total_messages, 2);
+
+    let distinct_platform_message_ids: i64 = sqlx::query_scalar(
+        "SELECT COUNT(DISTINCT platform_message_id) FROM message WHERE meta_id = ?1",
+    )
+    .bind(session_id)
+    .fetch_one(&*pool)
+    .await?;
+    assert_eq!(distinct_platform_message_ids, 2);
 
     let _ = fs::remove_dir_all(&test_root);
     Ok(())

@@ -7,6 +7,7 @@ use tower_http::cors::CorsLayer;
 /// Build the main API router with all enabled modules.
 pub fn build_router(config: &ApiConfig) -> Router {
     let mut router = Router::new();
+    let status_payload = build_status_payload(config);
 
     // Add CORS layer if enabled
     if config.enable_cors {
@@ -68,6 +69,16 @@ pub fn build_router(config: &ApiConfig) -> Router {
     // Add service index and health check endpoints
     router = router.route("/", axum::routing::get(api_index));
     router = router.route("/health", axum::routing::get(health_check));
+    router = router.route(
+        "/status",
+        axum::routing::get({
+            let payload = status_payload.clone();
+            move || {
+                let body = payload.clone();
+                async move { Json(body) }
+            }
+        }),
+    );
 
     router
 }
@@ -78,6 +89,7 @@ async fn api_index() -> Json<serde_json::Value> {
         "service": "xenobot-api",
         "status": "running",
         "health": "/health",
+        "statusEndpoint": "/status",
         "endpoints": [
             "/chat",
             "/media",
@@ -99,6 +111,40 @@ async fn api_index() -> Json<serde_json::Value> {
 /// Health check endpoint.
 async fn health_check() -> &'static str {
     "OK"
+}
+
+fn build_status_payload(config: &ApiConfig) -> serde_json::Value {
+    serde_json::json!({
+        "service": "xenobot-api",
+        "version": env!("CARGO_PKG_VERSION"),
+        "status": "running",
+        "health": "/health",
+        "statusEndpoint": "/status",
+        "bindAddr": config.bind_addr.to_string(),
+        "apiBasePath": config.api_base_path,
+        "corsEnabled": config.enable_cors,
+        "requestTimeoutSeconds": config.request_timeout_seconds,
+        "maxBodySizeBytes": config.max_body_size,
+        "runtime": {
+            "os": std::env::consts::OS,
+            "arch": std::env::consts::ARCH
+        },
+        "features": {
+            "chat": config.features.enable_chat,
+            "merge": config.features.enable_merge,
+            "ai": config.features.enable_ai,
+            "llm": config.features.enable_llm,
+            "agent": config.features.enable_agent,
+            "embedding": config.features.enable_embedding,
+            "core": config.features.enable_core,
+            "nlp": config.features.enable_nlp,
+            "network": config.features.enable_network,
+            "cache": config.features.enable_cache,
+            "session": config.features.enable_session,
+            "events": config.features.enable_events,
+            "wechat": config.features.enable_wechat
+        }
+    })
 }
 
 /// Create CORS layer based on configuration.
@@ -180,6 +226,7 @@ mod tests {
         assert_eq!(json["service"], "xenobot-api");
         assert_eq!(json["status"], "running");
         assert_eq!(json["health"], "/health");
+        assert_eq!(json["statusEndpoint"], "/status");
         assert!(json["endpoints"].is_array());
     }
 
@@ -198,5 +245,32 @@ mod tests {
             .await
             .expect("read body");
         assert_eq!(std::str::from_utf8(&bytes).expect("utf8"), "OK");
+    }
+
+    #[tokio::test]
+    async fn status_route_returns_runtime_payload_and_feature_flags() {
+        let app = build_router(&ApiConfig::default());
+        let request = Request::builder()
+            .method(Method::GET)
+            .uri("/status")
+            .body(Body::empty())
+            .expect("build request");
+        let response = app.oneshot(request).await.expect("route response");
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let bytes = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("read body");
+        let json: serde_json::Value = serde_json::from_slice(&bytes).expect("json body");
+        assert_eq!(json["service"], "xenobot-api");
+        assert_eq!(json["status"], "running");
+        assert_eq!(json["health"], "/health");
+        assert_eq!(json["statusEndpoint"], "/status");
+        assert!(json["version"].is_string());
+        assert!(json["bindAddr"].is_string());
+        assert!(json["features"].is_object());
+        assert_eq!(json["features"]["chat"], true);
+        assert_eq!(json["features"]["session"], true);
+        assert_eq!(json["runtime"]["arch"], std::env::consts::ARCH);
     }
 }

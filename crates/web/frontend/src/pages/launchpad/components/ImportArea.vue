@@ -423,11 +423,11 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
 </script>
 
 <template>
-  <div class="flex flex-col items-center space-y-6">
+  <div class="xeno-import-stack flex flex-col items-center space-y-6">
     <!-- English UI note -->
     <div
       v-if="isBatchImporting && batchFiles.length > 0"
-      class="w-full max-w-4xl rounded-3xl border border-gray-200/50 bg-gray-100/50 px-8 py-6 backdrop-blur-md dark:border-white/10 dark:bg-gray-800/40"
+      class="xeno-import-state-card w-full max-w-4xl rounded-3xl border border-gray-200/50 bg-gray-100/50 px-8 py-6 backdrop-blur-md dark:border-white/10 dark:bg-gray-800/40"
     >
       <!-- English UI note -->
       <div class="mb-4 flex items-center justify-between">
@@ -473,7 +473,7 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
     <!-- English UI note -->
     <div
       v-else-if="isMergeImporting && mergeStage !== 'done'"
-      class="w-full max-w-4xl rounded-3xl border border-gray-200/50 bg-gray-100/50 px-8 py-6 backdrop-blur-md dark:border-white/10 dark:bg-gray-800/40"
+      class="xeno-import-state-card w-full max-w-4xl rounded-3xl border border-gray-200/50 bg-gray-100/50 px-8 py-6 backdrop-blur-md dark:border-white/10 dark:bg-gray-800/40"
     >
       <!-- English UI note -->
       <div class="mb-4 flex items-center justify-between">
@@ -526,7 +526,7 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
     <!-- English UI note -->
     <div
       v-else-if="isMergeImporting && mergeStage === 'done' && mergeResult"
-      class="w-full max-w-4xl rounded-3xl border border-gray-200/50 bg-gray-100/50 px-8 py-6 backdrop-blur-md dark:border-white/10 dark:bg-gray-800/40"
+      class="xeno-import-state-card w-full max-w-4xl rounded-3xl border border-gray-200/50 bg-gray-100/50 px-8 py-6 backdrop-blur-md dark:border-white/10 dark:bg-gray-800/40"
     >
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">
@@ -554,7 +554,7 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
     <!-- English UI note -->
     <div
       v-else-if="batchImportResult"
-      class="w-full max-w-4xl rounded-3xl border border-gray-200/50 bg-gray-100/50 px-8 py-6 backdrop-blur-md dark:border-white/10 dark:bg-gray-800/40"
+      class="xeno-import-state-card w-full max-w-4xl rounded-3xl border border-gray-200/50 bg-gray-100/50 px-8 py-6 backdrop-blur-md dark:border-white/10 dark:bg-gray-800/40"
     >
       <!-- English UI note -->
       <div class="mb-4 flex items-center justify-between">
@@ -632,7 +632,7 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
     >
       <template #default="{ isDragOver }">
         <div
-          class="group relative flex w-full cursor-pointer flex-col items-center justify-center rounded-3xl border border-gray-200/50 bg-gray-100/50 px-8 py-4 backdrop-blur-md transition-all duration-300 hover:border-pink-500/30 hover:bg-gray-100/80 hover:shadow-2xl hover:shadow-pink-500/10 focus:outline-none focus:ring-4 focus:ring-pink-500/20 sm:px-12 sm:py-6 dark:border-white/10 dark:bg-gray-800/40 dark:hover:border-pink-500/30 dark:hover:bg-gray-800/60"
+          class="xeno-import-dropzone group relative flex w-full cursor-pointer flex-col items-center justify-center rounded-3xl border border-gray-200/50 bg-gray-100/50 px-8 py-4 backdrop-blur-md transition-all duration-300 hover:border-pink-500/30 hover:bg-gray-100/80 hover:shadow-2xl hover:shadow-pink-500/10 focus:outline-none focus:ring-4 focus:ring-pink-500/20 sm:px-12 sm:py-6 dark:border-white/10 dark:bg-gray-800/40 dark:hover:border-pink-500/30 dark:hover:bg-gray-800/60"
           :class="{
             'border-pink-500/50 bg-pink-50/50 dark:border-pink-400/50 dark:bg-pink-500/10':
               isDragOver && !isAnyImporting,
@@ -642,7 +642,7 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
         >
           <!-- English UI note -->
           <div
-            class="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl transition-transform duration-300 group-hover:scale-105"
+            class="xeno-import-dropzone-icon mb-4 flex h-16 w-16 items-center justify-center rounded-2xl transition-transform duration-300 group-hover:scale-105"
             :class="{ 'scale-105': isDragOver && !isAnyImporting, 'animate-pulse': isImporting }"
           >
             <UIcon
@@ -680,8 +680,8 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
     </FileDropZone>
 
     <!-- English UI note -->
-    <div v-if="!isAnyImporting && !batchImportResult" class="flex items-center justify-center">
-      <div class="flex items-center gap-2">
+    <div v-if="!isAnyImporting && !batchImportResult" class="xeno-import-toggle-row flex items-center justify-center">
+      <div class="xeno-import-toggle-inner flex items-center gap-2">
         <UCheckbox
           v-model="mergeImportEnabled"
           :label="t('home.import.options.mergeImport')"
@@ -706,7 +706,7 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
     <!-- Error Message -->
     <div
       v-if="importError"
-      class="flex max-w-lg flex-col items-center gap-3 rounded-lg bg-red-50 px-4 py-4 dark:bg-red-900/20"
+      class="xeno-import-error-card flex max-w-lg flex-col items-center gap-3 rounded-lg bg-red-50 px-4 py-4 dark:bg-red-900/20"
     >
       <div class="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
         <UIcon name="i-heroicons-exclamation-circle" class="h-5 w-5 shrink-0" />
@@ -752,3 +752,79 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
     <ChatSelector v-model:open="showChatSelector" :file-path="chatSelectorFilePath" @select="handleChatSelect" />
   </div>
 </template>
+
+<style scoped>
+.xeno-import-stack {
+  position: relative;
+}
+
+.xeno-import-state-card,
+.xeno-import-dropzone,
+.xeno-import-toggle-inner,
+.xeno-import-error-card {
+  border-color: var(--xeno-border-soft);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 120%),
+    var(--xeno-surface-muted);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 24px 60px rgba(2, 8, 19, 0.22);
+}
+
+.xeno-import-state-card,
+.xeno-import-dropzone {
+  position: relative;
+  overflow: hidden;
+}
+
+.xeno-import-state-card::before,
+.xeno-import-dropzone::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(96, 223, 255, 0.34), transparent);
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+.xeno-import-dropzone::after {
+  content: '';
+  position: absolute;
+  inset: 14% 18% auto;
+  height: 140px;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(87, 214, 255, 0.16), transparent 72%);
+  filter: blur(34px);
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.xeno-import-dropzone-icon {
+  border: 1px solid rgba(106, 220, 255, 0.18);
+  background:
+    radial-gradient(circle at 30% 30%, rgba(112, 227, 255, 0.18), transparent 58%),
+    rgba(7, 20, 32, 0.76);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 16px 32px rgba(0, 0, 0, 0.22);
+}
+
+.xeno-import-toggle-row {
+  width: 100%;
+}
+
+.xeno-import-toggle-inner {
+  border: 1px solid var(--xeno-border-soft);
+  border-radius: 9999px;
+  padding: 0.5rem 0.9rem;
+}
+
+.xeno-import-error-card {
+  border: 1px solid rgba(255, 126, 148, 0.2);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 120%),
+    rgba(74, 16, 28, 0.34);
+}
+</style>

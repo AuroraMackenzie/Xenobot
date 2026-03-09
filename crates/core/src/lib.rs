@@ -7,6 +7,7 @@
 pub mod config;
 pub mod constants;
 pub mod error;
+pub mod sandbox;
 pub mod platform_sources;
 pub mod types;
 pub mod webhook;
@@ -15,4 +16,5 @@ pub mod webhook;
 pub use config::XenobotConfig;
 pub use error::{Error, Result};
 pub use platform_sources::*;
+pub use sandbox::*;
 pub use types::*;

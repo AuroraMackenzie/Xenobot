@@ -346,8 +346,8 @@ pub struct FeatureConfig {
 }
 
 impl XenobotConfig {
-    /// Create default configuration.
-    pub fn default() -> Result<Self> {
+    /// Build config defaults using current system config/data/cache directories.
+    pub fn from_system_dirs() -> Result<Self> {
         let config_dir = dirs::config_dir()
             .ok_or_else(|| Error::Config("Cannot find config directory".to_string()))?
             .join("xenobot");

@@ -38,4 +38,10 @@ done
 echo "[platform-coverage] checking api + cli compile contract"
 cargo check -p xenobot-api -p xenobot-cli --features "$FEATURES" --offline
 
+echo "[platform-coverage] checking 7.2 agent frontend/backend alias contract"
+cargo test -p xenobot-api --test agent_frontend_contract_test --offline
+
+echo "[platform-coverage] checking 10.x MCP contract suite"
+cargo test -p xenobot-mcp --offline
+
 echo "[platform-coverage] complete"

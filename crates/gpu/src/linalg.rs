@@ -125,7 +125,7 @@ impl MatrixOps {
         }
 
         let mps_mmul = MpsMatrixMultiplication::new(self.device.clone())?;
-        mps_mmul.multiply(a, b, m, k, n, 1.0, 0.0)
+        mps_mmul.multiply(a, b, (m, k, n), 1.0, 0.0)
     }
 
     /// Perform matrix-vector multiplication: y = A × x
@@ -152,7 +152,7 @@ impl MatrixOps {
         // Treat x as a column vector (n × 1 matrix)
         // For MPS, we need to treat it as a matrix
         let mps_mmul = MpsMatrixMultiplication::new(self.device.clone())?;
-        mps_mmul.multiply(a, x, m, n, 1, 1.0, 0.0)
+        mps_mmul.multiply(a, x, (m, n, 1), 1.0, 0.0)
     }
 
     /// Transpose matrix: B = A^T
@@ -295,9 +295,7 @@ impl BatchMatrixOps {
             let c_slice = mps_mmul.multiply(
                 &a[a_offset..a_offset + m * k],
                 &b[b_offset..b_offset + k * n],
-                m,
-                k,
-                n,
+                (m, k, n),
                 1.0,
                 0.0,
             )?;
@@ -350,9 +348,7 @@ impl BatchMatrixOps {
             let y_slice = mps_mmul.multiply(
                 &a[a_offset..a_offset + m * n],
                 &x[x_offset..x_offset + n],
-                m,
-                n,
-                1, // Treat x as n × 1 matrix
+                (m, n, 1), // Treat x as n × 1 matrix
                 1.0,
                 0.0,
             )?;

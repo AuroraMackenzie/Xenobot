@@ -121,6 +121,11 @@ if [[ ${EXTREME_MODE} -eq 1 ]]; then
   fi
 
   echo "[frontend-bootstrap] no local node_modules and no usable offline bundle."
+  echo "[frontend-bootstrap] next steps:"
+  echo "  1) attempt DNS repair: scripts/xb web doctor --fix-dns-sudo"
+  echo "  2) or restore offline bundle:"
+  echo "     scripts/xb web bundle verify --input .xenobot/offline/frontend-offline-bundle.tar.gz"
+  echo "     scripts/xb web bootstrap --extreme --offline-bundle .xenobot/offline/frontend-offline-bundle.tar.gz"
   if [[ ${STRICT_MODE} -eq 1 ]]; then
     exit 1
   fi
@@ -136,6 +141,10 @@ if ! curl -fsS --max-time 8 "${PING_URL}" >/dev/null 2>&1; then
     exit 0
   fi
   echo "[frontend-bootstrap] skip frontend install. Rust backend development remains available."
+  echo "[frontend-bootstrap] next steps:"
+  echo "  1) attempt DNS repair: scripts/xb web doctor --fix-dns-sudo"
+  echo "  2) or provide an offline bundle path:"
+  echo "     scripts/xb web bootstrap --extreme --offline-bundle .xenobot/offline/frontend-offline-bundle.tar.gz"
   if [[ ${STRICT_MODE} -eq 1 ]]; then
     exit 1
   fi

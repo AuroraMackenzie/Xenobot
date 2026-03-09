@@ -361,21 +361,21 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="flex h-full flex-col">
+  <div class="xeno-batch-manage flex h-full flex-col">
     <!-- English UI note -->
-    <div class="mb-4">
+    <div class="xeno-batch-search-wrap mb-4">
       <UInput
         v-model="searchQuery"
         :placeholder="t('tools.batchManage.searchPlaceholder')"
         icon="i-heroicons-magnifying-glass"
         size="md"
-        class="max-w-md"
+        class="xeno-batch-search max-w-md"
       />
     </div>
 
     <!-- English UI note -->
-    <div class="mb-4 flex items-center justify-between">
-      <div class="flex items-center gap-4">
+    <div class="xeno-batch-toolbar mb-4 flex items-center justify-between">
+      <div class="xeno-batch-toolbar-meta flex items-center gap-4">
         <!-- English UI note -->
         <UCheckbox
           :model-value="isAllSelected"
@@ -403,7 +403,7 @@ onMounted(() => {
         </span>
       </div>
 
-      <div class="flex gap-2">
+      <div class="xeno-batch-toolbar-actions flex gap-2">
         <!-- English UI note -->
         <UTooltip :text="canMerge ? '' : t('tools.batchManage.mergeHint')">
           <UButton color="primary" :disabled="!canMerge" icon="i-heroicons-document-duplicate" @click="handleMerge">
@@ -419,24 +419,27 @@ onMounted(() => {
     </div>
 
     <!-- English UI note -->
-    <div v-if="sessions.length === 0" class="flex flex-1 items-center justify-center">
+    <div v-if="sessions.length === 0" class="xeno-batch-empty flex flex-1 items-center justify-center">
       <div class="text-center text-gray-500 dark:text-gray-400">
         <UIcon name="i-heroicons-inbox" class="mb-2 h-12 w-12" />
         <p>{{ t('tools.batchManage.empty') }}</p>
       </div>
     </div>
 
-    <div v-else-if="filteredSessions.length === 0" class="flex flex-1 items-center justify-center">
+    <div v-else-if="filteredSessions.length === 0" class="xeno-batch-empty flex flex-1 items-center justify-center">
       <div class="text-center text-gray-500 dark:text-gray-400">
         <UIcon name="i-heroicons-magnifying-glass" class="mb-2 h-12 w-12" />
         <p>{{ t('tools.batchManage.noSearchResult') }}</p>
       </div>
     </div>
 
-    <div v-else class="flex-1 overflow-y-auto rounded-lg border border-gray-200/50 dark:border-gray-700/50">
+    <div
+      v-else
+      class="xeno-batch-grid flex-1 overflow-auto rounded-lg border border-gray-200/50 dark:border-gray-700/50"
+    >
       <!-- English UI note -->
       <div
-        class="sticky top-0 z-[1] flex items-center gap-3 border-b border-gray-200 bg-gray-50 px-3 py-2 text-xs font-medium text-gray-500 dark:border-gray-700 dark:bg-gray-800/80 dark:text-gray-400"
+        class="xeno-batch-grid-head sticky top-0 z-[1] flex min-w-[860px] items-center gap-3 border-b border-gray-200 bg-gray-50 px-3 py-2 text-xs font-medium text-gray-500 dark:border-gray-700 dark:bg-gray-800/80 dark:text-gray-400"
       >
         <div class="w-6" />
         <div class="w-8" />
@@ -452,7 +455,7 @@ onMounted(() => {
       <div
         v-for="(session, index) in filteredSessions"
         :key="session.id"
-        class="flex cursor-pointer items-center gap-3 px-3 py-2 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+        class="xeno-batch-grid-row flex min-w-[860px] cursor-pointer items-center gap-3 px-3 py-2 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
         :class="[
           isSelected(session.id) ? 'bg-pink-50 dark:bg-pink-900/20' : '',
           index !== filteredSessions.length - 1 ? 'border-b border-gray-100 dark:border-gray-800' : '',
@@ -470,11 +473,11 @@ onMounted(() => {
             v-if="getSessionAvatar(session)"
             :src="getSessionAvatar(session)!"
             :alt="session.name"
-            class="h-8 w-8 shrink-0 rounded-full object-cover"
+            class="xeno-batch-avatar h-8 w-8 shrink-0 rounded-full object-cover"
           />
           <div
             v-else
-            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold"
+            class="xeno-batch-avatar flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold"
             :class="isPrivateChat(session) ? 'bg-pink-500 text-white' : 'bg-primary-500 text-white'"
           >
             {{ getSessionAvatarText(session) }}
@@ -493,7 +496,7 @@ onMounted(() => {
               v-if="editingId === session.id"
               v-model="editingName"
               type="text"
-              class="w-full rounded border border-pink-300 bg-white px-2 py-0.5 text-sm font-medium text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500 dark:border-pink-600 dark:bg-gray-800 dark:text-white"
+              class="xeno-batch-edit-input w-full rounded border border-pink-300 bg-white px-2 py-0.5 text-sm font-medium text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500 dark:border-pink-600 dark:bg-gray-800 dark:text-white"
               autofocus
               @blur="saveEdit"
               @keydown.enter="saveEdit"
@@ -503,7 +506,7 @@ onMounted(() => {
             <!-- English UI note -->
             <p
               v-else
-              class="cursor-text truncate rounded px-1 text-sm font-medium text-gray-900 hover:bg-gray-200 dark:text-white dark:hover:bg-gray-700"
+              class="xeno-batch-name cursor-text truncate rounded px-1 text-sm font-medium text-gray-900 hover:bg-gray-200 dark:text-white dark:hover:bg-gray-700"
               :title="t('tools.batchManage.clickToEdit')"
               @click="startEdit(session, $event)"
             >
@@ -515,7 +518,7 @@ onMounted(() => {
         <!-- English UI note -->
         <div class="w-20 text-center">
           <span
-            class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
+            class="xeno-batch-platform inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
             :class="getPlatformClass(session.platform)"
           >
             {{ getPlatformLabel(session.platform) }}
@@ -547,7 +550,7 @@ onMounted(() => {
     <!-- English UI note -->
     <UModal v-model:open="showMergeModal">
       <template #content>
-        <div class="p-4">
+        <div class="xeno-batch-modal-shell p-4">
           <div class="mb-4 flex items-center gap-3">
             <div class="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30">
               <UIcon name="i-heroicons-document-duplicate" class="h-5 w-5 text-blue-600 dark:text-blue-400" />
@@ -562,7 +565,7 @@ onMounted(() => {
           </p>
 
           <!-- English UI note -->
-          <div class="mb-4 max-h-40 overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-700">
+          <div class="xeno-batch-modal-list mb-4 max-h-40 overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-700">
             <div
               v-for="session in sessions.filter((s) => selectedIds.has(s.id))"
               :key="session.id"
@@ -600,7 +603,7 @@ onMounted(() => {
     <!-- English UI note -->
     <UModal v-model:open="showDeleteModal">
       <template #content>
-        <div class="p-4">
+        <div class="xeno-batch-modal-shell p-4">
           <div class="mb-4 flex items-center gap-3">
             <div class="flex h-10 w-10 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30">
               <UIcon name="i-heroicons-exclamation-triangle" class="h-5 w-5 text-red-600 dark:text-red-400" />
@@ -627,3 +630,128 @@ onMounted(() => {
     </UModal>
   </div>
 </template>
+
+<style scoped>
+.xeno-batch-manage {
+  color: var(--xeno-text-main);
+}
+
+.xeno-batch-search-wrap,
+.xeno-batch-toolbar,
+.xeno-batch-grid,
+.xeno-batch-empty {
+  border: 1px solid var(--xeno-border-soft);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 130%),
+    var(--xeno-surface-muted);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 20px 48px rgba(4, 10, 19, 0.18);
+}
+
+.xeno-batch-search-wrap,
+.xeno-batch-toolbar,
+.xeno-batch-empty {
+  border-radius: 1.1rem;
+  padding: 0.9rem 1rem;
+}
+
+.xeno-batch-grid {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.15rem;
+}
+
+.xeno-batch-grid::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(99, 226, 255, 0.3), transparent);
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.xeno-batch-grid-head {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 120%),
+    rgba(8, 23, 36, 0.92);
+  backdrop-filter: blur(12px) saturate(126%);
+}
+
+.xeno-batch-grid-row {
+  position: relative;
+}
+
+.xeno-batch-grid-row:hover {
+  background: rgba(108, 215, 255, 0.05);
+}
+
+.xeno-batch-grid-row::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 18%;
+  bottom: 18%;
+  width: 2px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(107, 216, 255, 0), rgba(107, 216, 255, 0.72), rgba(107, 216, 255, 0));
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.xeno-batch-grid-row:hover::before {
+  opacity: 0.8;
+}
+
+.xeno-batch-toolbar-meta,
+.xeno-batch-toolbar-actions {
+  flex-wrap: wrap;
+}
+
+.xeno-batch-empty {
+  min-height: 14rem;
+}
+
+.xeno-batch-avatar {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.16);
+}
+
+.xeno-batch-name {
+  transition:
+    background-color 0.18s ease,
+    color 0.18s ease;
+}
+
+.xeno-batch-name:hover {
+  background: rgba(111, 218, 255, 0.08);
+}
+
+.xeno-batch-edit-input {
+  border-color: rgba(111, 218, 255, 0.3);
+  background: rgba(7, 18, 28, 0.76);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.xeno-batch-platform {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.xeno-batch-modal-shell {
+  border: 1px solid var(--xeno-border-soft);
+  border-radius: 1rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 120%),
+    rgba(8, 21, 32, 0.92);
+}
+
+.xeno-batch-modal-list {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 120%),
+    rgba(6, 17, 27, 0.66);
+}
+</style>

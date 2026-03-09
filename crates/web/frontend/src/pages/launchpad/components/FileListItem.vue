@@ -1,29 +1,18 @@
 <script setup lang="ts">
-/**
- * English note.
- * English note.
- */
 defineProps<{
-  /** English note.
   name: string
-  /** English note.
   statusIcon: string
-  /** English note.
   statusClass: string
-  /** English note.
   progressText?: string
-  /** English note.
   index: number
-  /** English note.
   total: number
-  /** English note.
   highlight?: boolean
 }>()
 </script>
 
 <template>
   <div
-    class="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
+    class="xeno-file-list-item flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
     :class="{ 'bg-pink-50/50 dark:bg-pink-500/5': highlight }"
   >
     <UIcon :name="statusIcon" class="h-5 w-5 shrink-0" :class="statusClass" />
@@ -42,3 +31,12 @@ defineProps<{
     <slot name="action" />
   </div>
 </template>
+
+<style scoped>
+.xeno-file-list-item {
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 120%),
+    rgba(8, 20, 31, 0.58);
+}
+</style>

@@ -20,7 +20,7 @@ use std::{
     convert::Infallible,
     fs,
     path::{Path as FsPath, PathBuf},
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tracing::{instrument, warn};
 use xenobot_analysis::parsers::{
@@ -351,19 +351,84 @@ struct MultiChatScanItem {
     message_count: i64,
 }
 
+const WEBHOOK_BATCH_SIZE_DEFAULT: usize = 64;
+const WEBHOOK_MAX_CONCURRENCY_DEFAULT: usize = 8;
+const WEBHOOK_REQUEST_TIMEOUT_MS_DEFAULT: u64 = 8_000;
+const WEBHOOK_FLUSH_INTERVAL_MS_DEFAULT: u64 = 1_200;
+const WEBHOOK_RETRY_ATTEMPTS_DEFAULT: u32 = 3;
+const WEBHOOK_RETRY_BASE_DELAY_MS_DEFAULT: u64 = 150;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ApiWebhookItem {
     id: String,
     url: String,
+    #[serde(default, alias = "eventType")]
     event_type: Option<String>,
+    #[serde(default)]
+    platform: Option<String>,
+    #[serde(default, alias = "chatName")]
+    chat_name: Option<String>,
+    #[serde(default, alias = "metaId")]
+    meta_id: Option<i64>,
+    #[serde(default)]
     sender: Option<String>,
+    #[serde(default)]
     keyword: Option<String>,
+    #[serde(default, alias = "createdAt")]
     created_at: Option<String>,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
+struct ApiWebhookDispatchSettings {
+    #[serde(default, alias = "batchSize")]
+    batch_size: Option<usize>,
+    #[serde(default, alias = "maxConcurrency")]
+    max_concurrency: Option<usize>,
+    #[serde(default, alias = "requestTimeoutMs")]
+    request_timeout_ms: Option<u64>,
+    #[serde(default, alias = "flushIntervalMs")]
+    flush_interval_ms: Option<u64>,
+    #[serde(default, alias = "retryAttempts")]
+    retry_attempts: Option<u32>,
+    #[serde(default, alias = "retryBaseDelayMs")]
+    retry_base_delay_ms: Option<u64>,
+}
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 struct ApiWebhookStore {
+    #[serde(default)]
     items: Vec<ApiWebhookItem>,
+    #[serde(default)]
+    dispatch: ApiWebhookDispatchSettings,
+}
+
+#[derive(Debug, Clone)]
+struct WebhookDispatchConfig {
+    batch_size: usize,
+    max_concurrency: usize,
+    request_timeout_ms: u64,
+    flush_interval_ms: u64,
+    retry_attempts: u32,
+    retry_base_delay_ms: u64,
+}
+
+impl Default for WebhookDispatchConfig {
+    fn default() -> Self {
+        Self {
+            batch_size: WEBHOOK_BATCH_SIZE_DEFAULT,
+            max_concurrency: WEBHOOK_MAX_CONCURRENCY_DEFAULT,
+            request_timeout_ms: WEBHOOK_REQUEST_TIMEOUT_MS_DEFAULT,
+            flush_interval_ms: WEBHOOK_FLUSH_INTERVAL_MS_DEFAULT,
+            retry_attempts: WEBHOOK_RETRY_ATTEMPTS_DEFAULT,
+            retry_base_delay_ms: WEBHOOK_RETRY_BASE_DELAY_MS_DEFAULT,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+struct ApiWebhookRuntimeConfig {
+    rules: Vec<WebhookRule>,
+    dispatch: WebhookDispatchConfig,
 }
 
 fn now_ts() -> i64 {
@@ -385,34 +450,101 @@ fn api_webhook_item_to_rule(item: &ApiWebhookItem) -> WebhookRule {
         id: item.id.clone(),
         url: item.url.clone(),
         event_type: item.event_type.clone(),
+        platform: item.platform.clone(),
+        chat_name: item.chat_name.clone(),
+        meta_id: item.meta_id,
         sender: item.sender.clone(),
         keyword: item.keyword.clone(),
         created_at: item.created_at.clone(),
     }
 }
 
-fn read_api_webhook_items() -> Vec<WebhookRule> {
+fn sanitize_webhook_dispatch_settings(value: &ApiWebhookDispatchSettings) -> WebhookDispatchConfig {
+    fn clamp_usize(value: Option<usize>, default_value: usize, min: usize, max: usize) -> usize {
+        value.unwrap_or(default_value).clamp(min, max)
+    }
+
+    fn clamp_u64(value: Option<u64>, default_value: u64, min: u64, max: u64) -> u64 {
+        value.unwrap_or(default_value).clamp(min, max)
+    }
+
+    fn clamp_u32(value: Option<u32>, default_value: u32, min: u32, max: u32) -> u32 {
+        value.unwrap_or(default_value).clamp(min, max)
+    }
+
+    WebhookDispatchConfig {
+        batch_size: clamp_usize(value.batch_size, WEBHOOK_BATCH_SIZE_DEFAULT, 1, 1024),
+        max_concurrency: clamp_usize(
+            value.max_concurrency,
+            WEBHOOK_MAX_CONCURRENCY_DEFAULT,
+            1,
+            64,
+        ),
+        request_timeout_ms: clamp_u64(
+            value.request_timeout_ms,
+            WEBHOOK_REQUEST_TIMEOUT_MS_DEFAULT,
+            200,
+            60_000,
+        ),
+        flush_interval_ms: clamp_u64(
+            value.flush_interval_ms,
+            WEBHOOK_FLUSH_INTERVAL_MS_DEFAULT,
+            0,
+            30_000,
+        ),
+        retry_attempts: clamp_u32(value.retry_attempts, WEBHOOK_RETRY_ATTEMPTS_DEFAULT, 1, 8),
+        retry_base_delay_ms: clamp_u64(
+            value.retry_base_delay_ms,
+            WEBHOOK_RETRY_BASE_DELAY_MS_DEFAULT,
+            0,
+            5_000,
+        ),
+    }
+}
+
+fn should_flush_webhook_queue(
+    queue_len: usize,
+    queue_age: Option<Duration>,
+    dispatch: &WebhookDispatchConfig,
+) -> bool {
+    if queue_len == 0 {
+        return false;
+    }
+    if queue_len >= dispatch.batch_size {
+        return true;
+    }
+    queue_age
+        .map(|age| age >= Duration::from_millis(dispatch.flush_interval_ms))
+        .unwrap_or(false)
+}
+
+fn read_api_webhook_config() -> ApiWebhookRuntimeConfig {
+    let mut runtime = ApiWebhookRuntimeConfig::default();
     let path = api_webhook_store_path();
     if !path.exists() {
-        return Vec::new();
+        return runtime;
     }
 
     let raw = match fs::read_to_string(&path) {
         Ok(v) => v,
         Err(e) => {
             warn!("failed to read webhook config '{}': {}", path.display(), e);
-            return Vec::new();
+            return runtime;
         }
     };
     if raw.trim().is_empty() {
-        return Vec::new();
+        return runtime;
     }
 
     match serde_json::from_str::<ApiWebhookStore>(&raw) {
-        Ok(store) => store.items.iter().map(api_webhook_item_to_rule).collect(),
+        Ok(store) => {
+            runtime.rules = store.items.iter().map(api_webhook_item_to_rule).collect();
+            runtime.dispatch = sanitize_webhook_dispatch_settings(&store.dispatch);
+            runtime
+        }
         Err(e) => {
             warn!("failed to parse webhook config '{}': {}", path.display(), e);
-            Vec::new()
+            runtime
         }
     }
 }
@@ -420,6 +552,7 @@ fn read_api_webhook_items() -> Vec<WebhookRule> {
 async fn dispatch_api_webhook_message_created(
     client: &reqwest::Client,
     items: &[WebhookRule],
+    dispatch: &WebhookDispatchConfig,
     event: &WebhookMessageCreatedEvent,
 ) -> WebhookDispatchStats {
     let mut stats = WebhookDispatchStats::default();
@@ -433,7 +566,7 @@ async fn dispatch_api_webhook_message_created(
         let mut delivered = false;
         let mut attempts_used = 0u32;
         let mut last_error = "unknown delivery failure".to_string();
-        for attempt in 0..3u32 {
+        for attempt in 0..dispatch.retry_attempts {
             attempts_used = attempt.saturating_add(1);
             let send_result = client
                 .post(&item.url)
@@ -451,15 +584,17 @@ async fn dispatch_api_webhook_message_created(
                 }
                 Ok(resp) => {
                     last_error = format!("http status {}", resp.status());
-                    if attempt < 2 {
-                        let wait_ms = 150_u64 * (1_u64 << attempt);
+                    if attempt.saturating_add(1) < dispatch.retry_attempts {
+                        let backoff_factor = 1_u64 << attempt.min(10);
+                        let wait_ms = dispatch.retry_base_delay_ms.saturating_mul(backoff_factor);
                         tokio::time::sleep(Duration::from_millis(wait_ms)).await;
                     }
                 }
                 Err(err) => {
                     last_error = err.to_string();
-                    if attempt < 2 {
-                        let wait_ms = 150_u64 * (1_u64 << attempt);
+                    if attempt.saturating_add(1) < dispatch.retry_attempts {
+                        let backoff_factor = 1_u64 << attempt.min(10);
+                        let wait_ms = dispatch.retry_base_delay_ms.saturating_mul(backoff_factor);
                         tokio::time::sleep(Duration::from_millis(wait_ms)).await;
                     }
                 }
@@ -483,24 +618,31 @@ async fn dispatch_api_webhook_batch(
     client: &reqwest::Client,
     items: &[WebhookRule],
     queue: &mut Vec<WebhookMessageCreatedEvent>,
-    max_concurrency: usize,
+    dispatch: &WebhookDispatchConfig,
 ) -> WebhookDispatchStats {
     if queue.is_empty() {
         return WebhookDispatchStats::default();
     }
 
     let mut set = tokio::task::JoinSet::new();
-    let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(max_concurrency.max(1)));
+    let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(dispatch.max_concurrency));
     let shared_items = std::sync::Arc::new(items.to_vec());
+    let shared_dispatch = std::sync::Arc::new(dispatch.clone());
 
     for event in queue.drain(..) {
         let client_clone = client.clone();
         let items_clone = shared_items.clone();
         let semaphore_clone = semaphore.clone();
+        let dispatch_clone = shared_dispatch.clone();
         set.spawn(async move {
             let _permit = semaphore_clone.acquire_owned().await.ok();
-            dispatch_api_webhook_message_created(&client_clone, items_clone.as_slice(), &event)
-                .await
+            dispatch_api_webhook_message_created(
+                &client_clone,
+                items_clone.as_slice(),
+                dispatch_clone.as_ref(),
+                &event,
+            )
+            .await
         });
     }
 
@@ -1277,28 +1419,41 @@ fn normalized_content_for_signature(content: Option<&str>) -> String {
     content.unwrap_or_default().trim().replace('\n', " ")
 }
 
-fn signature_by_platform(
+fn normalized_platform_message_id_for_signature(platform_message_id: Option<&str>) -> String {
+    platform_message_id.unwrap_or_default().trim().to_string()
+}
+
+fn signature_by_platform_with_message_id(
     sender_platform_id: &str,
     ts: i64,
     msg_type: i64,
     content: Option<&str>,
+    platform_message_id: Option<&str>,
 ) -> String {
     format!(
-        "{}|{}|{}|{}",
+        "{}|{}|{}|{}|{}",
         sender_platform_id,
         ts,
         msg_type,
-        normalized_content_for_signature(content)
+        normalized_content_for_signature(content),
+        normalized_platform_message_id_for_signature(platform_message_id)
     )
 }
 
-fn signature_by_sender_id(sender_id: i64, ts: i64, msg_type: i64, content: Option<&str>) -> String {
+fn signature_by_sender_id_with_message_id(
+    sender_id: i64,
+    ts: i64,
+    msg_type: i64,
+    content: Option<&str>,
+    platform_message_id: Option<&str>,
+) -> String {
     format!(
-        "{}|{}|{}|{}",
+        "{}|{}|{}|{}|{}",
         sender_id,
         ts,
         msg_type,
-        normalized_content_for_signature(content)
+        normalized_content_for_signature(content),
+        normalized_platform_message_id_for_signature(platform_message_id)
     )
 }
 
@@ -1571,19 +1726,22 @@ async fn run_import_with_chat_index(
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
 
-    let webhook_items = read_api_webhook_items();
+    let webhook_runtime = read_api_webhook_config();
+    let webhook_items = webhook_runtime.rules;
+    let webhook_dispatch = webhook_runtime.dispatch;
     let webhook_client = if webhook_items.is_empty() {
         None
     } else {
         Some(
             reqwest::Client::builder()
-                .timeout(Duration::from_secs(8))
+                .timeout(Duration::from_millis(webhook_dispatch.request_timeout_ms))
                 .build()
                 .map_err(|e| ApiError::Http(e.to_string()))?,
         )
     };
     let mut webhook_stats = WebhookDispatchStats::default();
     let mut webhook_queue: Vec<WebhookMessageCreatedEvent> = Vec::new();
+    let mut webhook_queue_first_enqueued_at: Option<Instant> = None;
 
     let mut processed: i32 = 0;
     let write_result = async {
@@ -1622,12 +1780,21 @@ async fn run_import_with_chat_index(
                     msg_type: msg.msg_type,
                     content: msg.content.clone(),
                 };
+                if webhook_queue.is_empty() {
+                    webhook_queue_first_enqueued_at = Some(Instant::now());
+                }
                 webhook_queue.push(event);
-                if webhook_queue.len() >= 64 {
-                    let stats =
-                        dispatch_api_webhook_batch(client, &webhook_items, &mut webhook_queue, 8)
-                            .await;
+                let queue_age = webhook_queue_first_enqueued_at.map(|t| t.elapsed());
+                if should_flush_webhook_queue(webhook_queue.len(), queue_age, &webhook_dispatch) {
+                    let stats = dispatch_api_webhook_batch(
+                        client,
+                        &webhook_items,
+                        &mut webhook_queue,
+                        &webhook_dispatch,
+                    )
+                    .await;
                     merge_webhook_dispatch_stats(&mut webhook_stats, &stats);
+                    webhook_queue_first_enqueued_at = None;
                 }
             }
 
@@ -1638,9 +1805,15 @@ async fn run_import_with_chat_index(
         }
 
         if let Some(client) = webhook_client.as_ref() {
-            let stats =
-                dispatch_api_webhook_batch(client, &webhook_items, &mut webhook_queue, 8).await;
+            let stats = dispatch_api_webhook_batch(
+                client,
+                &webhook_items,
+                &mut webhook_queue,
+                &webhook_dispatch,
+            )
+            .await;
             merge_webhook_dispatch_stats(&mut webhook_stats, &stats);
+            webhook_queue_first_enqueued_at = None;
         }
 
         Ok::<(), ApiError>(())
@@ -2235,6 +2408,12 @@ async fn run_merged_import_batch(
                         .unwrap_or_default()
                         .cmp(b.content.as_deref().unwrap_or_default())
                 })
+                .then_with(|| {
+                    a.platform_message_id
+                        .as_deref()
+                        .unwrap_or_default()
+                        .cmp(b.platform_message_id.as_deref().unwrap_or_default())
+                })
         });
     }
     parsed_sources.sort_by(|a, b| {
@@ -2313,9 +2492,14 @@ async fn run_merged_import_batch(
                 }
             };
 
-            let signature =
-                signature_by_sender_id(sender_id, msg.ts, msg.msg_type, msg.content.as_deref());
-            if !merged_seen.insert(signature) {
+            let signature = signature_by_sender_id_with_message_id(
+                sender_id,
+                msg.ts,
+                msg.msg_type,
+                msg.content.as_deref(),
+                msg.platform_message_id.as_deref(),
+            );
+            if merged_seen.contains(&signature) {
                 source_duplicates = source_duplicates.saturating_add(1);
                 total_duplicates = total_duplicates.saturating_add(1);
                 continue;
@@ -2338,6 +2522,7 @@ async fn run_merged_import_batch(
                 source_error = Some(e.to_string());
                 break;
             }
+            merged_seen.insert(signature);
             source_inserted = source_inserted.saturating_add(1);
             total_inserted = total_inserted.saturating_add(1);
         }
@@ -3071,6 +3256,23 @@ async fn get_supported_formats() -> Result<Json<Vec<SupportedFormat>>, ApiError>
     Ok(Json(formats))
 }
 
+async fn ensure_chat_session_exists(
+    pool: &std::sync::Arc<sqlx::SqlitePool>,
+    meta_id: i64,
+) -> Result<(), ApiError> {
+    let repo = crate::database::Repository::new(pool.clone());
+    let exists = repo
+        .get_chat(meta_id)
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?
+        .is_some();
+    if exists {
+        Ok(())
+    } else {
+        Err(ApiError::NotFound(format!("session {} not found", meta_id)))
+    }
+}
+
 #[instrument]
 async fn get_catchphrase_analysis(
     Path(session_id): Path<String>,
@@ -3083,6 +3285,7 @@ async fn get_catchphrase_analysis(
     let pool = crate::database::get_pool()
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
+    ensure_chat_session_exists(&pool, meta_id).await?;
 
     let repo = crate::database::Repository::new(pool);
 
@@ -3117,6 +3320,7 @@ async fn get_mention_analysis(
     let pool = crate::database::get_pool()
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
+    ensure_chat_session_exists(&pool, meta_id).await?;
 
     let repo = crate::database::Repository::new(pool);
 
@@ -3151,6 +3355,7 @@ async fn get_mention_graph(
     let pool = crate::database::get_pool()
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
+    ensure_chat_session_exists(&pool, meta_id).await?;
 
     let repo = crate::database::Repository::new(pool);
 
@@ -3185,6 +3390,7 @@ async fn get_cluster_graph(
     let pool = crate::database::get_pool()
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
+    ensure_chat_session_exists(&pool, meta_id).await?;
     let repo = crate::database::Repository::new(pool.clone());
 
     let repo_filter = if filter.start_ts.is_none() && filter.end_ts.is_none() {
@@ -3478,6 +3684,7 @@ async fn get_laugh_analysis(
     let pool = crate::database::get_pool()
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
+    ensure_chat_session_exists(&pool, meta_id).await?;
 
     #[derive(Debug, sqlx::FromRow)]
     struct LaughRow {
@@ -3677,6 +3884,7 @@ async fn get_night_owl_analysis(
     let pool = crate::database::get_pool()
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
+    ensure_chat_session_exists(&pool, meta_id).await?;
 
     #[derive(Debug, sqlx::FromRow)]
     struct NightRow {
@@ -3792,6 +4000,7 @@ async fn get_dragon_king_analysis(
     let pool = crate::database::get_pool()
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
+    ensure_chat_session_exists(&pool, meta_id).await?;
 
     #[derive(Debug, sqlx::FromRow)]
     struct DragonRow {
@@ -3892,6 +4101,7 @@ async fn get_lurker_analysis(
     let pool = crate::database::get_pool()
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
+    ensure_chat_session_exists(&pool, meta_id).await?;
 
     #[derive(Debug, sqlx::FromRow)]
     struct LurkerRow {
@@ -4017,6 +4227,7 @@ async fn get_checkin_analysis(
     let pool = crate::database::get_pool()
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
+    ensure_chat_session_exists(&pool, meta_id).await?;
 
     #[derive(Debug, sqlx::FromRow)]
     struct CheckinRow {
@@ -4182,6 +4393,7 @@ async fn get_repeat_analysis(
     let pool = crate::database::get_pool()
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
+    ensure_chat_session_exists(&pool, meta_id).await?;
 
     #[derive(Debug, sqlx::FromRow)]
     struct RepeatRow {
@@ -5095,18 +5307,28 @@ fn escape_like_pattern(raw: &str) -> String {
         .replace('\'', "''")
 }
 
-fn build_sql_generation_keyword_filter(keyword: Option<&str>) -> String {
-    match keyword.map(str::trim).filter(|v| !v.is_empty()) {
-        Some(value) => {
-            let escaped = escape_like_pattern(value);
-            format!("WHERE msg.content LIKE '%{escaped}%' ESCAPE '\\\\'")
-        }
-        None => String::new(),
+fn build_sql_generation_message_filter(meta_id: i64, keyword: Option<&str>) -> String {
+    let mut where_clause = format!("WHERE msg.meta_id = {}", meta_id);
+    if let Some(value) = keyword.map(str::trim).filter(|v| !v.is_empty()) {
+        let escaped = escape_like_pattern(value);
+        where_clause.push_str(&format!(
+            " AND msg.content LIKE '%{escaped}%' ESCAPE '\\\\'"
+        ));
+    }
+    where_clause
+}
+
+fn append_sql_condition(where_clause: &str, condition: &str) -> String {
+    if where_clause.trim().is_empty() {
+        format!("WHERE {}", condition)
+    } else {
+        format!("{} AND {}", where_clause, condition)
     }
 }
 
 fn generate_sql_from_prompt(
     prompt: &str,
+    meta_id: i64,
     max_rows: usize,
     has_message_table: bool,
     has_member_table: bool,
@@ -5126,7 +5348,7 @@ fn generate_sql_from_prompt(
 
     let normalized = prompt.to_lowercase();
     let keyword = extract_first_quoted_segment(prompt);
-    let where_clause = build_sql_generation_keyword_filter(keyword.as_deref());
+    let where_clause = build_sql_generation_message_filter(meta_id, keyword.as_deref());
     let mut warnings = Vec::new();
     if keyword.is_none()
         && contains_any(
@@ -5146,6 +5368,37 @@ fn generate_sql_from_prompt(
             "count", "统计", "数量", "多少", "排行", "top", "active", "活跃",
         ],
     );
+    let is_message_type_intent = contains_any(
+        &normalized,
+        &[
+            "message type",
+            "msg type",
+            "type distribution",
+            "消息类型",
+            "类型分布",
+            "文字",
+            "图片",
+            "视频",
+            "语音",
+            "文件",
+        ],
+    );
+    let is_longest_message_intent = contains_any(
+        &normalized,
+        &[
+            "longest",
+            "long message",
+            "message length",
+            "最长",
+            "长度",
+            "长文本",
+        ],
+    );
+    let is_mention_intent = normalized.contains('@')
+        || contains_any(
+            &normalized,
+            &["mention", "mentions", "@提及", "提及", "被提到"],
+        );
     let is_hourly_intent = contains_any(
         &normalized,
         &[
@@ -5158,9 +5411,43 @@ fn generate_sql_from_prompt(
             "时间分布",
         ],
     );
+    let is_weekday_intent = contains_any(
+        &normalized,
+        &[
+            "weekday",
+            "week day",
+            "按星期",
+            "星期",
+            "周几",
+            "周内",
+            "day of week",
+        ],
+    );
     let is_daily_intent = contains_any(
         &normalized,
         &["daily", "day", "按天", "每日", "每天", "日期"],
+    );
+    let is_monthly_intent = contains_any(
+        &normalized,
+        &[
+            "monthly",
+            "month",
+            "按月",
+            "每月",
+            "月份",
+            "month distribution",
+        ],
+    );
+    let is_yearly_intent = contains_any(
+        &normalized,
+        &[
+            "yearly",
+            "year",
+            "按年",
+            "每年",
+            "年份",
+            "year distribution",
+        ],
     );
     let is_recent_intent = contains_any(
         &normalized,
@@ -5178,6 +5465,18 @@ fn generate_sql_from_prompt(
         return (sql, explanation, warnings);
     }
 
+    if is_weekday_intent {
+        let sql = format!(
+            "SELECT strftime('%w', datetime(msg.ts, 'unixepoch', 'localtime')) AS weekday_bucket, COUNT(*) AS message_count \
+             FROM message msg {} GROUP BY weekday_bucket ORDER BY weekday_bucket LIMIT {}",
+            where_clause, max_rows
+        );
+        let explanation =
+            "Groups messages by local weekday (0-6) and returns message counts per bucket."
+                .to_string();
+        return (sql, explanation, warnings);
+    }
+
     if is_daily_intent {
         let sql = format!(
             "SELECT date(datetime(msg.ts, 'unixepoch', 'localtime')) AS day_bucket, COUNT(*) AS message_count \
@@ -5186,6 +5485,112 @@ fn generate_sql_from_prompt(
         );
         let explanation =
             "Groups messages by local day and returns message counts per day bucket.".to_string();
+        return (sql, explanation, warnings);
+    }
+
+    if is_monthly_intent {
+        let sql = format!(
+            "SELECT strftime('%Y-%m', datetime(msg.ts, 'unixepoch', 'localtime')) AS month_bucket, COUNT(*) AS message_count \
+             FROM message msg {} GROUP BY month_bucket ORDER BY month_bucket DESC LIMIT {}",
+            where_clause, max_rows
+        );
+        let explanation =
+            "Groups messages by local month and returns message counts per month bucket."
+                .to_string();
+        return (sql, explanation, warnings);
+    }
+
+    if is_yearly_intent {
+        let sql = format!(
+            "SELECT strftime('%Y', datetime(msg.ts, 'unixepoch', 'localtime')) AS year_bucket, COUNT(*) AS message_count \
+             FROM message msg {} GROUP BY year_bucket ORDER BY year_bucket DESC LIMIT {}",
+            where_clause, max_rows
+        );
+        let explanation =
+            "Groups messages by local year and returns message counts per year bucket.".to_string();
+        return (sql, explanation, warnings);
+    }
+
+    if is_message_type_intent {
+        let sql = format!(
+            "SELECT msg.msg_type, COUNT(*) AS message_count \
+             FROM message msg {} GROUP BY msg.msg_type ORDER BY message_count DESC, msg.msg_type LIMIT {}",
+            where_clause, max_rows
+        );
+        let explanation =
+            "Returns message counts grouped by msg_type, ordered by frequency.".to_string();
+        return (sql, explanation, warnings);
+    }
+
+    if is_longest_message_intent {
+        let where_with_content = append_sql_condition(
+            &where_clause,
+            "msg.content IS NOT NULL AND length(trim(msg.content)) > 0",
+        );
+        if has_member_table {
+            let sql = format!(
+                "SELECT msg.id, datetime(msg.ts, 'unixepoch', 'localtime') AS local_time, \
+                 COALESCE(m.group_nickname, m.account_name, m.platform_id, printf('member_%d', msg.sender_id)) AS sender_name, \
+                 msg.content, length(msg.content) AS content_length \
+                 FROM message msg \
+                 LEFT JOIN member m ON m.id = msg.sender_id \
+                 {} \
+                 ORDER BY content_length DESC, msg.ts DESC \
+                 LIMIT {}",
+                where_with_content, max_rows
+            );
+            let explanation =
+                "Returns messages with the longest content length and sender display name."
+                    .to_string();
+            return (sql, explanation, warnings);
+        }
+
+        warnings.push(
+            "member table is missing; sender display name is unavailable and sender_id is returned"
+                .to_string(),
+        );
+        let sql = format!(
+            "SELECT msg.id, datetime(msg.ts, 'unixepoch', 'localtime') AS local_time, msg.sender_id, \
+             msg.content, length(msg.content) AS content_length \
+             FROM message msg {} ORDER BY content_length DESC, msg.ts DESC LIMIT {}",
+            where_with_content, max_rows
+        );
+        let explanation =
+            "Returns messages with the longest content length and sender_id.".to_string();
+        return (sql, explanation, warnings);
+    }
+
+    if is_mention_intent {
+        let mention_where = append_sql_condition(&where_clause, "msg.content LIKE '%@%'");
+        if has_member_table {
+            let sql = format!(
+                "SELECT msg.id, datetime(msg.ts, 'unixepoch', 'localtime') AS local_time, \
+                 COALESCE(m.group_nickname, m.account_name, m.platform_id, printf('member_%d', msg.sender_id)) AS sender_name, \
+                 msg.content \
+                 FROM message msg \
+                 LEFT JOIN member m ON m.id = msg.sender_id \
+                 {} \
+                 ORDER BY msg.ts DESC, msg.id DESC \
+                 LIMIT {}",
+                mention_where, max_rows
+            );
+            let explanation =
+                "Returns recent messages containing @ mentions with sender display name."
+                    .to_string();
+            return (sql, explanation, warnings);
+        }
+
+        warnings.push(
+            "member table is missing; sender display name is unavailable and sender_id is returned"
+                .to_string(),
+        );
+        let sql = format!(
+            "SELECT msg.id, datetime(msg.ts, 'unixepoch', 'localtime') AS local_time, msg.sender_id, msg.content \
+             FROM message msg {} ORDER BY msg.ts DESC, msg.id DESC LIMIT {}",
+            mention_where, max_rows
+        );
+        let explanation =
+            "Returns recent messages containing @ mentions with sender_id.".to_string();
         return (sql, explanation, warnings);
     }
 
@@ -5258,8 +5663,8 @@ fn generate_sql_from_prompt(
 
     let sql = format!(
         "SELECT msg.id, datetime(msg.ts, 'unixepoch', 'localtime') AS local_time, msg.sender_id, msg.content \
-         FROM message msg ORDER BY msg.ts DESC, msg.id DESC LIMIT {}",
-        max_rows
+         FROM message msg {} ORDER BY msg.ts DESC, msg.id DESC LIMIT {}",
+        where_clause, max_rows
     );
     let explanation = "Returns recent message rows as the default fallback query.".to_string();
     (
@@ -5305,15 +5710,7 @@ async fn generate_sql_assist(
     let pool = crate::database::get_pool()
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
-    let repo = crate::database::Repository::new(pool.clone());
-    let session_exists = repo
-        .get_chat(meta_id)
-        .await
-        .map_err(|e| ApiError::Database(e.to_string()))?
-        .is_some();
-    if !session_exists {
-        return Err(ApiError::NotFound(format!("session {} not found", meta_id)));
-    }
+    ensure_chat_session_exists(&pool, meta_id).await?;
 
     let table_names: Vec<String> = sqlx::query_scalar(
         "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
@@ -5326,7 +5723,7 @@ async fn generate_sql_assist(
     let has_member_table = table_set.contains("member");
 
     let (sql, explanation, warnings) =
-        generate_sql_from_prompt(prompt, limit, has_message_table, has_member_table);
+        generate_sql_from_prompt(prompt, meta_id, limit, has_message_table, has_member_table);
     validate_read_only_sql(&sql)?;
 
     Ok(Json(serde_json::json!({
@@ -5351,7 +5748,7 @@ async fn execute_sql(
     validate_read_only_sql(&sql)?;
 
     // 2) Parse meta_id from session_id
-    let _meta_id: i64 = match session_id.parse::<i64>() {
+    let meta_id: i64 = match session_id.parse::<i64>() {
         Ok(v) => v,
         Err(_) => return Err(ApiError::InvalidRequest("Invalid session_id".to_string())),
     };
@@ -5360,6 +5757,7 @@ async fn execute_sql(
     let pool = crate::database::get_pool()
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
+    ensure_chat_session_exists(&pool, meta_id).await?;
 
     // 4) Execute and time the query
     let timeout_ms = sql_lab_timeout_ms();
@@ -5437,13 +5835,17 @@ async fn execute_sql(
 
 #[instrument]
 async fn get_schema(
-    Path(_session_id): Path<String>,
+    Path(session_id): Path<String>,
     Query(query): Query<SchemaQueryParams>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
+    let meta_id = session_id
+        .parse::<i64>()
+        .map_err(|_| ApiError::InvalidRequest("Invalid session_id".to_string()))?;
     // Get database connection pool
     let pool = crate::database::get_pool()
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
+    ensure_chat_session_exists(&pool, meta_id).await?;
 
     // Query all user tables (excluding sqlite internal tables)
     #[derive(Debug, sqlx::FromRow)]
@@ -5723,6 +6125,7 @@ async fn analyze_incremental_import(
         ts: i64,
         msg_type: i64,
         content: Option<String>,
+        platform_message_id: Option<String>,
     }
 
     let existing_rows: Vec<ExistingRow> = sqlx::query_as(
@@ -5731,7 +6134,8 @@ async fn analyze_incremental_import(
             m.platform_id as sender_platform_id,
             msg.ts as ts,
             msg.msg_type as msg_type,
-            msg.content as content
+            msg.content as content,
+            msg.platform_message_id as platform_message_id
         FROM message msg
         JOIN member m ON msg.sender_id = m.id
         WHERE msg.meta_id = ?1
@@ -5744,26 +6148,29 @@ async fn analyze_incremental_import(
 
     let mut existing_signatures: HashSet<String> = HashSet::with_capacity(existing_rows.len());
     for row in existing_rows {
-        existing_signatures.insert(signature_by_platform(
+        existing_signatures.insert(signature_by_platform_with_message_id(
             &row.sender_platform_id,
             row.ts,
             row.msg_type,
             row.content.as_deref(),
+            row.platform_message_id.as_deref(),
         ));
     }
 
     let mut duplicate_count = 0usize;
     let mut new_count = 0usize;
     for msg in payload.messages {
-        let sig = signature_by_platform(
+        let sig = signature_by_platform_with_message_id(
             &msg.sender_platform_id,
             msg.ts,
             msg.msg_type,
             msg.content.as_deref(),
+            msg.platform_message_id.as_deref(),
         );
         if existing_signatures.contains(&sig) {
             duplicate_count += 1;
         } else {
+            existing_signatures.insert(sig);
             new_count += 1;
         }
     }
@@ -5929,10 +6336,11 @@ async fn incremental_import(
         ts: i64,
         msg_type: i64,
         content: Option<String>,
+        platform_message_id: Option<String>,
     }
     let existing_rows: Vec<ExistingRow> = sqlx::query_as(
         r#"
-        SELECT sender_id, ts, msg_type, content
+        SELECT sender_id, ts, msg_type, content, platform_message_id
         FROM message
         WHERE meta_id = ?1
         "#,
@@ -5944,27 +6352,31 @@ async fn incremental_import(
 
     let mut existing_signatures: HashSet<String> = HashSet::with_capacity(existing_rows.len());
     for row in existing_rows {
-        existing_signatures.insert(signature_by_sender_id(
+        existing_signatures.insert(signature_by_sender_id_with_message_id(
             row.sender_id,
             row.ts,
             row.msg_type,
             row.content.as_deref(),
+            row.platform_message_id.as_deref(),
         ));
     }
 
-    let webhook_items = read_api_webhook_items();
+    let webhook_runtime = read_api_webhook_config();
+    let webhook_items = webhook_runtime.rules;
+    let webhook_dispatch = webhook_runtime.dispatch;
     let webhook_client = if webhook_items.is_empty() {
         None
     } else {
         Some(
             reqwest::Client::builder()
-                .timeout(Duration::from_secs(8))
+                .timeout(Duration::from_millis(webhook_dispatch.request_timeout_ms))
                 .build()
                 .map_err(|e| ApiError::Http(e.to_string()))?,
         )
     };
     let mut webhook_stats = WebhookDispatchStats::default();
     let mut webhook_queue: Vec<WebhookMessageCreatedEvent> = Vec::new();
+    let mut webhook_queue_first_enqueued_at: Option<Instant> = None;
 
     let mut processed = 0i32;
     let mut duplicate_count = 0usize;
@@ -5976,8 +6388,13 @@ async fn incremental_import(
                 .await
                 .map_err(|e| ApiError::Database(e.to_string()))?;
 
-            let signature =
-                signature_by_sender_id(sender_id, msg.ts, msg.msg_type, msg.content.as_deref());
+            let signature = signature_by_sender_id_with_message_id(
+                sender_id,
+                msg.ts,
+                msg.msg_type,
+                msg.content.as_deref(),
+                msg.platform_message_id.as_deref(),
+            );
             if existing_signatures.contains(&signature) {
                 duplicate_count += 1;
                 processed += 1;
@@ -5999,6 +6416,7 @@ async fn incremental_import(
                 })
                 .await
                 .map_err(|e| ApiError::Database(e.to_string()))?;
+            existing_signatures.insert(signature);
 
             if let Some(client) = webhook_client.as_ref() {
                 let event = WebhookMessageCreatedEvent {
@@ -6013,16 +6431,24 @@ async fn incremental_import(
                     msg_type: msg.msg_type,
                     content: msg.content.clone(),
                 };
+                if webhook_queue.is_empty() {
+                    webhook_queue_first_enqueued_at = Some(Instant::now());
+                }
                 webhook_queue.push(event);
-                if webhook_queue.len() >= 64 {
-                    let stats =
-                        dispatch_api_webhook_batch(client, &webhook_items, &mut webhook_queue, 8)
-                            .await;
+                let queue_age = webhook_queue_first_enqueued_at.map(|t| t.elapsed());
+                if should_flush_webhook_queue(webhook_queue.len(), queue_age, &webhook_dispatch) {
+                    let stats = dispatch_api_webhook_batch(
+                        client,
+                        &webhook_items,
+                        &mut webhook_queue,
+                        &webhook_dispatch,
+                    )
+                    .await;
                     merge_webhook_dispatch_stats(&mut webhook_stats, &stats);
+                    webhook_queue_first_enqueued_at = None;
                 }
             }
 
-            existing_signatures.insert(signature);
             new_count += 1;
             processed += 1;
             if processed % 200 == 0 {
@@ -6031,9 +6457,15 @@ async fn incremental_import(
         }
 
         if let Some(client) = webhook_client.as_ref() {
-            let stats =
-                dispatch_api_webhook_batch(client, &webhook_items, &mut webhook_queue, 8).await;
+            let stats = dispatch_api_webhook_batch(
+                client,
+                &webhook_items,
+                &mut webhook_queue,
+                &webhook_dispatch,
+            )
+            .await;
             merge_webhook_dispatch_stats(&mut webhook_stats, &stats);
+            webhook_queue_first_enqueued_at = None;
         }
 
         Ok::<(), ApiError>(())
@@ -6351,7 +6783,14 @@ async fn import_progress_sse() -> Sse<impl stream::Stream<Item = Result<Event, I
 
 #[cfg(test)]
 mod tests {
-    use super::validate_read_only_sql;
+    use super::{
+        sanitize_webhook_dispatch_settings, should_flush_webhook_queue, validate_read_only_sql,
+        ApiWebhookDispatchSettings, ApiWebhookItem, ApiWebhookStore, WEBHOOK_BATCH_SIZE_DEFAULT,
+        WEBHOOK_FLUSH_INTERVAL_MS_DEFAULT, WEBHOOK_MAX_CONCURRENCY_DEFAULT,
+        WEBHOOK_REQUEST_TIMEOUT_MS_DEFAULT, WEBHOOK_RETRY_ATTEMPTS_DEFAULT,
+        WEBHOOK_RETRY_BASE_DELAY_MS_DEFAULT,
+    };
+    use std::time::Duration;
 
     #[test]
     fn validate_read_only_sql_accepts_select_and_with_queries() {
@@ -6376,5 +6815,102 @@ mod tests {
             validate_read_only_sql("SELECT 1 -- DELETE FROM message\nFROM (SELECT 1 AS v) t")
                 .is_ok()
         );
+    }
+
+    #[test]
+    fn webhook_dispatch_settings_default_to_stable_values() {
+        let cfg = sanitize_webhook_dispatch_settings(&ApiWebhookDispatchSettings::default());
+        assert_eq!(cfg.batch_size, WEBHOOK_BATCH_SIZE_DEFAULT);
+        assert_eq!(cfg.max_concurrency, WEBHOOK_MAX_CONCURRENCY_DEFAULT);
+        assert_eq!(cfg.request_timeout_ms, WEBHOOK_REQUEST_TIMEOUT_MS_DEFAULT);
+        assert_eq!(cfg.flush_interval_ms, WEBHOOK_FLUSH_INTERVAL_MS_DEFAULT);
+        assert_eq!(cfg.retry_attempts, WEBHOOK_RETRY_ATTEMPTS_DEFAULT);
+        assert_eq!(cfg.retry_base_delay_ms, WEBHOOK_RETRY_BASE_DELAY_MS_DEFAULT);
+    }
+
+    #[test]
+    fn webhook_dispatch_settings_are_clamped_to_safe_ranges() {
+        let cfg = sanitize_webhook_dispatch_settings(&ApiWebhookDispatchSettings {
+            batch_size: Some(0),
+            max_concurrency: Some(10_000),
+            request_timeout_ms: Some(1),
+            flush_interval_ms: Some(50_000),
+            retry_attempts: Some(100),
+            retry_base_delay_ms: Some(10_000),
+        });
+        assert_eq!(cfg.batch_size, 1);
+        assert_eq!(cfg.max_concurrency, 64);
+        assert_eq!(cfg.request_timeout_ms, 200);
+        assert_eq!(cfg.flush_interval_ms, 30_000);
+        assert_eq!(cfg.retry_attempts, 8);
+        assert_eq!(cfg.retry_base_delay_ms, 5_000);
+    }
+
+    #[test]
+    fn webhook_store_supports_camel_case_fields_for_filters_and_dispatch() {
+        let raw = r#"
+        {
+          "items": [
+            {
+              "id": "wh_1",
+              "url": "https://example.com/hook",
+              "eventType": "message.created",
+              "platform": "wechat",
+              "chatName": "core",
+              "metaId": 9,
+              "sender": "alice",
+              "keyword": "urgent",
+              "createdAt": "2026-03-05T00:00:00Z"
+            }
+          ],
+          "dispatch": {
+            "batchSize": 16,
+            "maxConcurrency": 4,
+            "requestTimeoutMs": 5000,
+            "flushIntervalMs": 250,
+            "retryAttempts": 2,
+            "retryBaseDelayMs": 10
+          }
+        }
+        "#;
+        let parsed: ApiWebhookStore = serde_json::from_str(raw).expect("parse webhook store");
+        assert_eq!(parsed.items.len(), 1);
+        let item: &ApiWebhookItem = &parsed.items[0];
+        assert_eq!(item.event_type.as_deref(), Some("message.created"));
+        assert_eq!(item.platform.as_deref(), Some("wechat"));
+        assert_eq!(item.chat_name.as_deref(), Some("core"));
+        assert_eq!(item.meta_id, Some(9));
+        assert_eq!(item.created_at.as_deref(), Some("2026-03-05T00:00:00Z"));
+        let cfg = sanitize_webhook_dispatch_settings(&parsed.dispatch);
+        assert_eq!(cfg.batch_size, 16);
+        assert_eq!(cfg.max_concurrency, 4);
+        assert_eq!(cfg.request_timeout_ms, 5_000);
+        assert_eq!(cfg.flush_interval_ms, 250);
+        assert_eq!(cfg.retry_attempts, 2);
+        assert_eq!(cfg.retry_base_delay_ms, 10);
+    }
+
+    #[test]
+    fn webhook_queue_flush_decision_prefers_size_then_age() {
+        let cfg = sanitize_webhook_dispatch_settings(&ApiWebhookDispatchSettings {
+            batch_size: Some(4),
+            max_concurrency: None,
+            request_timeout_ms: None,
+            flush_interval_ms: Some(1_000),
+            retry_attempts: None,
+            retry_base_delay_ms: None,
+        });
+        assert!(!should_flush_webhook_queue(0, None, &cfg));
+        assert!(!should_flush_webhook_queue(
+            2,
+            Some(Duration::from_millis(999)),
+            &cfg
+        ));
+        assert!(should_flush_webhook_queue(4, None, &cfg));
+        assert!(should_flush_webhook_queue(
+            2,
+            Some(Duration::from_millis(1_000)),
+            &cfg
+        ));
     }
 }

@@ -1256,6 +1256,54 @@
             httpRequest('POST', '/network/test-proxy-connection', {
                 proxyUrl,
             }),
+        getRuntimeHealth: async () => {
+            const response = await requestWithMeta('GET', '/api/health', null, {
+                allowErrorStatus: true,
+            });
+            return {
+                success: response.ok,
+                status: response.status,
+                body:
+                    response.json && Object.keys(response.json).length > 0
+                        ? toCamelDeep(response.json)
+                        : response.text,
+            };
+        },
+        getRuntimeStatus: async () => {
+            const response = await requestWithMeta('GET', '/api/status', null, {
+                allowErrorStatus: true,
+            });
+            return {
+                success: response.ok,
+                status: response.status,
+                body: toCamelDeep(response.json || {}),
+            };
+        },
+        getServiceIndex: async () => {
+            const response = await requestWithMeta('GET', '/api/', null, {
+                allowErrorStatus: true,
+            });
+            return {
+                success: response.ok,
+                status: response.status,
+                body: toCamelDeep(response.json || {}),
+            };
+        },
+        getSandboxDoctor: async (fileGatewayDir = '') => {
+            const query = toQuery({
+                file_gateway_dir: String(fileGatewayDir || '').trim() || undefined,
+            });
+            const response = await requestWithMeta('GET', `/network/sandbox-doctor${query}`, null, {
+                allowErrorStatus: true,
+            });
+            const payload = toCamelDeep(response.json || {});
+            return {
+                success: response.ok && payload.success !== false,
+                status: response.status,
+                report: payload.report || null,
+                raw: payload,
+            };
+        },
     };
 
     window.nlpApi = {

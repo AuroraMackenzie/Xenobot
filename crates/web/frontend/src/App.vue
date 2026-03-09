@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import TitleBar from '@/components/common/TitleBar.vue'
 import Sidebar from '@/components/common/Sidebar.vue'
+import XenoSingularityBackdrop from '@/components/common/XenoSingularityBackdrop.vue'
 import SettingModal from '@/components/common/SettingModal.vue'
 import ScreenCaptureModal from '@/components/common/ScreenCaptureModal.vue'
 import { ChatRecordDrawer } from '@/components/common/ChatRecord'
@@ -25,6 +26,8 @@ const { isInitialized } = storeToRefs(sessionStore)
 const route = useRoute()
 const isBooting = ref(true)
 const isRouteTransitioning = ref(false)
+const routeTransitionName = ref<'xeno-route-forward' | 'xeno-route-back'>('xeno-route-forward')
+const previousRouteRank = ref(0)
 
 const tooltip = {
   delayDuration: 100,
@@ -52,6 +55,34 @@ onMounted(async () => {
     isBooting.value = false
   }, 680)
 })
+
+function resolveRouteRank(name: string | symbol | null | undefined): number {
+  if (typeof name !== 'string') {
+    return 0
+  }
+
+  switch (name) {
+    case 'launchpad':
+      return 0
+    case 'workbench':
+      return 1
+    case 'circle-room':
+    case 'direct-room':
+      return 2
+    default:
+      return 1
+  }
+}
+
+watch(
+  () => route.name,
+  (nextName) => {
+    const nextRank = resolveRouteRank(nextName)
+    routeTransitionName.value = nextRank >= previousRouteRank.value ? 'xeno-route-forward' : 'xeno-route-back'
+    previousRouteRank.value = nextRank
+  },
+  { immediate: true },
+)
 
 // English engineering note.
 function onRouteBeforeEnter() {
@@ -81,6 +112,13 @@ function onRouteTransitionCancelled() {
     <!-- English UI note -->
     <TitleBar />
     <div class="xeno-app-shell relative flex h-screen w-full overflow-hidden" :class="{ 'xeno-app-booting': isBooting }">
+      <div class="xeno-shell-atmosphere pointer-events-none absolute inset-0 z-0" aria-hidden="true">
+        <XenoSingularityBackdrop />
+        <div class="xeno-shell-orbit xeno-shell-orbit-a" />
+        <div class="xeno-shell-orbit xeno-shell-orbit-b" />
+        <div class="xeno-shell-beam" />
+        <div class="xeno-shell-horizon" />
+      </div>
       <!-- English UI note -->
       <template v-if="!isInitialized">
         <div class="flex h-full w-full items-center justify-center">
@@ -93,6 +131,15 @@ function onRouteTransitionCancelled() {
       <template v-else>
         <Sidebar />
         <main class="xeno-page-content relative flex-1 overflow-hidden">
+          <div class="xeno-page-atmosphere pointer-events-none absolute inset-0 z-0" aria-hidden="true">
+            <div class="xeno-page-scanline" />
+            <div class="xeno-page-pulse" />
+          </div>
+          <div
+            class="xeno-route-progress pointer-events-none absolute left-0 right-0 top-0 z-30"
+            :class="{ 'xeno-route-progress-active': isRouteTransitioning }"
+            aria-hidden="true"
+          />
           <div
             class="xeno-route-curtain pointer-events-none absolute inset-0 z-20"
             :class="{ 'xeno-route-curtain-active': isRouteTransitioning }"
@@ -100,7 +147,7 @@ function onRouteTransitionCancelled() {
           />
           <router-view v-slot="{ Component }">
             <Transition
-              name="xeno-route"
+              :name="routeTransitionName"
               mode="out-in"
               @before-enter="onRouteBeforeEnter"
               @before-leave="onRouteBeforeLeave"
@@ -130,6 +177,11 @@ function onRouteTransitionCancelled() {
   isolation: isolate;
 }
 
+.xeno-app-shell > :not(.xeno-shell-atmosphere) {
+  position: relative;
+  z-index: 1;
+}
+
 .xeno-app-shell::before {
   content: '';
   position: absolute;
@@ -140,8 +192,103 @@ function onRouteTransitionCancelled() {
   background: radial-gradient(circle at 18% 8%, rgba(14, 165, 233, 0.24), transparent 42%);
 }
 
+.xeno-app-shell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 20%),
+    radial-gradient(circle at 76% 18%, rgba(34, 211, 238, 0.1), transparent 30%);
+  mix-blend-mode: screen;
+  opacity: 0.72;
+}
+
 .xeno-app-booting::before {
   animation: xeno-boot-reveal 760ms cubic-bezier(0.22, 0.92, 0.3, 1) forwards;
+}
+
+.xeno-shell-atmosphere {
+  overflow: hidden;
+}
+
+.xeno-shell-orbit {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(14px);
+  opacity: 0.7;
+}
+
+.xeno-shell-orbit-a {
+  top: -18%;
+  right: 8%;
+  width: 28rem;
+  height: 28rem;
+  border: 1px solid rgba(56, 189, 248, 0.14);
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.14), transparent 68%);
+}
+
+.xeno-shell-orbit-b {
+  bottom: -22%;
+  left: 20%;
+  width: 20rem;
+  height: 20rem;
+  border: 1px solid rgba(45, 212, 191, 0.12);
+  background: radial-gradient(circle, rgba(45, 212, 191, 0.12), transparent 72%);
+}
+
+.xeno-shell-beam {
+  position: absolute;
+  inset: 0 auto 0 22%;
+  width: 36rem;
+  transform: skewX(-14deg);
+  background: linear-gradient(180deg, rgba(56, 189, 248, 0.08), transparent 42%, rgba(14, 165, 233, 0.05) 100%);
+  filter: blur(18px);
+  opacity: 0.55;
+}
+
+.xeno-shell-horizon {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 4.2rem;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.18), rgba(255, 255, 255, 0.12), transparent);
+  opacity: 0.7;
+}
+
+.xeno-page-content {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 10%),
+    radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.08), transparent 26%);
+}
+
+.xeno-page-atmosphere {
+  overflow: hidden;
+}
+
+.xeno-page-scanline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.4), transparent);
+  box-shadow: 0 0 22px rgba(14, 165, 233, 0.3);
+  opacity: 0.55;
+}
+
+.xeno-page-pulse {
+  position: absolute;
+  top: 3rem;
+  right: -6rem;
+  width: 18rem;
+  height: 18rem;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(14, 165, 233, 0.12), transparent 70%);
+  filter: blur(22px);
+  opacity: 0.55;
 }
 
 .xeno-route-curtain {
@@ -157,28 +304,58 @@ function onRouteTransitionCancelled() {
   animation: xeno-route-curtain-pulse 420ms cubic-bezier(0.22, 0.92, 0.3, 1) both;
 }
 
-.xeno-route-enter-active,
-.xeno-route-leave-active {
+.xeno-route-progress {
+  height: 2px;
+  opacity: 0;
+  transform: scaleX(0.1);
+  transform-origin: left center;
+  background:
+    linear-gradient(90deg, rgba(45, 212, 191, 0.2) 0%, rgba(14, 165, 233, 0.7) 45%, rgba(148, 163, 184, 0.2) 100%);
+  box-shadow: 0 0 18px rgba(14, 165, 233, 0.38);
+}
+
+.xeno-route-progress-active {
+  animation: xeno-route-progress-run 420ms cubic-bezier(0.22, 0.92, 0.3, 1) both;
+}
+
+.xeno-route-forward-enter-active,
+.xeno-route-forward-leave-active,
+.xeno-route-back-enter-active,
+.xeno-route-back-leave-active {
   transition:
     opacity 0.34s cubic-bezier(0.22, 0.92, 0.3, 1),
     transform 0.34s cubic-bezier(0.22, 0.92, 0.3, 1),
     filter 0.34s cubic-bezier(0.22, 0.92, 0.3, 1);
 }
 
-.xeno-route-enter-from {
+.xeno-route-forward-enter-from {
   opacity: 0;
-  transform: translateY(16px) scale(0.992);
+  transform: translate3d(18px, 12px, 0) scale(0.992);
   filter: blur(8px) saturate(108%);
 }
 
-.xeno-route-leave-to {
+.xeno-route-forward-leave-to {
   opacity: 0;
-  transform: translateY(-12px) scale(0.996);
+  transform: translate3d(-14px, -10px, 0) scale(0.996);
   filter: blur(7px) saturate(106%);
 }
 
-.xeno-route-enter-to,
-.xeno-route-leave-from {
+.xeno-route-back-enter-from {
+  opacity: 0;
+  transform: translate3d(-18px, 12px, 0) scale(0.992);
+  filter: blur(8px) saturate(108%);
+}
+
+.xeno-route-back-leave-to {
+  opacity: 0;
+  transform: translate3d(14px, -10px, 0) scale(0.996);
+  filter: blur(7px) saturate(106%);
+}
+
+.xeno-route-forward-enter-to,
+.xeno-route-forward-leave-from,
+.xeno-route-back-enter-to,
+.xeno-route-back-leave-from {
   opacity: 1;
   transform: translateY(0) scale(1);
   filter: blur(0) saturate(100%);
@@ -209,19 +386,42 @@ function onRouteTransitionCancelled() {
   }
 }
 
+@keyframes xeno-route-progress-run {
+  0% {
+    opacity: 0;
+    transform: scaleX(0.08);
+  }
+  25% {
+    opacity: 1;
+    transform: scaleX(0.42);
+  }
+  100% {
+    opacity: 0;
+    transform: scaleX(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .xeno-shell-orbit,
+  .xeno-shell-beam,
+  .xeno-page-pulse,
   .xeno-app-booting::before,
-  .xeno-route-curtain-active {
+  .xeno-route-curtain-active,
+  .xeno-route-progress-active {
     animation: none !important;
   }
 
-  .xeno-route-enter-active,
-  .xeno-route-leave-active {
+  .xeno-route-forward-enter-active,
+  .xeno-route-forward-leave-active,
+  .xeno-route-back-enter-active,
+  .xeno-route-back-leave-active {
     transition-duration: 0.01ms !important;
   }
 
-  .xeno-route-enter-from,
-  .xeno-route-leave-to {
+  .xeno-route-forward-enter-from,
+  .xeno-route-forward-leave-to,
+  .xeno-route-back-enter-from,
+  .xeno-route-back-leave-to {
     opacity: 1;
     transform: none;
     filter: none;

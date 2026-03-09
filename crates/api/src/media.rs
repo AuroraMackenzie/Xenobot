@@ -66,6 +66,8 @@ struct AudioTranscodeRequest {
     bitrate_kbps: Option<u32>,
     sample_rate_hz: Option<u32>,
     channels: Option<u8>,
+    #[serde(alias = "ffmpegBinary")]
+    ffmpeg_path: Option<String>,
 }
 
 async fn resolve_media_path(
@@ -181,10 +183,21 @@ async fn transcode_audio_mp3(
 ) -> Result<Json<serde_json::Value>, ApiError> {
     #[cfg(feature = "wechat")]
     {
-        if !xenobot_wechat::audio::has_ffmpeg(None) {
-            return Err(ApiError::NotImplemented(
-                "ffmpeg is required for audio transcoding but is not available in PATH".to_string(),
-            ));
+        let ffmpeg_binary = resolve_ffmpeg_binary_path(req.ffmpeg_path.as_deref())?;
+        if !xenobot_wechat::audio::has_ffmpeg(ffmpeg_binary.as_deref()) {
+            let message = ffmpeg_binary
+                .as_ref()
+                .map(|path| {
+                    format!(
+                        "ffmpeg is required for audio transcoding but binary is unavailable: {}",
+                        path.to_string_lossy()
+                    )
+                })
+                .unwrap_or_else(|| {
+                    "ffmpeg is required for audio transcoding but is not available in PATH"
+                        .to_string()
+                });
+            return Err(ApiError::NotImplemented(message));
         }
 
         let input = load_binary_media_payload(&req.source).await?;
@@ -206,7 +219,7 @@ async fn transcode_audio_mp3(
             sample_rate_hz: req.sample_rate_hz.unwrap_or(24_000),
             channels: req.channels.unwrap_or(1),
             overwrite: true,
-            ffmpeg_binary: None,
+            ffmpeg_binary: ffmpeg_binary.clone(),
         };
 
         let mp3 =
@@ -222,7 +235,12 @@ async fn transcode_audio_mp3(
             "options": {
                 "bitrateKbps": options.bitrate_kbps,
                 "sampleRateHz": options.sample_rate_hz,
-                "channels": options.channels
+                "channels": options.channels,
+                "ffmpegBinary": options
+                    .ffmpeg_binary
+                    .as_ref()
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "ffmpeg".to_string())
             }
         })));
     }
@@ -524,6 +542,27 @@ fn normalize_audio_format(input: &str) -> &str {
     }
 }
 
+fn resolve_ffmpeg_binary_path(request_path: Option<&str>) -> Result<Option<PathBuf>, ApiError> {
+    if let Some(raw) = request_path {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            return Err(ApiError::InvalidRequest(
+                "ffmpegPath cannot be empty".to_string(),
+            ));
+        }
+        return Ok(Some(PathBuf::from(trimmed)));
+    }
+
+    if let Ok(raw) = std::env::var("XENOBOT_FFMPEG_PATH") {
+        let trimmed = raw.trim();
+        if !trimmed.is_empty() {
+            return Ok(Some(PathBuf::from(trimmed)));
+        }
+    }
+
+    Ok(None)
+}
+
 #[cfg(feature = "wechat")]
 fn wechat_image_content_type(format: xenobot_wechat::media::ImageFormat) -> &'static str {
     match format {
@@ -538,6 +577,62 @@ fn wechat_image_content_type(format: xenobot_wechat::media::ImageFormat) -> &'st
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_decode_base64_payload_accepts_valid() {
+        let encoded = base64::engine::general_purpose::STANDARD.encode(b"hello");
+        let decoded = decode_base64_payload(&encoded).expect("valid base64 should decode");
+        assert_eq!(decoded, b"hello");
+    }
+
+    #[test]
+    fn test_decode_base64_payload_rejects_empty() {
+        let err = decode_base64_payload("   ").expect_err("empty payload should fail");
+        assert!(matches!(err, ApiError::InvalidRequest(_)));
+    }
+
+    #[test]
+    fn test_decode_base64_payload_rejects_invalid() {
+        let err =
+            decode_base64_payload("not-valid-@@").expect_err("invalid base64 payload should fail");
+        assert!(matches!(err, ApiError::InvalidRequest(_)));
+    }
+
+    #[tokio::test]
+    async fn test_load_binary_media_payload_rejects_both_path_and_payload() {
+        let req = BinaryMediaRequest {
+            path: Some("/tmp/placeholder.bin".to_string()),
+            payload_base64: Some(base64::engine::general_purpose::STANDARD.encode(b"abc")),
+        };
+        let err = load_binary_media_payload(&req)
+            .await
+            .expect_err("path + payloadBase64 together must fail");
+        assert!(matches!(err, ApiError::InvalidRequest(_)));
+    }
+
+    #[tokio::test]
+    async fn test_load_binary_media_payload_rejects_missing_source() {
+        let req = BinaryMediaRequest {
+            path: None,
+            payload_base64: None,
+        };
+        let err = load_binary_media_payload(&req)
+            .await
+            .expect_err("missing source should fail");
+        assert!(matches!(err, ApiError::InvalidRequest(_)));
+    }
+
+    #[tokio::test]
+    async fn test_load_binary_media_payload_accepts_base64_source() {
+        let req = BinaryMediaRequest {
+            path: None,
+            payload_base64: Some(base64::engine::general_purpose::STANDARD.encode(b"media-bytes")),
+        };
+        let payload = load_binary_media_payload(&req)
+            .await
+            .expect("base64 source should decode");
+        assert_eq!(payload, b"media-bytes");
+    }
 
     #[test]
     fn test_extract_media_path_from_json_content() {
@@ -561,5 +656,25 @@ mod tests {
     fn test_infer_audio_format_from_path_silk() {
         assert_eq!(infer_audio_format_from_path("/tmp/a.silk"), Some("silk"));
         assert_eq!(infer_audio_format_from_path("/tmp/a.unknown"), None);
+    }
+
+    #[test]
+    fn test_normalize_audio_format_maps_mp4_to_m4a() {
+        assert_eq!(normalize_audio_format("mp4"), "m4a");
+        assert_eq!(normalize_audio_format(" m4a "), "m4a");
+        assert_eq!(normalize_audio_format("unknown"), "silk");
+    }
+
+    #[test]
+    fn test_resolve_ffmpeg_binary_path_prefers_request_field() {
+        let parsed = resolve_ffmpeg_binary_path(Some("/opt/homebrew/bin/ffmpeg"))
+            .expect("request ffmpeg path should be accepted");
+        assert_eq!(parsed, Some(PathBuf::from("/opt/homebrew/bin/ffmpeg")));
+    }
+
+    #[test]
+    fn test_resolve_ffmpeg_binary_path_rejects_empty_request() {
+        let err = resolve_ffmpeg_binary_path(Some("   ")).expect_err("empty request should fail");
+        assert!(matches!(err, ApiError::InvalidRequest(_)));
     }
 }

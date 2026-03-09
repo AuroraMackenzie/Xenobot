@@ -173,6 +173,20 @@ async fn test_advanced_analysis_endpoints_return_expected_shapes(
     let runs = repeat_resp["runs"].as_array().cloned().unwrap_or_default();
     assert!(!runs.is_empty());
 
+    let (status, catchphrase_resp) =
+        get_json(&app, &format!("/sessions/{meta_id}/catchphrase-analysis")).await?;
+    assert_eq!(status, StatusCode::OK);
+    let members = catchphrase_resp["members"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert!(!members.is_empty());
+    assert!(members.iter().any(|member| {
+        member["catchphrases"]
+            .as_array()
+            .is_some_and(|items| items.iter().any(|item| item["content"] == "Echo phrase"))
+    }));
+
     let (status, mention_resp) =
         get_json(&app, &format!("/sessions/{meta_id}/mention-analysis")).await?;
     assert_eq!(status, StatusCode::OK);
@@ -206,6 +220,60 @@ async fn test_advanced_analysis_endpoints_return_expected_shapes(
     assert!(laugh_resp["rankByCount"].is_array());
     assert!(laugh_resp["typeDistribution"].is_array());
     assert!(laugh_resp["totalLaughs"].as_i64().unwrap_or(0) >= 2);
+
+    let _ = fs::remove_dir_all(&test_root);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_advanced_analysis_endpoints_return_not_found_for_missing_session(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let _guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+    let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .canonicalize()?;
+    let _cwd_guard = WorkingDirGuard::change_to(&workspace_root)?;
+
+    let test_root = unique_test_root();
+    fs::create_dir_all(&test_root)?;
+    let db_path = test_root.join("xenobot_api_advanced_analysis_missing_session.db");
+
+    let mut db_config = DatabaseConfig::default();
+    db_config.sqlite_path = db_path;
+    xenobot_api::database::init_database_with_config(&db_config).await?;
+
+    let app = chat::router();
+    let missing_session_id = 9_999_999_i64;
+    let endpoints = [
+        "night-owl-analysis",
+        "dragon-king-analysis",
+        "lurker-analysis",
+        "checkin-analysis",
+        "repeat-analysis",
+        "catchphrase-analysis",
+        "mention-analysis",
+        "mention-graph",
+        "cluster-graph",
+        "laugh-analysis",
+    ];
+
+    for endpoint in endpoints {
+        let (status, body) =
+            get_json(&app, &format!("/sessions/{missing_session_id}/{endpoint}")).await?;
+        assert_eq!(
+            status,
+            StatusCode::NOT_FOUND,
+            "expected 404 for endpoint {endpoint}"
+        );
+        assert_eq!(body["code"], 404);
+        assert!(
+            body["error"]
+                .as_str()
+                .is_some_and(|text| text.contains("session") && text.contains("not found")),
+            "unexpected error body for endpoint {endpoint}: {body}"
+        );
+    }
 
     let _ = fs::remove_dir_all(&test_root);
     Ok(())

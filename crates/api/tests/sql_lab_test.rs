@@ -202,6 +202,44 @@ async fn test_execute_sql_enforces_read_only_policy() -> Result<(), Box<dyn std:
 }
 
 #[tokio::test]
+async fn test_execute_sql_returns_not_found_for_missing_session(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let _guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+    let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .canonicalize()?;
+    let _cwd_guard = WorkingDirGuard::change_to(&workspace_root)?;
+
+    let test_root = unique_test_root();
+    fs::create_dir_all(&test_root)?;
+    let db_path = test_root.join("xenobot_api_sql_lab_missing_session.db");
+
+    let mut db_config = DatabaseConfig::default();
+    db_config.sqlite_path = db_path;
+    xenobot_api::database::init_database_with_config(&db_config).await?;
+
+    let app = chat::router();
+    let endpoint = "/sessions/999999/execute-sql";
+    let (status, resp) = post_json(
+        &app,
+        endpoint,
+        json!({
+            "sql": "SELECT 1 AS ok"
+        }),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert!(resp["error"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("session 999999 not found"));
+
+    let _ = fs::remove_dir_all(&test_root);
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_execute_sql_caps_large_result_sets_with_limited_flag(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let _guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
@@ -311,6 +349,10 @@ async fn test_generate_sql_returns_safe_query_that_can_be_executed(
         .as_str()
         .expect("generate sql should return sql string");
     assert!(generated_sql.to_ascii_uppercase().contains("SELECT"));
+    assert!(
+        generated_sql.contains(&format!("msg.meta_id = {}", session_id)),
+        "generated SQL should be scoped to the current session"
+    );
 
     let execute_endpoint = format!("/sessions/{session_id}/execute-sql");
     let (exec_status, _) = post_json(
@@ -322,6 +364,323 @@ async fn test_generate_sql_returns_safe_query_that_can_be_executed(
     )
     .await?;
     assert_eq!(exec_status, StatusCode::OK);
+
+    let _ = fs::remove_dir_all(&test_root);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_generate_sql_supports_hourly_and_daily_intents(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let _guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+    let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .canonicalize()?;
+    let _cwd_guard = WorkingDirGuard::change_to(&workspace_root)?;
+
+    let test_root = unique_test_root();
+    fs::create_dir_all(&test_root)?;
+    let db_path = test_root.join("xenobot_api_sql_lab_generate_time_intents.db");
+
+    let mut db_config = DatabaseConfig::default();
+    db_config.sqlite_path = db_path;
+    xenobot_api::database::init_database_with_config(&db_config).await?;
+
+    let pool = xenobot_api::database::get_pool().await?;
+    let repo = Repository::new(pool.clone());
+    let session_id = repo
+        .create_chat(&ChatMeta {
+            id: 0,
+            name: "SQL Generate Time Intent Session".to_string(),
+            platform: "wechat".to_string(),
+            chat_type: "group".to_string(),
+            imported_at: 1_700_000_000,
+            group_id: None,
+            group_avatar: None,
+            owner_id: None,
+            schema_version: 3,
+            session_gap_threshold: 1800,
+        })
+        .await?;
+
+    let app = chat::router();
+    let endpoint = format!("/sessions/{session_id}/generate-sql");
+
+    let (hourly_status, hourly_resp) = post_json(
+        &app,
+        &endpoint,
+        json!({
+            "prompt": "按小时统计消息数量",
+            "maxRows": 24
+        }),
+    )
+    .await?;
+    assert_eq!(hourly_status, StatusCode::OK);
+    let hourly_sql = hourly_resp["sql"].as_str().unwrap_or_default();
+    assert!(hourly_sql.contains("strftime('%H'"));
+    assert!(hourly_sql.contains("GROUP BY hour_bucket"));
+    assert!(hourly_sql.contains(&format!("msg.meta_id = {}", session_id)));
+
+    let (daily_status, daily_resp) = post_json(
+        &app,
+        &endpoint,
+        json!({
+            "prompt": "按天统计消息数量",
+            "maxRows": 31
+        }),
+    )
+    .await?;
+    assert_eq!(daily_status, StatusCode::OK);
+    let daily_sql = daily_resp["sql"].as_str().unwrap_or_default();
+    assert!(daily_sql.contains("date(datetime(msg.ts"));
+    assert!(daily_sql.contains("GROUP BY day_bucket"));
+    assert!(daily_sql.contains(&format!("msg.meta_id = {}", session_id)));
+
+    let (weekday_status, weekday_resp) = post_json(
+        &app,
+        &endpoint,
+        json!({
+            "prompt": "按星期统计消息数量",
+            "maxRows": 7
+        }),
+    )
+    .await?;
+    assert_eq!(weekday_status, StatusCode::OK);
+    let weekday_sql = weekday_resp["sql"].as_str().unwrap_or_default();
+    assert!(weekday_sql.contains("strftime('%w'"));
+    assert!(weekday_sql.contains("GROUP BY weekday_bucket"));
+    assert!(weekday_sql.contains(&format!("msg.meta_id = {}", session_id)));
+
+    let (monthly_status, monthly_resp) = post_json(
+        &app,
+        &endpoint,
+        json!({
+            "prompt": "按月统计消息数量",
+            "maxRows": 12
+        }),
+    )
+    .await?;
+    assert_eq!(monthly_status, StatusCode::OK);
+    let monthly_sql = monthly_resp["sql"].as_str().unwrap_or_default();
+    assert!(monthly_sql.contains("strftime('%Y-%m'"));
+    assert!(monthly_sql.contains("GROUP BY month_bucket"));
+    assert!(monthly_sql.contains(&format!("msg.meta_id = {}", session_id)));
+
+    let (yearly_status, yearly_resp) = post_json(
+        &app,
+        &endpoint,
+        json!({
+            "prompt": "按年统计消息数量",
+            "maxRows": 10
+        }),
+    )
+    .await?;
+    assert_eq!(yearly_status, StatusCode::OK);
+    let yearly_sql = yearly_resp["sql"].as_str().unwrap_or_default();
+    assert!(yearly_sql.contains("strftime('%Y'"));
+    assert!(yearly_sql.contains("GROUP BY year_bucket"));
+    assert!(yearly_sql.contains(&format!("msg.meta_id = {}", session_id)));
+
+    let _ = fs::remove_dir_all(&test_root);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_generate_sql_supports_type_length_and_mention_intents(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let _guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+    let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .canonicalize()?;
+    let _cwd_guard = WorkingDirGuard::change_to(&workspace_root)?;
+
+    let test_root = unique_test_root();
+    fs::create_dir_all(&test_root)?;
+    let db_path = test_root.join("xenobot_api_sql_lab_generate_content_intents.db");
+
+    let mut db_config = DatabaseConfig::default();
+    db_config.sqlite_path = db_path;
+    xenobot_api::database::init_database_with_config(&db_config).await?;
+
+    let pool = xenobot_api::database::get_pool().await?;
+    let repo = Repository::new(pool.clone());
+    let session_id = repo
+        .create_chat(&ChatMeta {
+            id: 0,
+            name: "SQL Generate Content Intent Session".to_string(),
+            platform: "wechat".to_string(),
+            chat_type: "group".to_string(),
+            imported_at: 1_700_000_000,
+            group_id: None,
+            group_avatar: None,
+            owner_id: None,
+            schema_version: 3,
+            session_gap_threshold: 1800,
+        })
+        .await?;
+
+    let app = chat::router();
+    let endpoint = format!("/sessions/{session_id}/generate-sql");
+
+    let (type_status, type_resp) = post_json(
+        &app,
+        &endpoint,
+        json!({
+            "prompt": "消息类型分布",
+            "maxRows": 10
+        }),
+    )
+    .await?;
+    assert_eq!(type_status, StatusCode::OK);
+    let type_sql = type_resp["sql"].as_str().unwrap_or_default();
+    assert!(type_sql.contains("msg.msg_type"));
+    assert!(type_sql.contains("GROUP BY msg.msg_type"));
+    assert!(type_sql.contains(&format!("msg.meta_id = {}", session_id)));
+
+    let (length_status, length_resp) = post_json(
+        &app,
+        &endpoint,
+        json!({
+            "prompt": "最长消息",
+            "maxRows": 20
+        }),
+    )
+    .await?;
+    assert_eq!(length_status, StatusCode::OK);
+    let length_sql = length_resp["sql"].as_str().unwrap_or_default();
+    assert!(length_sql.contains("length(msg.content) AS content_length"));
+    assert!(length_sql.contains("ORDER BY content_length DESC"));
+    assert!(length_sql.contains(&format!("msg.meta_id = {}", session_id)));
+
+    let (mention_status, mention_resp) = post_json(
+        &app,
+        &endpoint,
+        json!({
+            "prompt": "最近@提及消息",
+            "maxRows": 30
+        }),
+    )
+    .await?;
+    assert_eq!(mention_status, StatusCode::OK);
+    let mention_sql = mention_resp["sql"].as_str().unwrap_or_default();
+    assert!(mention_sql.contains("msg.content LIKE '%@%'"));
+    assert!(mention_sql.contains("ORDER BY msg.ts DESC"));
+    assert!(mention_sql.contains(&format!("msg.meta_id = {}", session_id)));
+
+    let _ = fs::remove_dir_all(&test_root);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_generate_sql_keyword_intent_without_quotes_does_not_add_like_filter(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let _guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+    let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .canonicalize()?;
+    let _cwd_guard = WorkingDirGuard::change_to(&workspace_root)?;
+
+    let test_root = unique_test_root();
+    fs::create_dir_all(&test_root)?;
+    let db_path = test_root.join("xenobot_api_sql_lab_generate_keyword_warning.db");
+
+    let mut db_config = DatabaseConfig::default();
+    db_config.sqlite_path = db_path;
+    xenobot_api::database::init_database_with_config(&db_config).await?;
+
+    let pool = xenobot_api::database::get_pool().await?;
+    let repo = Repository::new(pool.clone());
+    let session_id = repo
+        .create_chat(&ChatMeta {
+            id: 0,
+            name: "SQL Generate Keyword Warning Session".to_string(),
+            platform: "wechat".to_string(),
+            chat_type: "group".to_string(),
+            imported_at: 1_700_000_000,
+            group_id: None,
+            group_avatar: None,
+            owner_id: None,
+            schema_version: 3,
+            session_gap_threshold: 1800,
+        })
+        .await?;
+
+    let app = chat::router();
+    let endpoint = format!("/sessions/{session_id}/generate-sql");
+    let (status, resp) = post_json(
+        &app,
+        &endpoint,
+        json!({
+            "prompt": "search messages by keyword hello",
+            "maxRows": 100
+        }),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    let generated_sql = resp["sql"].as_str().unwrap_or_default();
+    assert!(
+        !generated_sql.contains("LIKE"),
+        "sql should not include LIKE filter when keyword is unquoted"
+    );
+    assert!(generated_sql.contains(&format!("msg.meta_id = {}", session_id)));
+
+    let _ = fs::remove_dir_all(&test_root);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_generate_sql_fallback_intent_keeps_session_scope() -> Result<(), Box<dyn std::error::Error>>
+{
+    let _guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+    let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .canonicalize()?;
+    let _cwd_guard = WorkingDirGuard::change_to(&workspace_root)?;
+
+    let test_root = unique_test_root();
+    fs::create_dir_all(&test_root)?;
+    let db_path = test_root.join("xenobot_api_sql_lab_generate_fallback_scope.db");
+
+    let mut db_config = DatabaseConfig::default();
+    db_config.sqlite_path = db_path;
+    xenobot_api::database::init_database_with_config(&db_config).await?;
+
+    let pool = xenobot_api::database::get_pool().await?;
+    let repo = Repository::new(pool.clone());
+    let session_id = repo
+        .create_chat(&ChatMeta {
+            id: 0,
+            name: "SQL Generate Fallback Scope Session".to_string(),
+            platform: "wechat".to_string(),
+            chat_type: "group".to_string(),
+            imported_at: 1_700_000_000,
+            group_id: None,
+            group_avatar: None,
+            owner_id: None,
+            schema_version: 3,
+            session_gap_threshold: 1800,
+        })
+        .await?;
+
+    let app = chat::router();
+    let endpoint = format!("/sessions/{session_id}/generate-sql");
+    let (status, resp) = post_json(
+        &app,
+        &endpoint,
+        json!({
+            "prompt": "show me something unusual with no known intent words",
+            "maxRows": 20
+        }),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    let generated_sql = resp["sql"].as_str().unwrap_or_default();
+    assert!(generated_sql.contains(&format!("msg.meta_id = {}", session_id)));
+    assert_eq!(resp["strategy"], "rule_based_safe_sql");
 
     let _ = fs::remove_dir_all(&test_root);
     Ok(())
@@ -496,6 +855,37 @@ async fn test_get_schema_detailed_returns_summary_indexes_and_row_count(
     assert!(meta_table["indexes"].is_array());
     assert!(meta_table["foreignKeys"].is_array());
     assert!(meta_table["rowCount"].as_i64().unwrap_or(-1) >= 1);
+
+    let _ = fs::remove_dir_all(&test_root);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_get_schema_returns_not_found_for_missing_session(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let _guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+    let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .canonicalize()?;
+    let _cwd_guard = WorkingDirGuard::change_to(&workspace_root)?;
+
+    let test_root = unique_test_root();
+    fs::create_dir_all(&test_root)?;
+    let db_path = test_root.join("xenobot_api_sql_lab_schema_missing_session.db");
+
+    let mut db_config = DatabaseConfig::default();
+    db_config.sqlite_path = db_path;
+    xenobot_api::database::init_database_with_config(&db_config).await?;
+
+    let app = chat::router();
+    let endpoint = "/sessions/888888/schema";
+    let (status, resp) = get_json(&app, endpoint).await?;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert!(resp["error"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("session 888888 not found"));
 
     let _ = fs::remove_dir_all(&test_root);
     Ok(())

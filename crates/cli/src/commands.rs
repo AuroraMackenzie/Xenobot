@@ -297,7 +297,11 @@ pub enum ApiCommand {
     },
 
     /// Get API server status
-    Status,
+    Status {
+        /// Output format
+        #[arg(short, long, default_value_t = OutputFormat::Text)]
+        format: OutputFormat,
+    },
 
     /// Run API in-process smoke checks without binding network/socket listeners
     Smoke {
@@ -392,7 +396,7 @@ pub enum ApiCommand {
         #[arg(long, default_value = "http://127.0.0.1:5030")]
         url: String,
 
-        /// Integration target id (e.g. claude-desktop, chatwise, opencode)
+        /// Integration target id (e.g. claude-desktop, chatwise, opencode, pencil)
         #[arg(long, default_value = "claude-desktop")]
         target: String,
 
@@ -422,6 +426,25 @@ pub enum ApiCommand {
         /// JSON object argument payload
         #[arg(long, default_value = "{}")]
         args_json: String,
+
+        /// Output format
+        #[arg(short, long, default_value_t = OutputFormat::Json)]
+        format: OutputFormat,
+
+        /// Request timeout in milliseconds
+        #[arg(long, default_value_t = 5000)]
+        timeout_ms: u64,
+    },
+
+    /// List MCP tools via JSON-RPC or HTTP bridge endpoint
+    McpTools {
+        /// MCP server base URL (without trailing slash)
+        #[arg(long, default_value = "http://127.0.0.1:5030")]
+        url: String,
+
+        /// Call transport mode
+        #[arg(long, value_enum, default_value_t = McpCallMode::Rpc)]
+        mode: McpCallMode,
 
         /// Output format
         #[arg(short, long, default_value_t = OutputFormat::Json)]
@@ -735,6 +758,18 @@ pub enum WebhookCommand {
         #[arg(long)]
         event_type: Option<String>,
 
+        /// Platform filter (e.g. wechat, whatsapp, telegram)
+        #[arg(long)]
+        platform: Option<String>,
+
+        /// Chat name filter (exact match)
+        #[arg(long = "chat-name")]
+        chat_name: Option<String>,
+
+        /// Session(meta) id filter
+        #[arg(long = "meta-id")]
+        meta_id: Option<i64>,
+
         /// Sender filter
         #[arg(long)]
         sender: Option<String>,
@@ -774,6 +809,59 @@ pub enum WebhookCommand {
 
     /// Clear all failed webhook deliveries
     ClearFailed,
+
+    /// View or update webhook dispatch runtime settings
+    Dispatch {
+        /// Dispatch settings operation
+        #[command(subcommand)]
+        command: WebhookDispatchCommand,
+    },
+}
+
+/// Webhook dispatch setting operations.
+#[derive(Subcommand, Debug)]
+pub enum WebhookDispatchCommand {
+    /// Show current dispatch settings
+    Show {
+        /// Output format
+        #[arg(short, long, default_value_t = OutputFormat::Text)]
+        format: OutputFormat,
+    },
+
+    /// Update dispatch settings
+    Set {
+        /// Reset dispatch settings to defaults before applying provided options
+        #[arg(long, default_value_t = false)]
+        reset: bool,
+
+        /// Max buffered events before immediate flush
+        #[arg(long)]
+        batch_size: Option<usize>,
+
+        /// Max concurrent webhook requests
+        #[arg(long)]
+        max_concurrency: Option<usize>,
+
+        /// Per-request timeout in milliseconds
+        #[arg(long)]
+        request_timeout_ms: Option<u64>,
+
+        /// Time-window flush interval in milliseconds
+        #[arg(long)]
+        flush_interval_ms: Option<u64>,
+
+        /// Retry attempts for failed webhook delivery
+        #[arg(long)]
+        retry_attempts: Option<u32>,
+
+        /// Base delay for retry backoff in milliseconds
+        #[arg(long)]
+        retry_base_delay_ms: Option<u64>,
+
+        /// Output format
+        #[arg(short, long, default_value_t = OutputFormat::Text)]
+        format: OutputFormat,
+    },
 }
 
 /// Database operations arguments.

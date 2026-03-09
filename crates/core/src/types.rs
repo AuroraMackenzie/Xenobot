@@ -1190,6 +1190,7 @@ pub enum PredictionHorizon {
 
 /// Real-time event types.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(clippy::large_enum_variant)]
 pub enum RealTimeEvent {
     /// New message event.
     NewMessage(Message),

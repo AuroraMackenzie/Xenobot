@@ -163,21 +163,18 @@ impl NeuralNetwork {
         let mut current = input.to_vec();
         let mps_mmul = MpsMatrixMultiplication::new(self.device.clone())?;
 
-        for (_i, ((layer, weights), bias)) in self
+        for ((layer, weights), bias) in self
             .layers
             .iter()
             .zip(&self.weights)
             .zip(&self.biases)
-            .enumerate()
         {
             // Matrix multiplication: output = input * weights
             let batch_size = 1; // Single sample inference
             let output = mps_mmul.multiply(
                 &current,
                 weights,
-                batch_size,
-                layer.input_dim,
-                layer.output_dim,
+                (batch_size, layer.input_dim, layer.output_dim),
                 1.0, // alpha
                 0.0, // beta
             )?;
@@ -210,7 +207,7 @@ impl NeuralNetwork {
             Activation::Relu => tensor.iter().map(|&x| x.max(0.0)).collect(),
             Activation::Gelu => {
                 // Approximate GELU: x * 0.5 * (1.0 + tanh(sqrt(2.0/π) * (x + 0.044715 * x^3)))
-                const SQRT_2_OVER_PI: f32 = 0.7978845608;
+                const SQRT_2_OVER_PI: f32 = 0.797_884_6;
                 const GELU_COEF: f32 = 0.044715;
                 tensor
                     .iter()

@@ -9,6 +9,13 @@ This document tracks Xenobot's current legal-safe platform adapter coverage.
 - No process-memory key extraction.
 - No encryption bypass.
 
+Explicitly excluded implementation styles:
+
+- DLL hook chains
+- process-memory scanning
+- Windows-only key extraction helpers
+- reference-project UI/asset reuse
+
 ## Covered Platforms (17)
 
 1. WeChat (`xenobot-wechat`)
@@ -42,4 +49,5 @@ The script verifies:
 - `xenobot-core` platform discovery tests.
 - each platform adapter crate test set.
 - API + CLI compile contract (`api,analysis` feature set).
-
+- agent frontend/backend alias contract regression (`7.2`).
+- MCP protocol/tool/resource contract regression (`10.x`).

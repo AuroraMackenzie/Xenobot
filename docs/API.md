@@ -6,6 +6,49 @@ This document describes the current HTTP endpoints exposed by `xenobot-api` (Axu
 
 - Default local service mode: managed by `xenobot-cli api start`
 - Sandbox fallback chain: `TCP -> UDS -> file gateway IPC` (no socket required)
+- Route mount note:
+  - Chat module endpoints in this document are mounted under `/chat`.
+  - Example: `GET /sessions` is exposed as `GET /chat/sessions`.
+
+## Service Basics (`xenobot-api`)
+
+- `GET /` service index
+- `GET /health` liveness probe (`OK`)
+- `GET /status` machine-readable runtime status:
+  - `service`, `version`, `status`
+  - `bindAddr`, `apiBasePath`, `corsEnabled`
+  - `features` matrix
+  - `runtime.os`, `runtime.arch`
+
+## Network Operations
+
+- `GET /network/proxy-config`
+- `POST /network/proxy-config`
+- `POST /network/test-proxy-connection`
+- `GET /network/sandbox-doctor`
+
+### `GET /network/sandbox-doctor`
+
+Returns the same capability recommendation model used by the CLI `api sandbox-doctor` flow:
+
+- `tcp.allowed`
+- `uds.supported`
+- `uds.allowed`
+- `fileGateway.dir`
+- `fileGateway.writable`
+- `recommended.mode`
+- `recommended.command`
+
+Optional query params:
+
+- `fileGatewayDir`
+- `file_gateway_dir`
+
+Example:
+
+```bash
+curl -s "http://127.0.0.1:8080/api/network/sandbox-doctor" | jq
+```
 
 ## Migration
 
@@ -57,9 +100,14 @@ or inline payload:
   "inputFormat": "silk",
   "bitrateKbps": 128,
   "sampleRateHz": 24000,
-  "channels": 1
+  "channels": 1,
+  "ffmpegPath": "/opt/homebrew/bin/ffmpeg"
 }
 ```
+
+Notes:
+- `ffmpegPath` is optional; when omitted, runtime uses `XENOBOT_FFMPEG_PATH` (if set), then falls back to `ffmpeg` from `PATH`.
+- `ffmpegPath` may also be provided as `ffmpegBinary` for compatibility.
 
 Both endpoints return in-memory payload bytes as Base64 (`bytes`) and never require a temporary output file path.
 
@@ -185,7 +233,10 @@ Incremental responses include checkpoint diagnostics:
 ## SQL and Plugin
 
 - `POST /sessions/:session_id/execute-sql` (read-only SQL guard: SELECT/CTE only, no multi-statement)
+  - returns `404` when `session_id` does not exist.
 - `POST /sessions/:session_id/generate-sql` (AI-assisted safe SQL draft, rule-based local fallback)
+  - returns `404` when `session_id` does not exist.
+  - generated SQL is session-scoped by default (`msg.meta_id = :session_id`) for message-table intents.
   - request:
     - `prompt` (required)
     - `maxRows` (optional, clamped `1..500`, default `100`)
@@ -196,8 +247,13 @@ Incremental responses include checkpoint diagnostics:
     - `strategy` (`rule_based_safe_sql`)
     - `limit`
     - `warnings` (array)
+  - built-in rule intents include:
+    - recent/keyword message lookup
+    - sender count ranking
+    - hourly / weekday / daily / monthly / yearly time buckets
   - generated SQL is re-validated by the same read-only guard used by `execute-sql`.
 - `GET /sessions/:session_id/schema`
+  - returns `404` when `session_id` does not exist.
   - default response: compatibility array of `{ name, columns }`
   - supports query params:
     - `detailed=true`: returns `{ tables, summary, includesRowCount }`
@@ -224,6 +280,30 @@ Incremental responses include checkpoint diagnostics:
 
 - `GET /db-directory`
 - `GET /supported-formats`
+
+## LLM Configuration and Chat
+
+- `GET /llm/providers`
+- `GET /llm/configs`
+- `GET /llm/active-config-id`
+- `POST /llm/configs`
+- `POST /llm/configs/:id`
+- `DELETE /llm/configs/:id`
+- `POST /llm/active-config`
+- `POST /llm/validate-api-key`
+- `GET /llm/has-config`
+- `POST /llm/chat`
+- `POST /llm/chat-stream`
+
+Validation rules:
+- `provider` must exist in the provider catalog (case-insensitive input, normalized to canonical provider id).
+- for providers other than `openai-compatible`, `model` (when provided) must be one of that provider's declared models.
+- for `openai-compatible`, custom model ids are allowed.
+- `baseUrl` (when provided) must be a valid URL.
+- `validate-api-key` applies the same provider/model/baseUrl validation before API key checks.
+- `POST /llm/chat` and `POST /llm/chat-stream` use provider runtime calls for OpenAI-style providers and Gemini.
+- if upstream call fails, runtime returns a local-safe fallback response instead of propagating transport errors.
+- optional timeout env: `XENOBOT_LLM_TIMEOUT_MS` (ms, clamped to safe bounds).
 
 ## Agent
 
@@ -273,7 +353,7 @@ Transport endpoints:
 - `tools` (legacy-compatible list of tool names)
 - `toolSpecs` (structured tool metadata with `name`, `description`, `inputSchema`)
 
-### MCP Tool List (first batch)
+### MCP Tool List (first + second batch)
 
 - `current_time`
 - `get_current_time` (alias)
@@ -283,6 +363,12 @@ Transport endpoints:
 - `query_chats` (alias)
 - `chat_records`
 - `chat_history` (alias)
+- `member_stats`
+- `get_member_stats` (alias)
+- `time_stats`
+- `get_time_stats` (alias)
+- `session_summary`
+- `get_session_summary` (alias)
 
 Legacy-compatible aliases remain available:
 - `list_contacts`
@@ -311,7 +397,8 @@ Response shape:
 
 Error semantics:
 - tool not found: HTTP `404`, `code = "tool_not_found"`
-- tool runtime/argument failure: HTTP `500`, `code = "tool_error"`
+- tool argument failure: HTTP `400`, `code = "invalid_params"`
+- tool runtime failure: HTTP `500`, `code = "tool_error"`
 
 ### `POST /mcp` (Streamable HTTP JSON-RPC)
 
@@ -389,11 +476,17 @@ Checks:
 - `POST /mcp` `tools/call` (smoke call on `get_current_time`)
 - `GET /integrations`
 - required first-batch MCP tool aliases and integration preset IDs
+  - current built-in targets:
+    - `claude-desktop`
+    - `chatwise`
+    - `opencode`
+    - `pencil`
 
 CLI preset fetch:
 
 ```bash
 cargo run -p xenobot-cli --features "api,analysis" -- api mcp-preset --url http://127.0.0.1:8081 --target claude-desktop --format json
+cargo run -p xenobot-cli --features "api,analysis" -- api mcp-preset --url http://127.0.0.1:8081 --target pencil --format json
 ```
 
 CLI direct tool call (RPC mode):
@@ -459,6 +552,12 @@ cargo run -p xenobot-cli --features "api,analysis" -- \
   --format json
 ```
 
+Latest diagnostic evidence in current execution environment (2026-03-05 UTC):
+- `tcp.allowed=false` (`Operation not permitted`)
+- `uds.allowed=false` (`Operation not permitted`)
+- `fileGateway.writable=true`
+- recommendation points to `api start --force-file-gateway ...`
+
 CLI file-gateway single call (no socket required):
 
 ```bash
@@ -479,6 +578,7 @@ scripts/xb api sandbox-health --format json
 scripts/xb mcp start --db-path /tmp/xenobot.db
 scripts/xb mcp smoke --url http://127.0.0.1:8081
 scripts/xb mcp preset --url http://127.0.0.1:8081 --target claude-desktop --format json
+scripts/xb mcp preset --url http://127.0.0.1:8081 --target pencil --format json
 ```
 
 ## Compatibility Notes

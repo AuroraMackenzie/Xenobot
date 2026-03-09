@@ -244,6 +244,12 @@ struct KeyStoreSnapshot {
     profiles: HashMap<String, StoredKeyProfileSnapshot>,
 }
 
+impl Default for Ui {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Ui {
     /// Create a new UI.
     pub fn new() -> Self {
@@ -384,11 +390,13 @@ impl Ui {
     /// Update UI state.
     pub fn update(&mut self) {
         self.tick_count = self.tick_count.saturating_add(1);
-        if matches!(self.status.http_status, ServiceStatus::Running) && self.tick_count % 10 == 0 {
+        if matches!(self.status.http_status, ServiceStatus::Running)
+            && self.tick_count.is_multiple_of(10)
+        {
             self.status.last_session_time = Self::now_text();
         }
         if matches!(self.status.auto_decrypt_status, ServiceStatus::Running)
-            && self.tick_count % 15 == 0
+            && self.tick_count.is_multiple_of(15)
             && self.status.data_size == "0 B"
         {
             self.status.data_size = "128 MB".to_string();
@@ -498,12 +506,10 @@ impl Ui {
                     } else {
                         profile.platform
                     }
+                } else if profile.platform.trim().is_empty() {
+                    profile.version
                 } else {
-                    if profile.platform.trim().is_empty() {
-                        profile.version
-                    } else {
-                        format!("{} ({})", profile.version, profile.platform)
-                    }
+                    format!("{} ({})", profile.version, profile.platform)
                 };
                 if !profile_name.trim().is_empty() {
                     self.status.account = profile_name;
