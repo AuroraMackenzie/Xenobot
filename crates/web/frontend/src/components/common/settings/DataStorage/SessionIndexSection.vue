@@ -1,8 +1,4 @@
 <script setup lang="ts">
-/**
- * English note.
- * English note.
- */
 import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -86,7 +82,7 @@ async function loadSessionIndexStatus() {
 
     allSessionsStatus.value = statusList
   } catch (error) {
-    console.error('加载会话索引状态失败:', error)
+    console.error('[SessionIndexSection] Failed to load session index status:', error)
   } finally {
     isLoadingSessionStatus.value = false
   }
@@ -120,7 +116,7 @@ async function batchGenerateIndex() {
         statusItem.sessionCount = count
       }
     } catch (error) {
-      console.error(`生成会话 ${session.name} 索引失败:`, error)
+      console.error(`[SessionIndexSection] Failed to generate index for session "${session.name}":`, error)
     }
   }
 
@@ -156,7 +152,7 @@ async function batchRegenerateAll() {
       session.hasIndex = true
       session.sessionCount = count
     } catch (error) {
-      console.error(`生成会话 ${session.name} 索引失败:`, error)
+      console.error(`[SessionIndexSection] Failed to regenerate index for session "${session.name}":`, error)
     }
   }
 
@@ -176,7 +172,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="xeno-session-shell space-y-6">
     <!-- English UI note -->
     <div class="space-y-3">
       <div class="flex items-center justify-between">
@@ -200,9 +196,7 @@ onMounted(() => {
       </div>
 
       <!-- English UI note -->
-      <div
-        class="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/50"
-      >
+      <div class="xeno-session-card flex items-center justify-between rounded-xl px-4 py-3">
         <div>
           <span class="text-sm text-gray-700 dark:text-gray-300">
             {{ t('settings.storage.session.defaultThreshold') }}
@@ -226,7 +220,7 @@ onMounted(() => {
       </div>
 
       <!-- English UI note -->
-      <div class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/50">
+      <div class="xeno-session-card rounded-xl px-4 py-3">
         <div class="flex items-center justify-between">
           <div>
             <span class="text-sm text-gray-700 dark:text-gray-300">
@@ -289,3 +283,25 @@ onMounted(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.xeno-session-shell {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1.5rem;
+  padding: 1rem;
+  background:
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.08), transparent 24%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.72), rgba(15, 23, 42, 0.6));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 18px 38px rgba(2, 6, 23, 0.18);
+  backdrop-filter: blur(18px);
+}
+
+.xeno-session-card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.58), rgba(15, 23, 42, 0.44));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+</style>

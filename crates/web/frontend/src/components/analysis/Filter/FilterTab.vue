@@ -1,15 +1,4 @@
 <script setup lang="ts">
-/**
- * English note.
- * English note.
- *
- * English note.
- * English note.
- * English note.
- *
- * English note.
- */
-
 import { ref, computed, watch, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from '@nuxt/ui/runtime/composables/useToast.js'
@@ -24,10 +13,8 @@ const { t } = useI18n()
 const toast = useToast()
 const sessionStore = useSessionStore()
 
-// English engineering note.
 const filterMode = ref<'condition' | 'session'>('condition')
 
-// English engineering note.
 const conditionFilter = ref<{
   keywords: string[]
   timeRange: { start: number; end: number } | null
@@ -40,10 +27,8 @@ const conditionFilter = ref<{
   contextSize: 10,
 })
 
-// English engineering note.
 const selectedSessionIds = ref<number[]>([])
 
-// English engineering note.
 interface FilterMessage {
   id: number
   senderName: string
@@ -59,7 +44,6 @@ interface FilterMessage {
   isHit: boolean
 }
 
-// English engineering note.
 interface PaginationInfo {
   page: number
   pageSize: number
@@ -68,7 +52,6 @@ interface PaginationInfo {
   hasMore: boolean
 }
 
-// English engineering note.
 const filterResult = ref<{
   blocks: Array<{
     startTs: number
@@ -84,25 +67,18 @@ const filterResult = ref<{
   pagination: PaginationInfo
 } | null>(null)
 
-// English engineering note.
 const isFiltering = ref(false)
 const isLoadingMore = ref(false)
 const showHistory = ref(false)
 const showAnalysisModal = ref(false)
 
-// English engineering note.
 const PAGE_SIZE = 50
 
-// English engineering note.
-// English engineering note.
-// English engineering note.
 const estimatedTokens = computed(() => {
   if (!filterResult.value) return 0
   return Math.ceil(filterResult.value.stats.totalChars * 1.5)
 })
 
-// English engineering note.
-// English engineering note.
 const tokenStatus = computed(() => {
   const tokens = estimatedTokens.value
   if (tokens < 50000) return 'green'
@@ -110,24 +86,20 @@ const tokenStatus = computed(() => {
   return 'red'
 })
 
-// English engineering note.
 const canExecuteFilter = computed(() => {
   if (isFiltering.value) return false
 
   if (filterMode.value === 'condition') {
-    // English engineering note.
     return (
       conditionFilter.value.keywords.length > 0 ||
       conditionFilter.value.senderIds.length > 0 ||
       conditionFilter.value.timeRange !== null
     )
   } else {
-    // English engineering note.
     return selectedSessionIds.value.length > 0
   }
 })
 
-// English engineering note.
 async function executeFilter() {
   const sessionId = sessionStore.currentSessionId
   if (!sessionId) return
@@ -137,7 +109,6 @@ async function executeFilter() {
 
   try {
     if (filterMode.value === 'condition') {
-      // English engineering note.
       const rawFilter = toRaw(conditionFilter.value)
       const keywords = rawFilter.keywords.length > 0 ? [...rawFilter.keywords] : undefined
       const timeFilter = rawFilter.timeRange
@@ -152,25 +123,23 @@ async function executeFilter() {
         timeFilter,
         senderIds,
         contextSize,
-        1, // English engineering note.
+        1,
         PAGE_SIZE
       )
       filterResult.value = result
     } else {
-      // English engineering note.
       if (selectedSessionIds.value.length === 0) return
       const sessionIds = [...toRaw(selectedSessionIds.value)]
       const result = await window.aiApi.getMultipleSessionsMessages(sessionId, sessionIds, 1, PAGE_SIZE)
       filterResult.value = result
     }
   } catch (error) {
-    console.error('筛选失败:', error)
+    console.error('[FilterTab] Failed to execute filter:', error)
   } finally {
     isFiltering.value = false
   }
 }
 
-// English engineering note.
 async function loadMoreBlocks() {
   const sessionId = sessionStore.currentSessionId
   if (!sessionId || !filterResult.value || !filterResult.value.pagination.hasMore || isLoadingMore.value) return
@@ -203,29 +172,26 @@ async function loadMoreBlocks() {
       result = await window.aiApi.getMultipleSessionsMessages(sessionId, sessionIds, nextPage, PAGE_SIZE)
     }
 
-    // English engineering note.
     if (result && result.blocks.length > 0) {
       filterResult.value = {
         blocks: [...filterResult.value.blocks, ...result.blocks],
-        stats: filterResult.value.stats, // English engineering note.
+        stats: filterResult.value.stats,
         pagination: result.pagination,
       }
     }
   } catch (error) {
-    console.error('加载更多失败:', error)
+    console.error('[FilterTab] Failed to load more blocks:', error)
   } finally {
     isLoadingMore.value = false
   }
 }
 
-// English engineering note.
 const isExporting = ref(false)
 const exportProgress = ref<{
   percentage: number
   message: string
 } | null>(null)
 
-// English engineering note.
 let unsubscribeExportProgress: (() => void) | null = null
 
 function startExportProgressListener() {
@@ -234,7 +200,6 @@ function startExportProgressListener() {
       percentage: progress.percentage,
       message: progress.message,
     }
-    // English engineering note.
     if (progress.stage === 'done' || progress.stage === 'error') {
       exportProgress.value = null
     }
@@ -249,7 +214,6 @@ function stopExportProgressListener() {
   exportProgress.value = null
 }
 
-// English engineering note.
 async function exportFeedPack() {
   if (!filterResult.value || filterResult.value.blocks.length === 0) return
 
@@ -257,11 +221,10 @@ async function exportFeedPack() {
   if (!sessionId) return
 
   const sessionInfo = sessionStore.currentSession
-  const sessionName = sessionInfo?.name || '未知会话'
+  const sessionName = sessionInfo?.name || t('analysis.filter.unknownSession')
 
-  // English engineering note.
   const dialogResult = await window.api.dialog.showOpenDialog({
-    title: '选择保存目录',
+    title: t('analysis.filter.selectExportDirectory'),
     properties: ['openDirectory', 'createDirectory'],
   })
   if (dialogResult.canceled || !dialogResult.filePaths[0]) return
@@ -270,11 +233,9 @@ async function exportFeedPack() {
   isExporting.value = true
   exportProgress.value = { percentage: 0, message: t('analysis.filter.exportPreparing') }
 
-  // English engineering note.
   startExportProgressListener()
 
   try {
-    // English engineering note.
     const rawFilter = toRaw(conditionFilter.value)
     const exportParams = {
       sessionId,
@@ -290,11 +251,9 @@ async function exportFeedPack() {
       chatSessionIds: filterMode.value === 'session' ? [...toRaw(selectedSessionIds.value)] : undefined,
     }
 
-    // English engineering note.
     const exportResult = await window.aiApi.exportFilterResultToFile(exportParams)
 
     if (exportResult.success && exportResult.filePath) {
-      // English engineering note.
       toast.add({
         title: t('analysis.filter.exportSuccess'),
         description: exportResult.filePath,
@@ -302,7 +261,6 @@ async function exportFeedPack() {
         icon: 'i-heroicons-check-circle',
       })
     } else {
-      // English engineering note.
       toast.add({
         title: t('analysis.filter.exportFailed'),
         description: exportResult.error || t('common.error.unknown'),
@@ -311,7 +269,7 @@ async function exportFeedPack() {
       })
     }
   } catch (error) {
-    console.error('导出失败:', error)
+    console.error('[FilterTab] Failed to export filtered result:', error)
     toast.add({
       title: t('analysis.filter.exportFailed'),
       description: String(error),
@@ -324,18 +282,15 @@ async function exportFeedPack() {
   }
 }
 
-// English engineering note.
 function openLocalAnalysis() {
   if (!filterResult.value || filterResult.value.blocks.length === 0) return
   showAnalysisModal.value = true
 }
 
-// English engineering note.
 watch(filterMode, () => {
   filterResult.value = null
 })
 
-// English engineering note.
 function loadHistoryCondition(condition: {
   mode: 'condition' | 'session'
   conditionFilter?: typeof conditionFilter.value
@@ -353,7 +308,6 @@ function loadHistoryCondition(condition: {
 
 <template>
   <div class="xeno-filter-shell h-full flex flex-col">
-    <!-- English UI note -->
     <div class="xeno-filter-header flex-none flex items-center justify-between px-4 py-3">
       <div class="flex items-center gap-4">
         <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ t('analysis.filter.title') }}</h2>
@@ -386,18 +340,14 @@ function loadHistoryCondition(condition: {
       </div>
 
       <div class="flex items-center gap-2">
-        <!-- English UI note -->
         <UButton variant="ghost" icon="i-heroicons-clock" size="sm" @click="showHistory = true">
           {{ t('analysis.filter.history') }}
         </UButton>
       </div>
     </div>
 
-    <!-- English UI note -->
     <div class="flex-1 flex overflow-hidden">
-      <!-- English UI note -->
       <div class="xeno-filter-left w-80 flex-none flex flex-col">
-        <!-- English UI note -->
         <div class="flex-1 min-h-0 overflow-y-auto">
           <Transition name="xeno-filter-panel" mode="out-in">
             <ConditionPanel
@@ -411,7 +361,6 @@ function loadHistoryCondition(condition: {
           </Transition>
         </div>
 
-        <!-- English UI note -->
         <div class="xeno-filter-left-footer flex-none p-4">
           <UButton block color="primary" :loading="isFiltering" :disabled="!canExecuteFilter" @click="executeFilter">
             {{ t('analysis.filter.execute') }}
@@ -419,7 +368,6 @@ function loadHistoryCondition(condition: {
         </div>
       </div>
 
-      <!-- English UI note -->
       <div class="flex-1 flex flex-col overflow-hidden">
         <PreviewPanel
           :result="filterResult"
@@ -430,13 +378,11 @@ function loadHistoryCondition(condition: {
           @load-more="loadMoreBlocks"
         />
 
-        <!-- English UI note -->
         <Transition name="xeno-filter-action">
           <div
             v-if="filterResult && filterResult.blocks.length > 0"
             class="xeno-filter-actions flex-none flex flex-col gap-2 px-4 py-3"
           >
-            <!-- English UI note -->
             <div v-if="isExporting && exportProgress" class="w-full">
               <div class="mb-1 flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
                 <span>{{ exportProgress.message }}</span>
@@ -449,7 +395,6 @@ function loadHistoryCondition(condition: {
                 />
               </div>
             </div>
-            <!-- English UI note -->
             <div class="flex items-center justify-end gap-3">
               <UButton
                 variant="outline"
@@ -469,43 +414,56 @@ function loadHistoryCondition(condition: {
       </div>
     </div>
 
-    <!-- English UI note -->
     <FilterHistory v-model:open="showHistory" @load="loadHistoryCondition" />
 
-    <!-- English UI note -->
     <LocalAnalysisModal v-model:open="showAnalysisModal" :filter-result="filterResult" :filter-mode="filterMode" />
   </div>
 </template>
 
 <style scoped>
 .xeno-filter-shell {
-  background: linear-gradient(180deg, transparent, var(--xeno-surface-muted));
+  background:
+    linear-gradient(180deg, transparent, var(--xeno-surface-muted)),
+    radial-gradient(circle at top right, rgba(84, 214, 255, 0.06), transparent 24%);
 }
 
 .xeno-filter-header {
   border-bottom: 1px solid var(--xeno-border-soft);
-  background: var(--xeno-surface-muted);
-  backdrop-filter: blur(12px) saturate(126%);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 120%),
+    rgba(7, 18, 29, 0.66);
+  backdrop-filter: blur(16px) saturate(132%);
 }
 
 .xeno-filter-mode {
-  border: 1px solid var(--xeno-border-soft);
-  background: var(--xeno-surface-main);
+  border: 1px solid rgba(139, 166, 189, 0.16);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 120%),
+    rgba(8, 18, 28, 0.64);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .xeno-filter-left {
-  border-right: 1px solid var(--xeno-border-soft);
+  border-right: 1px solid rgba(139, 166, 189, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 120%),
+    rgba(5, 14, 22, 0.54);
 }
 
 .xeno-filter-left-footer {
-  border-top: 1px solid var(--xeno-border-soft);
-  background: var(--xeno-surface-main);
+  border-top: 1px solid rgba(139, 166, 189, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 120%),
+    rgba(8, 18, 28, 0.72);
+  backdrop-filter: blur(14px) saturate(128%);
 }
 
 .xeno-filter-actions {
-  border-top: 1px solid var(--xeno-border-soft);
-  background: var(--xeno-surface-muted);
-  backdrop-filter: blur(12px) saturate(125%);
+  border-top: 1px solid rgba(139, 166, 189, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 120%),
+    rgba(7, 18, 29, 0.62);
+  backdrop-filter: blur(16px) saturate(130%);
 }
 
 .xeno-filter-panel-enter-active,

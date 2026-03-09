@@ -29,6 +29,7 @@
   },
   "batchSummary": {
     "title": "Batch Generate Summaries",
+    "description": "Generate summaries across multiple session windows with one controlled batch flow.",
     "byRange": "By Range",
     "byTime": "By Time",
     "selectRange": "Select Range",

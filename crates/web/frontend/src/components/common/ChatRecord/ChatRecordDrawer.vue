@@ -182,13 +182,15 @@ watch(
 <template>
   <UDrawer v-model:open="layoutStore.showChatRecordDrawer" direction="right" :handle="false" :ui="{ content: 'z-50' }">
     <template #content>
-      <div class="flex h-full w-[680px] flex-col bg-white dark:bg-gray-900" style="-webkit-app-region: no-drag">
+      <div class="xeno-record-drawer flex h-full w-[760px] max-w-[100vw] flex-col" style="-webkit-app-region: no-drag">
         <!-- English UI note -->
         <div
-          class="flex items-center justify-between border-b border-gray-200 px-4 dark:border-gray-800"
+          class="xeno-record-drawer-header flex items-center justify-between px-4"
           :class="isWindows ? 'pt-10 pb-3' : 'py-3'"
         >
-          <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{{ t('records.drawer.title') }}</h3>
+          <h3 class="break-words pr-3 text-lg font-semibold text-gray-900 dark:text-white">
+            {{ t('records.drawer.title') }}
+          </h3>
           <UButton
             icon="i-heroicons-x-mark"
             color="neutral"
@@ -229,10 +231,30 @@ watch(
         </div>
 
         <!-- English UI note -->
-        <div v-if="messageCount > 0" class="shrink-0 border-t border-gray-200 px-4 py-2 dark:border-gray-800">
+        <div v-if="messageCount > 0" class="xeno-record-drawer-footer shrink-0 px-4 py-2">
           <span class="text-xs text-gray-500">{{ t('records.drawer.loadedCount', { count: messageCount }) }}</span>
         </div>
       </div>
     </template>
   </UDrawer>
 </template>
+
+<style scoped>
+.xeno-record-drawer {
+  background:
+    radial-gradient(circle at top left, rgba(84, 214, 255, 0.1), transparent 24%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 22%),
+    rgba(7, 18, 29, 0.97);
+  border-left: 1px solid rgba(139, 166, 189, 0.14);
+  box-shadow: -20px 0 56px rgba(2, 8, 16, 0.28);
+  backdrop-filter: blur(22px) saturate(132%);
+}
+
+.xeno-record-drawer-header {
+  border-bottom: 1px solid rgba(139, 166, 189, 0.14);
+}
+
+.xeno-record-drawer-footer {
+  border-top: 1px solid rgba(139, 166, 189, 0.14);
+}
+</style>

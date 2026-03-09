@@ -1,9 +1,4 @@
 <script setup lang="ts">
-/**
- * English note.
- * English note.
- */
-
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { FileDropZone } from '@/components/UI'
@@ -17,49 +12,33 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
-  /** English note.
   imported: [newMessageCount: number]
 }>()
 
 const { t } = useI18n()
 
-// English engineering note.
 type Stage = 'select' | 'analyzing' | 'preview' | 'importing' | 'done' | 'error'
 const stage = ref<Stage>('select')
-
-// English engineering note.
 const selectedFile = ref<{ path: string; name: string } | null>(null)
-
-// English engineering note.
 const analyzeResult = ref<{
   newMessageCount: number
   duplicateCount: number
   totalInFile: number
 } | null>(null)
-
-// English engineering note.
 const importProgress = ref<ImportProgress | null>(null)
-
-// English engineering note.
 const errorMessage = ref<string | null>(null)
-
-// English engineering note.
 const importResult = ref<{ newMessageCount: number } | null>(null)
-
-// English engineering note.
 const isOpen = computed({
   get: () => props.modelValue,
   set: (value) => emit('update:modelValue', value),
 })
 
-// English engineering note.
 watch(isOpen, (value) => {
   if (!value) {
     resetState()
   }
 })
 
-// English engineering note.
 function resetState() {
   stage.value = 'select'
   selectedFile.value = null
@@ -69,7 +48,6 @@ function resetState() {
   importResult.value = null
 }
 
-// English engineering note.
 async function handleFileDrop({ paths }: { files: File[]; paths: string[] }) {
   if (paths.length === 0) {
     errorMessage.value = t('home.import.cannotReadPath')
@@ -84,7 +62,6 @@ async function handleFileDrop({ paths }: { files: File[]; paths: string[] }) {
   await analyzeFile()
 }
 
-// English engineering note.
 async function handleSelectFile() {
   const result = await window.api.dialog.showOpenDialog({
     title: t('analysis.incremental.selectFile'),
@@ -107,7 +84,6 @@ async function handleSelectFile() {
   await analyzeFile()
 }
 
-// English engineering note.
 async function analyzeFile() {
   if (!selectedFile.value) return
 
@@ -136,7 +112,6 @@ async function analyzeFile() {
   }
 }
 
-// English engineering note.
 async function executeImport() {
   if (!selectedFile.value) return
 
@@ -148,7 +123,6 @@ async function executeImport() {
   }
 
   try {
-    // English engineering note.
     const unsubscribe = window.chatApi.onImportProgress((progress) => {
       importProgress.value = progress
     })
@@ -169,7 +143,6 @@ async function executeImport() {
   }
 }
 
-// English engineering note.
 function handleDone() {
   if (importResult.value) {
     emit('imported', importResult.value.newMessageCount)
@@ -177,7 +150,6 @@ function handleDone() {
   isOpen.value = false
 }
 
-// English engineering note.
 function handleBack() {
   stage.value = 'select'
   selectedFile.value = null
@@ -185,7 +157,6 @@ function handleBack() {
   errorMessage.value = null
 }
 
-// English engineering note.
 function translateError(error: string): string {
   if (error.startsWith('error.')) {
     const key = `home.import.errors.${error.slice(6)}`
@@ -197,28 +168,27 @@ function translateError(error: string): string {
 </script>
 
 <template>
-  <UModal v-model:open="isOpen" :title="t('analysis.incremental.title')">
+  <UModal v-model:open="isOpen" :title="t('analysis.incremental.title')" :ui="{ content: 'max-w-2xl' }">
     <template #body>
-      <div class="min-h-[200px]">
-        <!-- English UI note -->
+      <div class="xeno-incremental-shell min-h-[240px]">
         <div v-if="stage === 'select'" class="space-y-4">
-          <p class="text-sm text-gray-600 dark:text-gray-400">
+          <p class="break-words text-sm text-gray-600 dark:text-gray-400">
             {{ t('analysis.incremental.description', { name: sessionName }) }}
           </p>
 
           <FileDropZone :accept="['.json', '.jsonl', '.txt']" class="w-full" @files="handleFileDrop">
             <template #default="{ isDragOver }">
               <div
-                class="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-10 transition-colors"
+                class="xeno-incremental-dropzone flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-10 transition-colors"
                 :class="
                   isDragOver
-                    ? 'border-pink-500 bg-pink-50/50 dark:border-pink-400 dark:bg-pink-500/10'
-                    : 'border-gray-300 hover:border-pink-400 dark:border-gray-600 dark:hover:border-pink-500'
+                    ? 'border-sky-400 bg-sky-500/10'
+                    : 'border-white/15 hover:border-sky-400/80'
                 "
                 @click="handleSelectFile"
               >
-                <UIcon name="i-heroicons-arrow-up-tray" class="mb-3 h-10 w-10 text-gray-400" />
-                <p class="text-sm text-gray-600 dark:text-gray-400">
+                <UIcon name="i-heroicons-arrow-up-tray" class="mb-3 h-10 w-10 text-sky-300/90" />
+                <p class="text-center text-sm text-gray-600 dark:text-gray-400">
                   {{ isDragOver ? t('home.import.dropHint') : t('analysis.incremental.dropHint') }}
                 </p>
               </div>
@@ -226,17 +196,15 @@ function translateError(error: string): string {
           </FileDropZone>
         </div>
 
-        <!-- English UI note -->
         <div v-else-if="stage === 'analyzing'" class="flex flex-col items-center justify-center py-10">
-          <UIcon name="i-heroicons-arrow-path" class="mb-4 h-10 w-10 animate-spin text-pink-500" />
+          <UIcon name="i-heroicons-arrow-path" class="mb-4 h-10 w-10 animate-spin text-sky-400" />
           <p class="text-gray-600 dark:text-gray-400">{{ t('analysis.incremental.analyzing') }}</p>
-          <p class="mt-2 text-sm text-gray-500">{{ selectedFile?.name }}</p>
+          <p class="mt-2 break-all text-center text-sm text-gray-500">{{ selectedFile?.name }}</p>
         </div>
 
-        <!-- English UI note -->
         <div v-else-if="stage === 'preview' && analyzeResult" class="space-y-6">
-          <div class="rounded-lg bg-gray-50 p-4 dark:bg-gray-800">
-            <p class="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+          <div class="xeno-incremental-panel rounded-2xl p-4">
+            <p class="mb-2 break-all text-sm font-medium text-gray-700 dark:text-gray-300">
               {{ selectedFile?.name }}
             </p>
             <div class="grid grid-cols-3 gap-4 text-center">
@@ -267,16 +235,14 @@ function translateError(error: string): string {
           </p>
         </div>
 
-        <!-- English UI note -->
         <div v-else-if="stage === 'importing'" class="flex flex-col items-center justify-center py-10">
-          <UIcon name="i-heroicons-arrow-path" class="mb-4 h-10 w-10 animate-spin text-pink-500" />
+          <UIcon name="i-heroicons-arrow-path" class="mb-4 h-10 w-10 animate-spin text-sky-400" />
           <p class="text-gray-600 dark:text-gray-400">{{ t('analysis.incremental.importing') }}</p>
           <div v-if="importProgress" class="mt-4 w-full max-w-xs">
             <UProgress :value="importProgress.progress" size="sm" />
           </div>
         </div>
 
-        <!-- English UI note -->
         <div v-else-if="stage === 'done' && importResult" class="flex flex-col items-center justify-center py-10">
           <UIcon name="i-heroicons-check-circle" class="mb-4 h-12 w-12 text-green-500" />
           <p class="text-lg font-medium text-gray-900 dark:text-white">
@@ -287,13 +253,12 @@ function translateError(error: string): string {
           </p>
         </div>
 
-        <!-- English UI note -->
         <div v-else-if="stage === 'error'" class="flex flex-col items-center justify-center py-10">
           <UIcon name="i-heroicons-x-circle" class="mb-4 h-12 w-12 text-red-500" />
           <p class="text-lg font-medium text-gray-900 dark:text-white">
             {{ t('analysis.incremental.failed') }}
           </p>
-          <p class="mt-2 text-sm text-red-600 dark:text-red-400">
+          <p class="mt-2 break-words text-center text-sm text-red-600 dark:text-red-400">
             {{ errorMessage }}
           </p>
         </div>
@@ -302,14 +267,12 @@ function translateError(error: string): string {
 
     <template #footer>
       <div class="flex w-full justify-end gap-2">
-        <!-- English UI note -->
         <template v-if="stage === 'select'">
           <UButton color="neutral" variant="ghost" @click="isOpen = false">
             {{ t('common.cancel') }}
           </UButton>
         </template>
 
-        <!-- English UI note -->
         <template v-else-if="stage === 'preview'">
           <UButton color="neutral" variant="ghost" @click="handleBack">
             {{ t('common.back') }}
@@ -323,7 +286,6 @@ function translateError(error: string): string {
           </UButton>
         </template>
 
-        <!-- English UI note -->
         <template v-else-if="stage === 'done' || stage === 'error'">
           <UButton v-if="stage === 'error'" color="neutral" variant="ghost" @click="handleBack">
             {{ t('common.retry') }}
@@ -336,3 +298,24 @@ function translateError(error: string): string {
     </template>
   </UModal>
 </template>
+
+<style scoped>
+.xeno-incremental-shell {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1.5rem;
+  padding: 1rem;
+  background:
+    radial-gradient(circle at top right, rgba(56, 189, 248, 0.12), transparent 28%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.78), rgba(15, 23, 42, 0.62));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 20px 44px rgba(2, 6, 23, 0.2);
+  backdrop-filter: blur(18px);
+}
+
+.xeno-incremental-dropzone,
+.xeno-incremental-panel {
+  background: rgba(15, 23, 42, 0.52);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+</style>

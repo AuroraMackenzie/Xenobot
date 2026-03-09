@@ -1,8 +1,4 @@
 <script setup lang="ts">
-/**
- * English note.
- * English note.
- */
 import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -65,7 +61,7 @@ async function loadCacheInfo() {
   try {
     cacheInfo.value = await window.cacheApi.getInfo()
   } catch (error) {
-    console.error('获取缓存信息失败:', error)
+    console.error('[StorageManageSection] Failed to load cache info:', error)
   } finally {
     isLoading.value = false
   }
@@ -78,7 +74,7 @@ async function loadDataDir() {
     dataDir.value = info.path
     isCustomDataDir.value = info.isCustom
   } catch (error) {
-    console.error('获取数据目录失败:', error)
+    console.error('[StorageManageSection] Failed to load data directory:', error)
   }
 }
 
@@ -91,10 +87,10 @@ async function clearCache(cacheId: string) {
       // English engineering note.
       await loadCacheInfo()
     } else {
-      console.error('清理缓存失败:', result.error)
+      console.error('[StorageManageSection] Failed to clear cache:', result.error)
     }
   } catch (error) {
-    console.error('清理缓存失败:', error)
+    console.error('[StorageManageSection] Failed to clear cache:', error)
   } finally {
     clearingId.value = null
   }
@@ -105,7 +101,7 @@ async function openDirectory(cacheId: string) {
   try {
     await window.cacheApi.openDir(cacheId)
   } catch (error) {
-    console.error('打开目录失败:', error)
+    console.error('[StorageManageSection] Failed to open directory:', error)
   }
 }
 
@@ -158,7 +154,7 @@ async function applyDataDirChange(newDir: string | null, migrate: boolean) {
   try {
     const result = await window.cacheApi.setDataDir(newDir, migrate)
     if (!result.success) {
-      dataDirError.value = result.error || '设置失败'
+      dataDirError.value = result.error || 'Failed to update the data directory.'
       return
     }
 
@@ -189,7 +185,7 @@ defineExpose({
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="xeno-storage-shell space-y-6">
     <!-- English UI note -->
     <div class="flex items-center justify-between">
       <div>
@@ -201,7 +197,7 @@ defineExpose({
       </div>
       <div class="flex items-center gap-2">
         <!-- English UI note -->
-        <div class="rounded-lg bg-gray-100 px-3 py-1.5 dark:bg-gray-800">
+        <div class="xeno-storage-summary rounded-lg px-3 py-1.5">
           <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('settings.storage.totalUsage') }}</span>
           <span class="text-sm font-semibold text-gray-900 dark:text-white">{{ totalSizeFormatted }}</span>
         </div>
@@ -221,7 +217,7 @@ defineExpose({
       <div
         v-for="dir in cacheInfo.directories"
         :key="dir.id"
-        class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 transition-colors hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800/50 dark:hover:bg-gray-800"
+        class="xeno-storage-card rounded-xl px-3 py-2.5 transition-colors"
       >
         <div class="flex items-center justify-between">
           <!-- English UI note -->
@@ -414,3 +410,31 @@ defineExpose({
     </UModal>
   </div>
 </template>
+
+<style scoped>
+.xeno-storage-shell {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1.5rem;
+  padding: 1rem;
+  background:
+    radial-gradient(circle at top right, rgba(250, 204, 21, 0.08), transparent 24%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.72), rgba(15, 23, 42, 0.6));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 18px 38px rgba(2, 6, 23, 0.18);
+  backdrop-filter: blur(18px);
+}
+
+.xeno-storage-summary,
+.xeno-storage-card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.58), rgba(15, 23, 42, 0.44));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.xeno-storage-card:hover {
+  background:
+    linear-gradient(180deg, rgba(30, 41, 59, 0.68), rgba(15, 23, 42, 0.5));
+}
+</style>

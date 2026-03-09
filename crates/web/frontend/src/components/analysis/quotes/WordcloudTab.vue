@@ -114,7 +114,7 @@ async function loadPosTagDefinitions() {
     // English engineering note.
     customPosTags.value = tags.filter((t) => t.meaningful).map((t) => t.tag)
   } catch (error) {
-    console.error('加载词性标签失败:', error)
+    console.error('[WordcloudTab] Failed to load POS tag definitions:', error)
   }
 }
 
@@ -159,7 +159,7 @@ async function loadWordFrequency() {
       posTagStats.value = statsMap
     }
   } catch (error) {
-    console.error('加载词频数据失败:', error)
+    console.error('[WordcloudTab] Failed to load word frequency data:', error)
     wordcloudData.value = { words: [] }
   } finally {
     isLoading.value = false
@@ -212,10 +212,10 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="main-content mx-auto max-w-6xl py-6">
+  <div class="xeno-wordcloud-shell main-content mx-auto max-w-6xl py-6">
     <div class="flex gap-6">
       <!-- English UI note -->
-      <div class="flex-1 min-w-0 space-y-4">
+      <div class="xeno-wordcloud-stage flex-1 min-w-0 space-y-4 rounded-2xl p-5">
         <!-- English UI note -->
         <div class="relative w-full" style="aspect-ratio: 16 / 9">
           <!-- English UI note -->
@@ -284,7 +284,7 @@ onMounted(() => {
       </div>
 
       <!-- English UI note -->
-      <div class="w-[300px] shrink-0 space-y-4">
+      <div class="xeno-wordcloud-sidebar w-[300px] shrink-0 space-y-4 rounded-2xl p-4">
         <!-- English UI note -->
         <div>
           <h4 class="mb-2 text-xs font-medium text-gray-600 dark:text-gray-400">
@@ -378,3 +378,26 @@ onMounted(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.xeno-wordcloud-shell {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1.75rem;
+  background:
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.08), transparent 24%),
+    radial-gradient(circle at left center, rgba(250, 204, 21, 0.06), transparent 20%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.74), rgba(15, 23, 42, 0.62));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 18px 38px rgba(2, 6, 23, 0.18);
+  backdrop-filter: blur(18px);
+}
+
+.xeno-wordcloud-stage,
+.xeno-wordcloud-sidebar {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.6), rgba(15, 23, 42, 0.48));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+</style>

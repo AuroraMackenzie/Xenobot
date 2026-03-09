@@ -30,7 +30,7 @@ async function loadMentionAnalysis() {
   try {
     mentionAnalysis.value = await window.chatApi.getMentionAnalysis(props.sessionId, props.timeFilter)
   } catch (error) {
-    console.error('加载 @ 互动分析失败:', error)
+    console.error('[Relationships] Failed to load mention analysis:', error)
   } finally {
     isLoadingMention.value = false
   }
@@ -75,7 +75,7 @@ watch(
 </script>
 
 <template>
-  <div class="main-content space-y-6 p-6">
+  <div class="xeno-relationship-shell main-content space-y-6 p-6">
     <!-- English UI note -->
     <LoadingState v-if="isLoadingMention" :text="t('members.relationships.loading')" />
 
@@ -136,7 +136,7 @@ watch(
                 </button>
                 <div class="flex items-center gap-1 text-pink-500">
                   <span class="text-lg">→</span>
-                  <span class="text-xs">{{ pair.fromToCount }}次</span>
+                  <span class="text-xs">{{ t('members.relationships.times', { count: pair.fromToCount }) }}</span>
                 </div>
                 <button
                   class="font-medium text-gray-900 hover:text-pink-600 dark:text-white dark:hover:text-pink-600"
@@ -252,7 +252,7 @@ watch(
               <div
                 v-for="(item, index) in selectedMemberDetail.topMentioned"
                 :key="index"
-                class="flex items-center gap-3 rounded-lg bg-gray-50 px-3 py-2 dark:bg-gray-800"
+                class="xeno-relationship-chip flex items-center gap-3 rounded-xl px-3 py-2"
               >
                 <span class="text-sm font-medium text-gray-900 dark:text-white">
                   {{ item.toName }}
@@ -295,3 +295,18 @@ watch(
     </UModal>
   </div>
 </template>
+
+<style scoped>
+.xeno-relationship-shell {
+  background:
+    radial-gradient(circle at top right, rgba(236, 72, 153, 0.08), transparent 24%),
+    radial-gradient(circle at left center, rgba(59, 130, 246, 0.06), transparent 22%);
+}
+
+.xeno-relationship-chip {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.72), rgba(15, 23, 42, 0.58));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+</style>

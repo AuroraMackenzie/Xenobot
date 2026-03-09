@@ -36,7 +36,7 @@ async function loadMembers() {
   try {
     members.value = await window.chatApi.getMembers(props.sessionId)
   } catch (error) {
-    console.error('加载成员列表失败:', error)
+    console.error('[NicknameHistory] Failed to load members:', error)
   }
 }
 
@@ -66,7 +66,7 @@ async function loadMembersWithNicknameChanges() {
 
     membersWithNicknameChanges.value = membersWithChanges
   } catch (error) {
-    console.error('加载昵称变更记录失败:', error)
+    console.error('[NicknameHistory] Failed to load nickname change history:', error)
   } finally {
     isLoadingHistory.value = false
   }
@@ -99,7 +99,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="main-content max-w-5xl p-6">
+  <div class="xeno-nickname-shell main-content max-w-5xl p-6">
     <p class="mb-4 text-sm text-gray-500 dark:text-gray-400 no-capture">
       {{ t('members.nicknameHistory.note') }}
     </p>
@@ -129,7 +129,7 @@ onMounted(async () => {
 
           <div class="flex flex-1 flex-wrap items-center gap-2">
             <template v-for="(item, index) in member.history" :key="index">
-              <div class="flex items-center gap-1.5 rounded-lg bg-gray-50 px-3 py-1.5 dark:bg-gray-800">
+              <div class="xeno-nickname-chip flex items-center gap-1.5 rounded-xl px-3 py-1.5">
                 <span
                   class="text-sm"
                   :class="item.endTs === null ? 'font-semibold text-pink-600' : 'text-gray-700 dark:text-gray-300'"
@@ -154,3 +154,18 @@ onMounted(async () => {
     </SectionCard>
   </div>
 </template>
+
+<style scoped>
+.xeno-nickname-shell {
+  background:
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.08), transparent 26%),
+    radial-gradient(circle at left center, rgba(236, 72, 153, 0.06), transparent 22%);
+}
+
+.xeno-nickname-chip {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.72), rgba(15, 23, 42, 0.58));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+</style>

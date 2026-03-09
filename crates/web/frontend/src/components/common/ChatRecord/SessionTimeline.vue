@@ -1,7 +1,6 @@
 <script setup lang="ts">
 /**
- * English note.
- * English note.
+ * Session timeline rail used to jump between segmented chat windows.
  */
 import { ref, computed, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -14,7 +13,7 @@ interface ChatSessionItem {
   endTs: number
   messageCount: number
   firstMessageId: number
-  /** English note.
+  /** Optional AI-generated summary for the session window. */
   summary?: string | null
 }
 
@@ -25,22 +24,22 @@ type FlatListItem =
 
 const props = defineProps<{
   sessionId: string
-  /** English note.
+  /** Currently focused session id. */
   activeSessionId?: number
-  /** English note.
+  /** Whether the rail is collapsed into the slim indicator mode. */
   collapsed?: boolean
-  /** English note.
+  /** Visible filter lower bound. */
   filterStartTs?: number
-  /** English note.
+  /** Visible filter upper bound. */
   filterEndTs?: number
-  /** English note.
+  /** Session ids matched by the active content query. */
   filterMatchedSessionIds?: Set<number>
 }>()
 
 const emit = defineEmits<{
-  /** English note.
+  /** Select a session and jump the message list to its first message. */
   (e: 'select', sessionId: number, firstMessageId: number): void
-  /** English note.
+  /** Collapse/expand the rail. */
   (e: 'update:collapsed', value: boolean): void
 }>()
 
@@ -135,8 +134,8 @@ const flatList = computed<FlatListItem[]>(() => {
 })
 
 // English engineering note.
-const ESTIMATED_DATE_HEIGHT = 28 // English engineering note.
-const ESTIMATED_SESSION_HEIGHT = 60 // English engineering note.
+const ESTIMATED_DATE_HEIGHT = 28 // Date separators are compact.
+const ESTIMATED_SESSION_HEIGHT = 60 // Session rows include summary affordances.
 
 // English engineering note.
 const virtualizer = useVirtualizer(
@@ -166,13 +165,13 @@ const totalSize = computed(() => virtualizer.value.getTotalSize())
 // English engineering note.
 function formatDate(ts: number): string {
   const date = new Date(ts * 1000)
-  return date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })
+  return date.toLocaleDateString(locale.value === 'zh-CN' ? 'zh-CN' : 'en-US', { month: '2-digit', day: '2-digit' })
 }
 
 // English engineering note.
 function formatTime(ts: number): string {
   const date = new Date(ts * 1000)
-  return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+  return date.toLocaleTimeString(locale.value === 'zh-CN' ? 'zh-CN' : 'en-US', { hour: '2-digit', minute: '2-digit' })
 }
 
 // English engineering note.
@@ -193,7 +192,7 @@ async function loadSessions() {
     await nextTick()
     scrollToBottom()
   } catch (error) {
-    console.error('加载会话列表失败:', error)
+    console.error('[SessionTimeline] Failed to load session list:', error)
   } finally {
     isLoading.value = false
   }
@@ -221,39 +220,29 @@ function handleSelectSession(session: ChatSessionItem) {
 
 // English engineering note.
 async function generateSummary(session: ChatSessionItem, event: Event) {
-  event.stopPropagation() // English engineering note.
+  event.stopPropagation() // Keep row selection from firing while generating summary.
   event.preventDefault()
 
-  console.log('[SessionTimeline] 开始生成摘要:', session.id, props.sessionId)
-
   if (generatingSummaryIds.value.has(session.id)) {
-    console.log('[SessionTimeline] 已在生成中，跳过')
     return
   }
 
   generatingSummaryIds.value.add(session.id)
-  console.log('[SessionTimeline] 正在生成中的会话:', Array.from(generatingSummaryIds.value))
 
   try {
-    console.log('[SessionTimeline] 调用 IPC...')
     const result = await window.sessionApi.generateSummary(props.sessionId, session.id, locale.value)
-    console.log('[SessionTimeline] IPC 返回:', result)
 
     if (result.success && result.summary) {
       // English engineering note.
       const index = allSessions.value.findIndex((s) => s.id === session.id)
       if (index !== -1) {
         allSessions.value[index] = { ...allSessions.value[index], summary: result.summary }
-        console.log('[SessionTimeline] 摘要已更新:', result.summary)
       }
-    } else {
-      console.log('[SessionTimeline] 生成失败:', result.error)
     }
   } catch (error) {
-    console.error('[SessionTimeline] 生成摘要失败:', error)
+    console.error('[SessionTimeline] Failed to generate summary:', error)
   } finally {
     generatingSummaryIds.value.delete(session.id)
-    console.log('[SessionTimeline] 生成完成')
   }
 }
 
@@ -293,7 +282,7 @@ watch(
   <!-- English UI note -->
   <div
     v-if="isCollapsed"
-    class="flex h-full w-10 flex-col items-center border-r border-gray-200 bg-gray-50 py-2 dark:border-gray-700 dark:bg-gray-800/50"
+    class="xeno-timeline-collapsed flex h-full w-10 flex-col items-center py-2"
   >
     <UButton icon="i-heroicons-chevron-right" variant="ghost" size="xs" @click="isCollapsed = false" />
     <div class="mt-2 flex flex-1 items-center">
@@ -304,10 +293,10 @@ watch(
   <!-- English UI note -->
   <div
     v-else
-    class="flex h-full w-40 flex-col border-r border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50"
+    class="xeno-timeline-shell flex h-full w-44 flex-col"
   >
     <!-- English UI note -->
-    <div class="flex items-center justify-between border-b border-gray-200 px-2 py-1.5 dark:border-gray-700">
+    <div class="xeno-timeline-header flex items-center justify-between px-2 py-1.5">
       <span class="text-xs font-medium text-gray-600 dark:text-gray-300">{{ t('records.timeline.timeline') }}</span>
       <div class="flex items-center gap-0.5">
         <UTooltip :text="t('records.batchSummary.title')">
@@ -324,11 +313,11 @@ watch(
 
     <!-- English UI note -->
     <div v-else-if="allSessions.length === 0" class="flex flex-1 items-center justify-center p-2">
-      <span class="text-xs text-gray-400">{{ t('records.timeline.noSessions') }}</span>
+      <span class="xeno-timeline-empty text-center text-xs text-gray-400">{{ t('records.timeline.noSessions') }}</span>
     </div>
 
     <!-- English UI note -->
-    <div v-else ref="scrollContainerRef" class="flex-1 overflow-y-auto py-1">
+    <div v-else ref="scrollContainerRef" class="xeno-timeline-scroll flex-1 overflow-y-auto py-1">
       <div class="relative w-full" :style="{ height: `${totalSize}px` }">
         <div
           v-for="virtualItem in virtualItems"
@@ -352,11 +341,11 @@ watch(
           <!-- English UI note -->
           <template v-else-if="flatList[virtualItem.index]?.type === 'session'">
             <button
-              class="flex w-full flex-col rounded px-2 py-1 pl-4 text-left transition-colors"
+              class="xeno-timeline-session flex w-full flex-col rounded px-2 py-1 pl-4 text-left transition-colors"
               :class="[
                 activeSessionId === (flatList[virtualItem.index] as { session: ChatSessionItem }).session.id
-                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-                  : 'hover:bg-gray-100 dark:hover:bg-gray-700',
+                  ? 'xeno-timeline-session-active text-blue-700 dark:text-blue-300'
+                  : 'hover:bg-gray-100/70 dark:hover:bg-gray-700/50',
               ]"
               @click="handleSelectSession((flatList[virtualItem.index] as { session: ChatSessionItem }).session)"
             >
@@ -382,7 +371,7 @@ watch(
                     {{ (flatList[virtualItem.index] as { session: ChatSessionItem }).session.summary }}
                   </span>
                   <template #content>
-                    <div class="max-w-sm whitespace-pre-wrap text-sm leading-relaxed">
+                    <div class="max-w-sm whitespace-pre-wrap break-words text-sm leading-relaxed">
                       {{ (flatList[virtualItem.index] as { session: ChatSessionItem }).session.summary }}
                     </div>
                   </template>
@@ -425,5 +414,41 @@ watch(
 .vertical-text {
   writing-mode: vertical-rl;
   text-orientation: mixed;
+}
+
+.xeno-timeline-collapsed,
+.xeno-timeline-shell {
+  border-right: 1px solid rgba(139, 166, 189, 0.14);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 120%),
+    rgba(6, 16, 24, 0.5);
+}
+
+.xeno-timeline-header {
+  border-bottom: 1px solid rgba(139, 166, 189, 0.14);
+}
+
+.xeno-timeline-scroll {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 120%),
+    rgba(5, 13, 21, 0.08);
+}
+
+.xeno-timeline-empty {
+  border: 1px solid rgba(139, 166, 189, 0.12);
+  border-radius: 0.9rem;
+  padding: 0.8rem;
+  background: rgba(7, 17, 26, 0.38);
+}
+
+.xeno-timeline-session {
+  border: 1px solid transparent;
+}
+
+.xeno-timeline-session-active {
+  border-color: rgba(116, 220, 255, 0.18);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 120%),
+    rgba(12, 38, 60, 0.58);
 }
 </style>

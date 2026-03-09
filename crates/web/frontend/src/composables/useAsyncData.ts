@@ -1,44 +1,33 @@
 import { ref, watch, type Ref, type ComputedRef } from 'vue'
 
-/**
- * English note.
- * English note.
- */
-
 interface TimeFilter {
   startTs?: number
   endTs?: number
 }
 
 interface UseAsyncDataOptions<T> {
-  /** English note.
+  /** Start loading immediately after the watcher is bound. */
   immediate?: boolean
-  /** English note.
+  /** Re-run when nested fields inside the watched filter change. */
   deep?: boolean
-  /** English note.
+  /** Optional callback for centralized error handling. */
   onError?: (error: Error) => void
-  /** English note.
+  /** Initial fallback value before the first successful fetch. */
   defaultValue?: T
 }
 
 interface UseAsyncDataReturn<T> {
-  /** English note.
+  /** Latest resolved payload. */
   data: Ref<T | null>
-  /** English note.
+  /** Loading state for the current fetch cycle. */
   isLoading: Ref<boolean>
-  /** English note.
+  /** Last captured error, if any. */
   error: Ref<Error | null>
-  /** English note.
+  /** Force a manual reload with the current inputs. */
   reload: () => Promise<void>
 }
 
-/**
- * English note.
- * English note.
- * English note.
- * English note.
- * English note.
- */
+/** Shared async loader for session-scoped views that depend on an optional time filter. */
 export function useAsyncData<T>(
   fetchFn: (sessionId: string, timeFilter?: TimeFilter) => Promise<T>,
   sessionId: Ref<string> | ComputedRef<string>,
@@ -66,7 +55,7 @@ export function useAsyncData<T>(
       if (onError) {
         onError(err)
       } else {
-        console.error('数据加载失败:', err)
+        console.error('[useAsyncData] Data loading failed:', err)
       }
     } finally {
       isLoading.value = false
@@ -92,10 +81,7 @@ export function useAsyncData<T>(
   }
 }
 
-/**
- * English note.
- * English note.
- */
+/** Aggregate multiple async loaders under a single loading flag. */
 export function useMultipleAsyncData(loaders: Array<() => Promise<void>>) {
   const isLoading = ref(false)
 

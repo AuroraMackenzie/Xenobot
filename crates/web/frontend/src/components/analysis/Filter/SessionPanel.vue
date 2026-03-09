@@ -1,25 +1,16 @@
 <script setup lang="ts">
-/**
- * English note.
- * English note.
- * English note.
- */
-
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useSessionStore } from '@/stores/session'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const sessionStore = useSessionStore()
 
-// English engineering note.
 const selectedIds = defineModel<number[]>('selectedIds', { default: () => [] })
 
-// English engineering note.
 const selectedSet = ref<Set<number>>(new Set())
 
-// English engineering note.
 watch(
   selectedIds,
   (newIds) => {
@@ -28,7 +19,6 @@ watch(
   { immediate: true }
 )
 
-// English engineering note.
 interface ChatSession {
   id: number
   startTs: number
@@ -40,10 +30,8 @@ interface ChatSession {
 const sessions = ref<ChatSession[]>([])
 const isLoading = ref(false)
 
-// English engineering note.
 const scrollContainerRef = ref<HTMLElement | null>(null)
 
-// English engineering note.
 interface ListItem {
   type: 'date' | 'session'
   date?: string
@@ -51,25 +39,21 @@ interface ListItem {
   sessionCount?: number
 }
 
-// English engineering note.
 const flatItems = computed<ListItem[]>(() => {
   const groups: Record<string, ChatSession[]> = {}
 
-  // English engineering note.
   for (const session of sessions.value) {
-    const date = new Date(session.startTs * 1000).toLocaleDateString()
+    const date = new Date(session.startTs * 1000).toLocaleDateString(locale.value)
     if (!groups[date]) {
       groups[date] = []
     }
     groups[date].push(session)
   }
 
-  // English engineering note.
   const sortedDates = Object.keys(groups).sort((a, b) => {
     return new Date(b).getTime() - new Date(a).getTime()
   })
 
-  // English engineering note.
   const items: ListItem[] = []
   for (const date of sortedDates) {
     items.push({ type: 'date', date, sessionCount: groups[date].length })
@@ -81,7 +65,6 @@ const flatItems = computed<ListItem[]>(() => {
   return items
 })
 
-// English engineering note.
 const virtualizer = useVirtualizer(
   computed(() => ({
     count: flatItems.value.length,
@@ -93,7 +76,6 @@ const virtualizer = useVirtualizer(
 
 const virtualItems = computed(() => virtualizer.value.getVirtualItems())
 
-// English engineering note.
 async function loadSessions() {
   const sessionId = sessionStore.currentSessionId
   if (!sessionId) return
@@ -102,18 +84,16 @@ async function loadSessions() {
   try {
     sessions.value = await window.sessionApi.getSessions(sessionId)
   } catch (error) {
-    console.error('加载会话失败:', error)
+    console.error('[SessionPanel] Failed to load sessions:', error)
   } finally {
     isLoading.value = false
   }
 }
 
-// English engineering note.
 function isSelected(id: number): boolean {
   return selectedSet.value.has(id)
 }
 
-// English engineering note.
 function toggleSession(id: number) {
   const newSet = new Set(selectedSet.value)
   if (newSet.has(id)) {
@@ -125,24 +105,20 @@ function toggleSession(id: number) {
   selectedIds.value = Array.from(newSet)
 }
 
-// English engineering note.
 function getSessionIdsForDate(date: string): number[] {
   return flatItems.value.filter((item) => item.type === 'session' && item.date === date).map((item) => item.session!.id)
 }
 
-// English engineering note.
 function selectDate(date: string) {
   const sessionIds = getSessionIdsForDate(date)
   const allSelected = sessionIds.every((id) => selectedSet.value.has(id))
 
   const newSet = new Set(selectedSet.value)
   if (allSelected) {
-    // English engineering note.
     for (const id of sessionIds) {
       newSet.delete(id)
     }
   } else {
-    // English engineering note.
     for (const id of sessionIds) {
       newSet.add(id)
     }
@@ -151,26 +127,26 @@ function selectDate(date: string) {
   selectedIds.value = Array.from(newSet)
 }
 
-// English engineering note.
 function isDateFullySelected(date: string): boolean {
   const sessionIds = getSessionIdsForDate(date)
   return sessionIds.length > 0 && sessionIds.every((id) => selectedSet.value.has(id))
 }
 
-// English engineering note.
 function formatTime(ts: number): string {
-  return new Date(ts * 1000).toLocaleTimeString('zh-CN', {
+  return new Date(ts * 1000).toLocaleTimeString(locale.value, {
     hour: '2-digit',
     minute: '2-digit',
   })
 }
 
-// English engineering note.
 function formatDuration(startTs: number, endTs: number): string {
   const diff = endTs - startTs
-  if (diff < 60) return `${diff}秒`
-  if (diff < 3600) return `${Math.floor(diff / 60)}分钟`
-  return `${Math.floor(diff / 3600)}小时${Math.floor((diff % 3600) / 60)}分钟`
+  if (diff < 60) return t('analysis.filter.durationSeconds', { count: diff })
+  if (diff < 3600) return t('analysis.filter.durationMinutes', { count: Math.floor(diff / 60) })
+  return t('analysis.filter.durationHoursMinutes', {
+    hours: Math.floor(diff / 3600),
+    minutes: Math.floor((diff % 3600) / 60),
+  })
 }
 
 onMounted(() => {
@@ -179,23 +155,21 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="p-4 flex flex-col h-full min-h-0">
-    <!-- English UI note -->
+  <div class="xeno-session-shell flex h-full min-h-0 flex-col p-4">
     <div v-if="selectedIds.length > 0" class="flex-none mb-2 text-sm text-primary-500">
       {{ t('analysis.filter.selectedSessions', { count: selectedIds.length }) }}
     </div>
 
-    <!-- English UI note -->
     <div class="flex-1 min-h-0">
       <div v-if="isLoading" class="flex items-center justify-center h-full">
         <UIcon name="i-heroicons-arrow-path" class="w-6 h-6 animate-spin text-gray-400" />
       </div>
 
-      <div v-else-if="sessions.length === 0" class="flex items-center justify-center h-full text-gray-500 text-sm">
+      <div v-else-if="sessions.length === 0" class="xeno-session-empty flex items-center justify-center h-full text-gray-500 text-sm">
         {{ t('analysis.filter.noSessions') }}
       </div>
 
-      <div v-else ref="scrollContainerRef" class="h-full overflow-y-auto">
+      <div v-else ref="scrollContainerRef" class="xeno-session-scroll h-full overflow-y-auto rounded-2xl">
         <div :style="{ height: `${virtualizer.getTotalSize()}px`, position: 'relative' }">
           <div
             v-for="virtualRow in virtualItems"
@@ -208,17 +182,18 @@ onMounted(() => {
               transform: `translateY(${virtualRow.start}px)`,
             }"
           >
-            <!-- English UI note -->
             <div
               v-if="flatItems[virtualRow.index].type === 'date'"
-              class="flex items-center justify-between px-2 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-md cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700"
+              class="xeno-session-date flex cursor-pointer items-center justify-between rounded-xl px-3 py-2"
               @click="selectDate(flatItems[virtualRow.index].date!)"
             >
               <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
                 {{ flatItems[virtualRow.index].date }}
               </span>
               <div class="flex items-center gap-2">
-                <span class="text-xs text-gray-500">{{ flatItems[virtualRow.index].sessionCount }} 个会话</span>
+                <span class="text-xs text-gray-500">
+                  {{ t('analysis.filter.historySessionCount', { count: flatItems[virtualRow.index].sessionCount }) }}
+                </span>
                 <input
                   type="checkbox"
                   :checked="isDateFullySelected(flatItems[virtualRow.index].date!)"
@@ -229,10 +204,9 @@ onMounted(() => {
               </div>
             </div>
 
-            <!-- English UI note -->
             <label
               v-else
-              class="flex items-center gap-3 px-3 py-2 ml-2 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer border border-transparent"
+              class="xeno-session-item ml-2 flex cursor-pointer items-center gap-3 rounded-xl border border-transparent px-3 py-2"
               :class="{
                 'border-primary-300 bg-primary-50 dark:border-primary-600 dark:bg-primary-900/20': isSelected(
                   flatItems[virtualRow.index].session!.id
@@ -253,7 +227,7 @@ onMounted(() => {
                   </span>
                 </div>
                 <div class="flex items-center gap-2 text-xs text-gray-500">
-                  <span>{{ flatItems[virtualRow.index].session!.messageCount }} 条消息</span>
+                  <span>{{ t('analysis.filter.sessionMessageCount', { count: flatItems[virtualRow.index].session!.messageCount }) }}</span>
                   <span>·</span>
                   <span>
                     {{
@@ -272,3 +246,54 @@ onMounted(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.xeno-session-shell {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.01), transparent 120%);
+}
+
+.xeno-session-scroll {
+  border: 1px solid rgba(139, 166, 189, 0.14);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 120%),
+    rgba(7, 16, 24, 0.52);
+}
+
+.xeno-session-empty {
+  border: 1px dashed rgba(139, 166, 189, 0.16);
+  border-radius: 1.2rem;
+  background: rgba(8, 18, 28, 0.44);
+}
+
+.xeno-session-date {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 120%),
+    rgba(12, 24, 34, 0.78);
+  transition: background-color 140ms ease;
+}
+
+.xeno-session-date:hover {
+  background:
+    radial-gradient(circle at top left, rgba(84, 214, 255, 0.08), transparent 30%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 120%),
+    rgba(14, 28, 38, 0.84);
+}
+
+.xeno-session-item {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 120%),
+    rgba(9, 18, 28, 0.6);
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    transform 140ms ease;
+}
+
+.xeno-session-item:hover {
+  transform: translateY(-1px);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 120%),
+    rgba(12, 24, 34, 0.76);
+}
+</style>

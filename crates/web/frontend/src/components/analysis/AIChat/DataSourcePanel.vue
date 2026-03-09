@@ -105,7 +105,10 @@ function highlightKeywords(text: string): string {
               </span>
               <span class="text-xs text-gray-400">{{ formatTime(msg.timestamp) }}</span>
             </div>
-            <p class="line-clamp-3 text-sm text-gray-600 dark:text-gray-400" v-html="highlightKeywords(msg.content)" />
+            <p
+              class="line-clamp-3 break-words text-sm text-gray-600 dark:text-gray-400"
+              v-html="highlightKeywords(msg.content)"
+            />
           </div>
         </div>
       </div>
@@ -134,7 +137,7 @@ function highlightKeywords(text: string): string {
   text-orientation: mixed;
 }
 
-/* English note.
+/* Animated scanlines hint at indexed data flow behind the panel surface. */
 .data-flow-bg {
   background: repeating-linear-gradient(0deg, transparent, transparent 20px, currentColor 20px, currentColor 21px);
   animation: dataFlow 20s linear infinite;

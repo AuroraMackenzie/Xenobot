@@ -1,8 +1,4 @@
 <script setup lang="ts">
-/**
- * English note.
- * English note.
- */
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import StorageManageSection from './DataStorage/StorageManageSection.vue'
@@ -12,20 +8,16 @@ import { useSubTabsScroll } from '@/composables/useSubTabsScroll'
 
 const { t } = useI18n()
 
-// English engineering note.
 const navItems = computed(() => [
   { id: 'storage', label: t('settings.tabs.storageManage') },
   { id: 'session', label: t('settings.tabs.sessionManage') },
 ])
 
-// English engineering note.
 const { activeNav, scrollContainerRef, setSectionRef, handleNavChange } = useSubTabsScroll(navItems)
-void scrollContainerRef // English engineering note.
+void scrollContainerRef
 
-// Template refs
 const storageManageRef = ref<InstanceType<typeof StorageManageSection> | null>(null)
 
-// English engineering note.
 defineExpose({
   refresh: () => storageManageRef.value?.refresh(),
 })
@@ -33,23 +25,18 @@ defineExpose({
 
 <template>
   <div class="flex h-full gap-6">
-    <!-- English UI note -->
-    <div class="w-28 shrink-0">
+    <div class="xeno-storage-nav w-32 shrink-0 rounded-2xl p-3">
       <SubTabs v-model="activeNav" :items="navItems" orientation="vertical" @change="handleNavChange" />
     </div>
 
-    <!-- English UI note -->
-    <div ref="scrollContainerRef" class="min-w-0 flex-1 overflow-y-auto">
+    <div ref="scrollContainerRef" class="xeno-storage-shell min-w-0 flex-1 overflow-y-auto rounded-2xl p-5">
       <div class="space-y-8">
-        <!-- English UI note -->
         <div :ref="(el) => setSectionRef('storage', el as HTMLElement)">
           <StorageManageSection ref="storageManageRef" />
         </div>
 
-        <!-- English UI note -->
-        <div class="border-t border-gray-200 dark:border-gray-700" />
+        <div class="border-t border-white/10" />
 
-        <!-- English UI note -->
         <div :ref="(el) => setSectionRef('session', el as HTMLElement)">
           <SessionIndexSection />
         </div>
@@ -57,3 +44,17 @@ defineExpose({
     </div>
   </div>
 </template>
+
+<style scoped>
+.xeno-storage-nav,
+.xeno-storage-shell {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.08), transparent 26%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.72), rgba(15, 23, 42, 0.62));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 18px 38px rgba(2, 6, 23, 0.18);
+  backdrop-filter: blur(18px);
+}
+</style>

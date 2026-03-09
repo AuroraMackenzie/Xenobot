@@ -6,30 +6,23 @@ import { formatDateRange } from '@/utils'
 import UITabs from '@/components/UI/Tabs.vue'
 import DatePicker from '@/components/UI/DatePicker.vue'
 
-// English engineering note.
-
 export type TimeSelectMode = 'recent' | 'quarter' | 'year' | 'custom'
 
-/** English note.
 export interface TimeSelectState {
   mode: TimeSelectMode
-  recentDays?: number // English engineering note.
-  year?: number // English engineering note.
-  quarterYear?: number // English engineering note.
-  quarter?: number // English engineering note.
-  customStart?: string // English engineering note.
-  customEnd?: string // English engineering note.
+  recentDays?: number
+  year?: number
+  quarterYear?: number
+  quarter?: number
+  customStart?: string
+  customEnd?: string
 }
 
-/** English note.
 export interface TimeRangeValue {
   startTs: number
   endTs: number
-  /** English note.
   displayLabel: string
-  /** English note.
   isFullRange: boolean
-  /** English note.
   state: TimeSelectState
 }
 
@@ -39,7 +32,6 @@ interface Props {
   sessionId: string | undefined
   modelValue: TimeRangeValue | null
   visible?: boolean
-  /** English note.
   initialState?: Partial<TimeSelectState>
 }
 
@@ -55,29 +47,19 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-// English engineering note.
-
 const isLoaded = ref(false)
 const availableYears = ref<number[]>([])
 const fullTimeRange = ref<{ start: number; end: number } | null>(null)
 
-// English engineering note.
 const mode = ref<TimeSelectMode>('recent')
-// English engineering note.
 const recentPeriod = ref<number>(365)
-// English engineering note.
 const selectedYear = ref<number>(0)
-// English engineering note.
 const selectedQuarterYear = ref<number>(0)
 const selectedQuarter = ref<number>(1)
-// English engineering note.
 const customStartDate = ref<string>('')
 const customEndDate = ref<string>('')
 
-// English engineering note.
 const isInitializing = ref(false)
-
-// English engineering note.
 
 function getQuarterFromTs(ts: number): { year: number; quarter: number } {
   const date = new Date(ts * 1000)
@@ -176,9 +158,6 @@ const yearDisplayLabel = computed(() => {
   return t('common.timeSelect.year.label', { year: selectedYear.value })
 })
 
-// English engineering note.
-
-/** English note.
 function getRecentDisplayLabel(days: number): string {
   const map: Record<number, string> = {
     180: t('common.timeSelect.display.recent180'),
@@ -324,9 +303,6 @@ function initModeDefaults(newMode: TimeSelectMode) {
   }
 }
 
-// English engineering note.
-
-/** English note.
 const modeModel = computed({
   get: () => mode.value,
   set: (val: TimeSelectMode) => {
@@ -338,7 +314,6 @@ const modeModel = computed({
   },
 })
 
-/** English note.
 const recentPeriodModel = computed({
   get: () => recentPeriod.value,
   set: (val: number) => {
@@ -347,7 +322,6 @@ const recentPeriodModel = computed({
   },
 })
 
-/** English note.
 const customStartModel = computed({
   get: () => customStartDate.value,
   set: (val: string) => {
@@ -356,7 +330,6 @@ const customStartModel = computed({
   },
 })
 
-/** English note.
 const customEndModel = computed({
   get: () => customEndDate.value,
   set: (val: string) => {
@@ -364,8 +337,6 @@ const customEndModel = computed({
     if (customStartDate.value) emitCurrentValue()
   },
 })
-
-// English engineering note.
 
 async function loadData() {
   if (!props.sessionId) {
@@ -433,7 +404,7 @@ async function loadData() {
 
     emitCurrentValue()
   } catch (error) {
-    console.error('TimeSelect 加载数据失败:', error)
+    console.error('[TimeSelect] Failed to load time range data:', error)
     availableYears.value = []
     fullTimeRange.value = null
     emit('update:fullRange', null)
@@ -455,10 +426,8 @@ watch(
 
 <template>
   <div v-if="visible && isLoaded" class="flex items-center gap-2">
-    <!-- English UI note -->
     <USelect v-model="modeModel" :items="modeOptions" size="md" class="w-28 shrink-0" />
 
-    <!-- English UI note -->
     <UITabs
       v-if="mode === 'recent'"
       v-model="recentPeriodModel"
@@ -467,7 +436,6 @@ watch(
       class="min-w-0 shrink"
     />
 
-    <!-- English UI note -->
     <div v-else-if="mode === 'quarter'" class="flex items-center">
       <UButton
         icon="i-heroicons-chevron-left"
@@ -490,7 +458,6 @@ watch(
       />
     </div>
 
-    <!-- English UI note -->
     <div v-else-if="mode === 'year'" class="flex items-center">
       <UButton
         icon="i-heroicons-chevron-left"
@@ -513,7 +480,6 @@ watch(
       />
     </div>
 
-    <!-- English UI note -->
     <div v-else-if="mode === 'custom'" class="flex items-center gap-1">
       <DatePicker v-model="customStartModel" width-class="w-28" :clearable="false" />
       <span class="text-xs text-gray-400">-</span>

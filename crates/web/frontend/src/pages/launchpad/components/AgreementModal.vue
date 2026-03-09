@@ -100,47 +100,44 @@ defineExpose({ open })
     :open="isOpen"
     prevent-close
     :ui="{
-      content: 'md:w-full max-w-2xl',
+      content: 'md:w-full max-w-3xl',
       overlay: 'backdrop-blur-sm',
     }"
   >
     <template #content>
-      <!-- English UI note -->
-      <div class="agreement-modal flex max-h-[85vh] flex-col p-6">
+      <div class="agreement-modal xeno-agreement-shell flex max-h-[85vh] flex-col p-6">
         <!-- Header -->
-        <div class="mb-4 flex items-center justify-between gap-3">
+        <div class="xeno-agreement-header mb-4 flex items-center justify-between gap-3">
           <div class="flex items-center gap-3">
             <div
-              class="flex h-12 w-12 items-center justify-center rounded-xl bg-linear-to-br from-cyan-100 to-sky-100 dark:from-cyan-900/30 dark:to-sky-900/30"
+              class="xeno-agreement-icon flex h-12 w-12 items-center justify-center rounded-xl"
             >
               <UIcon name="i-heroicons-document-text" class="h-6 w-6 text-cyan-600 dark:text-cyan-400" />
             </div>
-            <div>
-              <h2 class="text-xl font-bold text-gray-900 dark:text-white">{{ t('common.agreement.title') }}</h2>
+            <div class="min-w-0">
+              <h2 class="break-words text-xl font-bold text-gray-900 dark:text-white">
+                {{ t('common.agreement.title') }}
+              </h2>
               <p class="text-sm text-gray-500 dark:text-gray-400">{{ t('common.agreement.subtitle') }}</p>
             </div>
           </div>
-          <!-- English UI note -->
-          <div class="w-36 shrink-0">
+          <div class="xeno-agreement-locale w-36 shrink-0">
             <UTabs v-model="currentLocale" size="sm" class="gap-0" :items="languageOptions" />
           </div>
         </div>
 
-        <!-- English UI note -->
         <UAlert
           v-if="isVersionUpdated"
           icon="i-heroicons-exclamation-triangle"
           :title="t('common.agreement.updateNotice')"
-          class="mb-4 pt-2"
+          class="xeno-agreement-alert mb-4 pt-2"
         />
 
-        <!-- English UI note -->
-        <div class="mb-6 flex-1 overflow-y-auto pr-4">
+        <div class="xeno-agreement-content-wrap mb-6 flex-1 overflow-y-auto pr-4">
           <div class="agreement-content" v-html="renderedContent" />
         </div>
 
-        <!-- English UI note -->
-        <div class="flex items-center justify-end gap-3 border-t border-gray-200 pt-4 dark:border-gray-700">
+        <div class="xeno-agreement-footer flex items-center justify-end gap-3 pt-4">
           <UButton variant="ghost" color="neutral" size="lg" @click="handleDisagree">
             {{ t('common.agreement.disagree') }}
           </UButton>
@@ -159,45 +156,81 @@ defineExpose({ open })
 </template>
 
 <style scoped>
-/* English note.
 .agreement-modal {
   -webkit-app-region: no-drag;
 }
 
-/* English note.
+.xeno-agreement-shell {
+  border: 1px solid var(--xeno-border-soft);
+  border-radius: 1.6rem;
+  background:
+    radial-gradient(circle at top left, rgba(84, 214, 255, 0.14), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 22%),
+    rgba(6, 16, 26, 0.94);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 30px 70px rgba(2, 8, 16, 0.38);
+  backdrop-filter: blur(22px) saturate(135%);
+}
+
+.xeno-agreement-header {
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(139, 166, 189, 0.16);
+}
+
+.xeno-agreement-icon {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 120%),
+    rgba(8, 31, 48, 0.84);
+  border: 1px solid rgba(116, 220, 255, 0.22);
+  box-shadow: 0 14px 32px rgba(4, 11, 18, 0.24);
+}
+
+.xeno-agreement-locale {
+  padding: 0.25rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(139, 166, 189, 0.16);
+  background: rgba(8, 18, 28, 0.72);
+}
+
+.xeno-agreement-alert {
+  border-radius: 1rem;
+}
+
+.xeno-agreement-content-wrap {
+  border: 1px solid rgba(139, 166, 189, 0.14);
+  border-radius: 1.25rem;
+  padding: 1.15rem 1.2rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 120%),
+    rgba(6, 16, 24, 0.62);
+}
+
+.xeno-agreement-footer {
+  border-top: 1px solid rgba(139, 166, 189, 0.16);
+}
+
 .agreement-content {
   font-size: 0.875rem;
   line-height: 1.6;
-  color: var(--color-gray-600);
+  color: rgba(205, 222, 235, 0.86);
+  word-break: break-word;
 }
 
-/* English note.
-:root.dark .agreement-content {
-  color: var(--color-gray-300);
-}
-
-/* English note.
 .agreement-content :deep(h2) {
   font-size: 0.95rem;
   font-weight: 600;
-  color: var(--color-gray-900);
+  color: rgba(243, 249, 255, 0.96);
   margin-top: 1.25rem;
   margin-bottom: 0.5rem;
   padding-bottom: 0.25rem;
-  border-bottom: 1px solid var(--color-gray-200);
+  border-bottom: 1px solid rgba(139, 166, 189, 0.16);
 }
 
-:root.dark .agreement-content :deep(h2) {
-  color: var(--color-gray-100);
-  border-bottom-color: var(--color-gray-700);
-}
-
-/* English note.
 .agreement-content :deep(h2:first-child) {
   margin-top: 0;
 }
 
-/* English note.
 .agreement-content :deep(ul) {
   margin: 0.5rem 0;
   padding-left: 1.25rem;
@@ -218,24 +251,17 @@ defineExpose({ open })
   font-weight: bold;
 }
 
-/* English note.
 .agreement-content :deep(strong) {
   font-weight: 600;
-  color: var(--color-gray-800);
+  color: rgba(243, 249, 255, 0.95);
 }
 
-:root.dark .agreement-content :deep(strong) {
-  color: var(--color-gray-200);
-}
-
-/* English note.
 .agreement-content :deep(p) {
   margin: 0.5rem 0;
 }
 
-/* English note.
 .agreement-content :deep(a) {
-  color: var(--color-cyan-500);
+  color: #74dcff;
   text-decoration: none;
 }
 

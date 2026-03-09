@@ -31,28 +31,23 @@ const activeSubTab = ref('wordcloud')
 </script>
 
 <template>
-  <div class="flex h-full flex-col">
-    <!-- English UI note -->
+  <div class="xeno-quotes-shell flex h-full flex-col gap-4">
     <SubTabs v-model="activeSubTab" :items="subTabs" persist-key="quotesTab" />
 
-    <!-- English UI note -->
-    <div class="flex-1 min-h-0 overflow-auto">
+    <div class="xeno-quotes-stage flex-1 min-h-0 overflow-auto rounded-2xl">
       <Transition name="fade" mode="out-in">
-        <!-- English UI note -->
         <CatchphraseTab
           v-if="activeSubTab === 'catchphrase'"
           :session-id="props.sessionId"
           :time-filter="props.timeFilter"
         />
 
-        <!-- English UI note -->
         <WordcloudTab
           v-else-if="activeSubTab === 'wordcloud'"
           :session-id="props.sessionId"
           :time-filter="props.timeFilter"
         />
 
-        <!-- English UI note -->
         <div v-else-if="activeSubTab === 'keyword'" class="main-content mx-auto max-w-3xl p-6">
           <KeywordAnalysis :session-id="props.sessionId" :time-filter="props.timeFilter" />
         </div>
@@ -62,6 +57,22 @@ const activeSubTab = ref('wordcloud')
 </template>
 
 <style scoped>
+.xeno-quotes-shell {
+  background:
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.08), transparent 24%),
+    radial-gradient(circle at left center, rgba(236, 72, 153, 0.06), transparent 20%);
+}
+
+.xeno-quotes-stage {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.76), rgba(15, 23, 42, 0.62));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 18px 38px rgba(2, 6, 23, 0.18);
+  backdrop-filter: blur(18px);
+}
+
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.15s ease;

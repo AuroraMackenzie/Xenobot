@@ -29,6 +29,7 @@
   },
   "batchSummary": {
     "title": "批量生成摘要",
+    "description": "在同一个受控流程中为多个会话窗口生成摘要。",
     "byRange": "按范围",
     "byTime": "按时间",
     "selectRange": "选择范围",

@@ -42,9 +42,7 @@ function truncateContent(content: string, maxLength = 30): string {
   return content.slice(0, maxLength) + '...'
 }
 
-/**
- * English note.
- */
+// English engineering note.
 function viewRepeatContext(item: { content: string; firstMessageId: number }) {
   layoutStore.openChatRecordDrawer({
     scrollToMessageId: item.firstMessageId,
@@ -63,7 +61,7 @@ watch(
 </script>
 
 <template>
-  <div class="main-content mx-auto max-w-3xl p-6">
+  <div class="xeno-quotes-panel main-content mx-auto max-w-3xl p-6">
     <!-- English UI note -->
     <LoadingState v-if="isLoading" :text="t('quotes.hotRepeat.loading')" />
 
@@ -118,3 +116,17 @@ watch(
     </SectionCard>
   </div>
 </template>
+
+<style scoped>
+.xeno-quotes-panel {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1.5rem;
+  background:
+    radial-gradient(circle at top right, rgba(248, 113, 113, 0.09), transparent 24%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.74), rgba(15, 23, 42, 0.62));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 18px 38px rgba(2, 6, 23, 0.18);
+  backdrop-filter: blur(18px);
+}
+</style>

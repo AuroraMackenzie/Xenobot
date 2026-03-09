@@ -1,48 +1,34 @@
 <script setup lang="ts">
-/**
- * English note.
- * English note.
- * English note.
- */
 import { ref, watch, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{
   sessionId: string
-  /** English note.
   modelValue?: boolean
 }>()
 
 const emit = defineEmits<{
-  /** English note.
   (e: 'update:modelValue', value: boolean): void
-  /** English note.
   (e: 'generated', sessionCount: number): void
 }>()
 
 const { t } = useI18n()
 
-// English engineering note.
 const hasIndex = ref(false)
 const sessionCount = ref(0)
 const isGenerating = ref(false)
 const isLoading = ref(true)
-// English engineering note.
 const forceMode = ref(false)
 
-// English engineering note.
 const isOpen = computed({
   get: () => props.modelValue ?? false,
   set: (value) => emit('update:modelValue', value),
 })
 
-// English engineering note.
 const canClose = computed(() => {
-  // English engineering note.
   return !forceMode.value
 })
 
-// English engineering note.
 async function checkAndAutoOpen() {
   if (!props.sessionId) return
 
@@ -58,13 +44,12 @@ async function checkAndAutoOpen() {
       isOpen.value = true
     }
   } catch (error) {
-    console.error('检查会话索引失败:', error)
+    console.error('[SessionIndexModal] Failed to inspect session index:', error)
   } finally {
     isLoading.value = false
   }
 }
 
-// English engineering note.
 async function refreshStatus() {
   if (!props.sessionId) return
 
@@ -74,59 +59,51 @@ async function refreshStatus() {
     hasIndex.value = stats.hasIndex
     sessionCount.value = stats.sessionCount
   } catch (error) {
-    console.error('检查会话索引失败:', error)
+    console.error('[SessionIndexModal] Failed to refresh session index status:', error)
   } finally {
     isLoading.value = false
   }
 }
 
-// English engineering note.
 async function generateSessionIndex() {
   if (!props.sessionId) return
 
   isGenerating.value = true
   try {
-    // English engineering note.
     const savedThreshold = localStorage.getItem('sessionGapThreshold')
-    const gapThreshold = savedThreshold ? parseInt(savedThreshold, 10) : 1800 // English engineering note.
+    const gapThreshold = savedThreshold ? parseInt(savedThreshold, 10) : 1800
 
     const count = await window.sessionApi.generate(props.sessionId, gapThreshold)
     hasIndex.value = true
     sessionCount.value = count
     emit('generated', count)
 
-    // English engineering note.
     forceMode.value = false
     isOpen.value = false
   } catch (error) {
-    console.error('生成会话索引失败:', error)
+    console.error('[SessionIndexModal] Failed to generate session index:', error)
   } finally {
     isGenerating.value = false
   }
 }
 
-// English engineering note.
 function close() {
   if (!canClose.value) return
   isOpen.value = false
 }
 
-// English engineering note.
 function handleOpenChange(value: boolean) {
   if (!value && !canClose.value) {
-    // English engineering note.
     return
   }
 
   isOpen.value = value
 
-  // English engineering note.
   if (value && !forceMode.value) {
     refreshStatus()
   }
 }
 
-// English engineering note.
 watch(
   () => props.sessionId,
   () => {
@@ -134,7 +111,6 @@ watch(
   }
 )
 
-// English engineering note.
 onMounted(() => {
   checkAndAutoOpen()
 })
@@ -143,11 +119,10 @@ onMounted(() => {
 <template>
   <UModal :open="isOpen" :dismissible="canClose" @update:open="handleOpenChange">
     <template #content>
-      <div class="p-6">
-        <!-- English UI note -->
+      <div class="xeno-session-index-card p-6">
         <div class="mb-4 flex items-center justify-between">
           <div class="flex items-center gap-2">
-            <div class="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30">
+            <div class="xeno-session-index-icon flex h-10 w-10 items-center justify-center rounded-full">
               <UIcon name="i-heroicons-clock" class="h-5 w-5 text-blue-600 dark:text-blue-400" />
             </div>
             <div>
@@ -162,17 +137,14 @@ onMounted(() => {
           <UButton v-if="canClose" icon="i-heroicons-x-mark" color="neutral" variant="ghost" size="sm" @click="close" />
         </div>
 
-        <!-- English UI note -->
         <div v-if="isLoading" class="flex items-center justify-center py-8">
           <UIcon name="i-heroicons-arrow-path" class="h-6 w-6 animate-spin text-gray-400" />
         </div>
 
-        <!-- English UI note -->
         <template v-else>
-          <!-- English UI note -->
           <div v-if="!hasIndex" class="space-y-4">
             <div
-              class="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/50 dark:bg-amber-900/20"
+              class="xeno-session-index-alert rounded-2xl p-4"
             >
               <div class="flex gap-3">
                 <UIcon name="i-heroicons-exclamation-triangle" class="h-5 w-5 shrink-0 text-amber-500" />
@@ -187,7 +159,7 @@ onMounted(() => {
               </div>
             </div>
 
-            <div class="rounded-lg bg-gray-50 p-4 dark:bg-gray-800/50">
+            <div class="xeno-session-index-panel rounded-2xl p-4">
               <h4 class="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
                 {{ t('records.sessionIndex.whatIsIt') }}
               </h4>
@@ -208,10 +180,9 @@ onMounted(() => {
             </div>
           </div>
 
-          <!-- English UI note -->
           <div v-else class="space-y-4">
             <div
-              class="rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800/50 dark:bg-green-900/20"
+              class="xeno-session-index-success rounded-2xl p-4"
             >
               <div class="flex gap-3">
                 <UIcon name="i-heroicons-check-circle" class="h-5 w-5 shrink-0 text-green-500" />
@@ -232,7 +203,6 @@ onMounted(() => {
           </div>
         </template>
 
-        <!-- English UI note -->
         <div class="mt-6 flex justify-end gap-2">
           <UButton v-if="canClose" variant="ghost" @click="close">
             {{ t('records.sessionIndex.cancel') }}
@@ -256,3 +226,40 @@ onMounted(() => {
     </template>
   </UModal>
 </template>
+
+<style scoped>
+.xeno-session-index-card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1.5rem;
+  background:
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.12), transparent 30%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.78), rgba(15, 23, 42, 0.64));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 20px 44px rgba(2, 6, 23, 0.22);
+  backdrop-filter: blur(18px);
+}
+
+.xeno-session-index-icon {
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.xeno-session-index-panel,
+.xeno-session-index-alert,
+.xeno-session-index-success {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.xeno-session-index-panel {
+  background: rgba(15, 23, 42, 0.54);
+}
+
+.xeno-session-index-alert {
+  background: rgba(251, 191, 36, 0.1);
+}
+
+.xeno-session-index-success {
+  background: rgba(34, 197, 94, 0.1);
+}
+</style>

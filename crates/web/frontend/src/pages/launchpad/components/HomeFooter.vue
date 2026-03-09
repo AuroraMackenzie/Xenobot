@@ -107,7 +107,7 @@ function loadCachedExtraLinks(): FooterLink[] | null {
     return (config.homeFooterExtraLinks as FooterLink[] | undefined) || null
   } catch (error) {
     // English engineering note.
-    console.warn('[HomeFooter] 读取缓存额外链接失败，将使用默认链接。', error)
+    console.warn('[HomeFooter] Failed to read cached extra links. Falling back to defaults.', error)
   }
   return null
 }
@@ -122,7 +122,7 @@ function loadCachedSocialConfig(): SocialConfig | null {
     return (config.social as SocialConfig | undefined) || null
   } catch (error) {
     // English engineering note.
-    console.warn('[HomeFooter] 读取缓存社交配置失败，将使用默认配置。', error)
+    console.warn('[HomeFooter] Failed to read cached social config. Falling back to defaults.', error)
   }
   return null
 }
@@ -169,7 +169,7 @@ async function fetchConfig(): Promise<void> {
     }
   } catch (error) {
     // English engineering note.
-    console.warn('[HomeFooter] 拉取远程配置失败，将继续使用本地配置。', error)
+    console.warn('[HomeFooter] Failed to fetch remote config. Keeping the local fallback.', error)
   }
 }
 
@@ -206,14 +206,14 @@ watch(locale, () => {
 </script>
 
 <template>
-  <div class="absolute bottom-4 left-0 right-0">
-    <div class="flex items-center justify-center">
+  <div class="xeno-home-footer-wrap absolute bottom-4 left-0 right-0">
+    <div class="xeno-home-footer flex items-center justify-center">
       <template v-for="(link, index) in footerLinks" :key="link.id">
         <!-- English UI note -->
         <span v-if="index > 0" class="mx-2 text-gray-300 dark:text-gray-600">·</span>
         <!-- English UI note -->
         <button
-          class="text-sm text-gray-500 hover:text-primary transition-colors dark:text-gray-400 dark:hover:text-primary"
+          class="xeno-home-footer-link text-sm text-gray-500 transition-colors hover:text-primary dark:text-gray-400 dark:hover:text-primary"
           @click="handleLinkClick(link)"
         >
           {{ link.title }}
@@ -224,7 +224,7 @@ watch(locale, () => {
       <template v-if="socialLink">
         <span class="mx-2 text-gray-300 dark:text-gray-600">·</span>
         <button
-          class="text-sm text-gray-500 hover:text-primary transition-colors dark:text-gray-400 dark:hover:text-primary"
+          class="xeno-home-footer-link text-sm text-gray-500 transition-colors hover:text-primary dark:text-gray-400 dark:hover:text-primary"
           @click="openSocialLink"
         >
           {{ socialLink.title }}
@@ -233,3 +233,29 @@ watch(locale, () => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.xeno-home-footer-wrap {
+  pointer-events: none;
+}
+
+.xeno-home-footer {
+  width: fit-content;
+  margin: 0 auto;
+  pointer-events: auto;
+  border: 1px solid var(--xeno-border-soft);
+  border-radius: 9999px;
+  padding: 0.7rem 1rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 120%),
+    rgba(7, 20, 31, 0.78);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 18px 36px rgba(1, 7, 15, 0.2);
+  backdrop-filter: blur(14px) saturate(124%);
+}
+
+.xeno-home-footer-link:hover {
+  color: #74dcff;
+}
+</style>

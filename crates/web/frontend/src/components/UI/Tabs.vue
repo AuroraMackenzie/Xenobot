@@ -81,7 +81,7 @@ watch(
 </template>
 
 <style scoped>
-/* English note.
+/* Hide native scrollbars while preserving horizontal touch/trackpad scrolling. */
 .scrollbar-hide {
   -ms-overflow-style: none; /* IE and Edge */
   scrollbar-width: none; /* Firefox */

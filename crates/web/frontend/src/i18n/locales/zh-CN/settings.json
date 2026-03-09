@@ -1,5 +1,6 @@
 {
   "title": "设置",
+  "description": "在同一个控制面板中调整本地行为、AI 工作流、存储规则与运行时集成。",
   "tabs": {
     "basic": "基础设置",
     "ai": "AI 设置",
@@ -308,6 +309,7 @@
       "responseRulesPlaceholder": "定义 AI 回答的格式和要求...",
       "preview": "完整提示词预览",
       "previewHint": "（预览为群聊模式，实际会根据分析类型自动调整）",
+      "previewResponseRulesLabel": "回答要求：",
       "resetToDefault": "重置为默认",
       "saveChanges": "保存修改",
       "addPreset": "添加预设"

@@ -47,7 +47,7 @@ async function loadMembers() {
   try {
     members.value = await window.chatApi.getMembers(props.sessionId)
   } catch (error) {
-    console.error('加载成员列表失败:', error)
+    console.error('[DirectSpaceMemberTab] Failed to load members:', error)
   } finally {
     isLoading.value = false
   }
@@ -74,7 +74,7 @@ async function updateAliases(member: MemberWithStats, newAliases: string[]) {
       }
     }
   } catch (error) {
-    console.error('保存别名失败:', error)
+    console.error('[DirectSpaceMemberTab] Failed to save aliases:', error)
   } finally {
     savingAliasesId.value = null
   }
@@ -127,7 +127,7 @@ onMounted(() => {
       <div
         v-for="member in members"
         :key="member.id"
-        class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-900"
+        class="xeno-member-card rounded-2xl p-5"
       >
         <!-- English UI note -->
         <div class="flex items-start gap-4">
@@ -204,7 +204,7 @@ onMounted(() => {
     </div>
 
     <!-- English UI note -->
-    <div v-if="members.length > 0" class="mt-6 flex items-start gap-3 rounded-xl bg-blue-50 p-4 dark:bg-blue-900/20">
+    <div v-if="members.length > 0" class="xeno-member-tip mt-6 flex items-start gap-3 rounded-2xl p-4">
       <UIcon name="i-heroicons-information-circle" class="mt-0.5 h-5 w-5 shrink-0 text-blue-500" />
       <div>
         <p class="text-sm font-medium text-blue-800 dark:text-blue-200">{{ t('members.private.tipTitle') }}</p>
@@ -215,3 +215,22 @@ onMounted(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.xeno-member-card,
+.xeno-member-tip {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.08), transparent 24%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.74), rgba(15, 23, 42, 0.62));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 16px 34px rgba(2, 6, 23, 0.16);
+  backdrop-filter: blur(18px);
+}
+
+.xeno-member-tip {
+  background:
+    linear-gradient(180deg, rgba(30, 64, 175, 0.18), rgba(15, 23, 42, 0.62));
+}
+</style>

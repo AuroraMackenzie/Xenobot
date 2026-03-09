@@ -312,7 +312,7 @@ async function loadAnalysis() {
       ...currentKeywords.value,
     ])
   } catch (error) {
-    console.error('加载词频分析失败:', error)
+    console.error('[KeywordAnalysis] Failed to load keyword analysis:', error)
     analysis.value = null
   } finally {
     isLoading.value = false
@@ -371,15 +371,16 @@ watch(
 </script>
 
 <template>
-  <ListPro
-    :items="rankData"
-    :title="t('quotes.keywords.title')"
-    :description="t('quotes.keywords.description')"
-    :top-n="10"
-    :count-template="t('quotes.keywords.countTemplate')"
-  >
-    <!-- English UI note -->
-    <template #config>
+  <div class="xeno-keyword-shell">
+    <ListPro
+      :items="rankData"
+      :title="t('quotes.keywords.title')"
+      :description="t('quotes.keywords.description')"
+      :top-n="10"
+      :count-template="t('quotes.keywords.countTemplate')"
+    >
+      <!-- English UI note -->
+      <template #config>
       <!-- English UI note -->
       <div class="border-b border-gray-100 p-4 dark:border-gray-800">
         <!-- English UI note -->
@@ -538,10 +539,10 @@ watch(
 
       <!-- English UI note -->
       <LoadingState v-if="isLoading && rankData.length === 0" :text="t('quotes.keywords.loading')" />
-    </template>
+      </template>
 
     <!-- English UI note -->
-    <template #item="{ item: member, index }">
+      <template #item="{ item: member, index }">
       <div class="flex items-center gap-3">
         <!-- English UI note -->
         <div
@@ -580,15 +581,30 @@ watch(
           </span>
         </div>
       </div>
-    </template>
+      </template>
 
     <!-- English UI note -->
-    <template #empty>
+      <template #empty>
       <div v-if="!isLoading" class="flex h-64 flex-col items-center justify-center text-gray-400">
         <UIcon name="i-heroicons-magnifying-glass" class="mb-2 h-8 w-8 opacity-50" />
         <p class="text-sm">{{ t('quotes.keywords.empty') }}</p>
       </div>
       <div v-else class="h-64" />
-    </template>
-  </ListPro>
+      </template>
+    </ListPro>
+  </div>
 </template>
+
+<style scoped>
+.xeno-keyword-shell {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1.5rem;
+  background:
+    radial-gradient(circle at top right, rgba(236, 72, 153, 0.09), transparent 24%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.74), rgba(15, 23, 42, 0.62));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 18px 38px rgba(2, 6, 23, 0.18);
+  backdrop-filter: blur(18px);
+}
+</style>

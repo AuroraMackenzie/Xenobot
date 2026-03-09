@@ -1,11 +1,4 @@
 <script setup lang="ts">
-/**
- * English note.
- * English note.
- * English note.
- * English note.
- */
-
 import { computed, ref, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useVirtualizer } from '@tanstack/vue-virtual'
@@ -13,9 +6,8 @@ import MessageList from '@/components/common/ChatRecord/MessageList.vue'
 import LoadingState from '@/components/UI/LoadingState.vue'
 import type { ChatRecordMessage } from '@/types/format'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
-// English engineering note.
 interface PaginationInfo {
   page: number
   pageSize: number
@@ -24,7 +16,6 @@ interface PaginationInfo {
   hasMore: boolean
 }
 
-// Props
 const props = defineProps<{
   result: {
     blocks: Array<{
@@ -59,49 +50,35 @@ const props = defineProps<{
   tokenStatus: 'green' | 'yellow' | 'red'
 }>()
 
-// Emits
 const emit = defineEmits<{
   (e: 'load-more'): void
 }>()
 
-// English engineering note.
 const selectedBlockIndex = ref(0)
-
-// English engineering note.
 let isBlockSwitching = false
-
-// English engineering note.
 const pendingScrollToMessageId = ref<number | null>(null)
-
-// English engineering note.
 const messageListRef = ref<InstanceType<typeof MessageList> | null>(null)
-
-// English engineering note.
 const blockListRef = ref<HTMLElement | null>(null)
 
-// English engineering note.
 function getBlockAtReversedIndex(index: number) {
   if (!props.result) return null
   const originalIndex = props.result.blocks.length - 1 - index
   return props.result.blocks[originalIndex]
 }
 
-// English engineering note.
 const blockCount = computed(() => props.result?.blocks.length ?? 0)
 
-// English engineering note.
 const blockVirtualizer = useVirtualizer(
   computed(() => ({
     count: blockCount.value,
     getScrollElement: () => blockListRef.value,
-    estimateSize: () => 72, // English engineering note.
+    estimateSize: () => 84,
     overscan: 5,
   }))
 )
 
 const virtualBlocks = computed(() => blockVirtualizer.value.getVirtualItems())
 
-// English engineering note.
 const tokenProgressColor = computed(() => {
   switch (props.tokenStatus) {
     case 'green':
@@ -115,12 +92,10 @@ const tokenProgressColor = computed(() => {
   }
 })
 
-// English engineering note.
 const tokenProgressPercent = computed(() => {
   return Math.min((props.estimatedTokens / 100000) * 100, 100)
 })
 
-// English engineering note.
 const currentBlockMessages = computed<ChatRecordMessage[]>(() => {
   if (blockCount.value === 0) return []
   const block = getBlockAtReversedIndex(selectedBlockIndex.value)
@@ -141,7 +116,6 @@ const currentBlockMessages = computed<ChatRecordMessage[]>(() => {
   }))
 })
 
-// English engineering note.
 const hitMessageIds = computed<number[]>(() => {
   if (blockCount.value === 0) return []
   const block = getBlockAtReversedIndex(selectedBlockIndex.value)
@@ -150,11 +124,8 @@ const hitMessageIds = computed<number[]>(() => {
   return block.messages.filter((msg) => msg.isHit).map((msg) => msg.id)
 })
 
-// English engineering note.
 const emptyQuery = { startTs: 0, endTs: 0 }
 
-// English engineering note.
-// English engineering note.
 const shouldShowYear = computed(() => {
   if (!props.result || props.result.blocks.length === 0) return false
 
@@ -165,7 +136,6 @@ const shouldShowYear = computed(() => {
   return firstYear !== lastYear
 })
 
-// English engineering note.
 function formatDateTime(ts: number): string {
   const options: Intl.DateTimeFormatOptions = {
     month: 'short',
@@ -178,21 +148,22 @@ function formatDateTime(ts: number): string {
     options.year = 'numeric'
   }
 
-  return new Date(ts * 1000).toLocaleString('zh-CN', options)
+  return new Date(ts * 1000).toLocaleString(locale.value, options)
 }
 
 function formatDuration(startTs: number, endTs: number): string {
   const diff = endTs - startTs
-  if (diff < 60) return `${diff}秒`
-  if (diff < 3600) return `${Math.floor(diff / 60)}分钟`
-  return `${Math.floor(diff / 3600)}h${Math.floor((diff % 3600) / 60)}m`
+  if (diff < 60) return t('analysis.filter.durationSeconds', { count: diff })
+  if (diff < 3600) return t('analysis.filter.durationMinutes', { count: Math.floor(diff / 60) })
+  return t('analysis.filter.durationHoursMinutes', {
+    hours: Math.floor(diff / 3600),
+    minutes: Math.floor((diff % 3600) / 60),
+  })
 }
 
-// English engineering note.
 function selectBlock(index: number) {
   selectedBlockIndex.value = index
 
-  // English engineering note.
   const block = getBlockAtReversedIndex(index)
   if (block) {
     const firstHitMessage = block.messages.find((msg) => msg.isHit)
@@ -202,33 +173,36 @@ function selectBlock(index: number) {
   }
 }
 
-// English engineering note.
 function goToNextBlock() {
-  if (isBlockSwitching) return // English engineering note.
+  if (isBlockSwitching) return
   if (blockCount.value === 0) return
   if (selectedBlockIndex.value < blockCount.value - 1) {
     isBlockSwitching = true
     selectedBlockIndex.value++
     scrollToBlockInList(selectedBlockIndex.value)
-    // English engineering note.
     setTimeout(() => {
       isBlockSwitching = false
     }, 300)
   }
 }
 
-// English engineering note.
-
 function goToPrevBlock() {
-  // English engineering note.
+  if (isBlockSwitching) return
+  if (blockCount.value === 0) return
+  if (selectedBlockIndex.value > 0) {
+    isBlockSwitching = true
+    selectedBlockIndex.value--
+    scrollToBlockInList(selectedBlockIndex.value)
+    setTimeout(() => {
+      isBlockSwitching = false
+    }, 300)
+  }
 }
 
-// English engineering note.
 function scrollToBlockInList(index: number) {
   blockVirtualizer.value.scrollToIndex(index, { align: 'center' })
 }
 
-// English engineering note.
 watch(
   () => props.result,
   () => {
@@ -237,11 +211,9 @@ watch(
   }
 )
 
-// English engineering note.
 watch(pendingScrollToMessageId, async (messageId) => {
   if (messageId !== null) {
     await nextTick()
-    // English engineering note.
     setTimeout(() => {
       messageListRef.value?.scrollToMessage(messageId)
       pendingScrollToMessageId.value = null
@@ -249,12 +221,10 @@ watch(pendingScrollToMessageId, async (messageId) => {
   }
 })
 
-// English engineering note.
 function handleBlockListScroll(event: Event) {
   const target = event.target as HTMLElement
   if (!target || !props.result?.pagination?.hasMore || props.isLoadingMore) return
 
-  // English engineering note.
   const threshold = 100
   const { scrollTop, scrollHeight, clientHeight } = target
   if (scrollHeight - scrollTop - clientHeight < threshold) {
@@ -264,14 +234,13 @@ function handleBlockListScroll(event: Event) {
 </script>
 
 <template>
-  <div class="flex-1 flex flex-col overflow-hidden bg-gray-50 dark:bg-gray-900">
-    <!-- English UI note -->
+  <div class="xeno-preview-shell flex-1 flex flex-col overflow-hidden">
     <div
       v-if="result && result.blocks.length > 0"
-      class="flex-none px-4 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700"
+      class="xeno-preview-header flex-none px-4 py-3"
     >
       <div class="flex items-center justify-between mb-2">
-        <div class="flex items-center gap-6 text-sm">
+        <div class="flex flex-wrap items-center gap-4 text-sm">
           <span class="text-gray-600 dark:text-gray-400">
             {{ t('analysis.filter.stats.blocks') }}:
             <span class="font-medium text-gray-900 dark:text-white">
@@ -322,10 +291,9 @@ function handleBlockListScroll(event: Event) {
             :style="{ width: `${tokenProgressPercent}%` }"
           />
         </div>
-        <span class="text-xs text-gray-500 whitespace-nowrap">10K</span>
+        <span class="text-xs text-gray-500 whitespace-nowrap">100K</span>
       </div>
 
-      <!-- English UI note -->
       <div v-if="tokenStatus === 'yellow'" class="mt-2 text-xs text-yellow-600 dark:text-yellow-400">
         {{ t('analysis.filter.tokenWarning.yellow') }}
       </div>
@@ -334,34 +302,28 @@ function handleBlockListScroll(event: Event) {
       </div>
     </div>
 
-    <!-- English UI note -->
     <div class="flex-1 min-h-0 flex overflow-hidden">
-      <!-- English UI note -->
       <LoadingState v-if="isLoading" variant="page" :text="t('analysis.filter.filtering')" />
 
-      <!-- English UI note -->
       <div v-else-if="!result" class="w-full h-full flex items-center justify-center">
-        <div class="text-center text-gray-400">
+        <div class="xeno-preview-empty text-center text-gray-400">
           <UIcon name="i-heroicons-funnel" class="w-12 h-12 mb-3 mx-auto" />
           <p>{{ t('analysis.filter.emptyHint') }}</p>
         </div>
       </div>
 
-      <!-- English UI note -->
       <div v-else-if="result.blocks.length === 0" class="flex-1 flex items-center justify-center">
-        <div class="text-center text-gray-400">
+        <div class="xeno-preview-empty text-center text-gray-400">
           <UIcon name="i-heroicons-magnifying-glass" class="w-12 h-12 mb-3 mx-auto" />
           <p>{{ t('analysis.filter.noResults') }}</p>
         </div>
       </div>
 
-      <!-- English UI note -->
       <template v-else>
-        <!-- English UI note -->
         <div
-          class="w-64 flex-none border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col"
+          class="xeno-preview-sidebar w-72 flex-none flex flex-col"
         >
-          <div class="flex-none px-3 py-2 border-b border-gray-200 dark:border-gray-700">
+          <div class="flex-none px-3 py-2 border-b border-white/10">
             <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
               {{ t('analysis.filter.stats.blocks') }}
               ({{ result.blocks.length }}
@@ -386,11 +348,11 @@ function handleBlockListScroll(event: Event) {
                 }"
               >
                 <div
-                  class="px-3 py-2 cursor-pointer border-b border-gray-100 dark:border-gray-700 transition-colors"
+                  class="xeno-preview-block cursor-pointer px-3 py-3 transition-colors"
                   :class="
                     selectedBlockIndex === virtualItem.index
-                      ? 'bg-primary-50 dark:bg-primary-900/30 border-l-2 border-l-primary-500'
-                      : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                      ? 'xeno-preview-block-active'
+                      : 'hover:bg-white/5'
                   "
                   @click="selectBlock(virtualItem.index)"
                 >
@@ -402,14 +364,24 @@ function handleBlockListScroll(event: Event) {
                       v-if="(getBlockAtReversedIndex(virtualItem.index)?.hitCount ?? 0) > 0"
                       class="text-xs text-primary-500"
                     >
-                      含 {{ getBlockAtReversedIndex(virtualItem.index)?.hitCount }} 个结果
+                      {{
+                        t('analysis.filter.previewHitCount', {
+                          count: getBlockAtReversedIndex(virtualItem.index)?.hitCount ?? 0,
+                        })
+                      }}
                     </span>
                   </div>
                   <div class="text-xs text-gray-500">
                     {{ formatDateTime(getBlockAtReversedIndex(virtualItem.index)?.startTs ?? 0) }}
                   </div>
                   <div class="flex items-center gap-2 text-xs text-gray-400 mt-1">
-                    <span>{{ getBlockAtReversedIndex(virtualItem.index)?.messages.length ?? 0 }} 条</span>
+                    <span>
+                      {{
+                        t('analysis.filter.previewMessageCount', {
+                          count: getBlockAtReversedIndex(virtualItem.index)?.messages.length ?? 0,
+                        })
+                      }}
+                    </span>
                     <span>·</span>
                     <span>
                       {{
@@ -424,10 +396,9 @@ function handleBlockListScroll(event: Event) {
               </div>
             </div>
 
-            <!-- English UI note -->
             <div
               v-if="result.pagination?.hasMore"
-              class="py-3 text-center text-sm text-gray-500 dark:text-gray-400 border-t border-gray-100 dark:border-gray-700"
+              class="py-3 text-center text-sm text-gray-500 dark:text-gray-400 border-t border-white/10"
             >
               <template v-if="isLoadingMore">
                 <UIcon name="i-heroicons-arrow-path" class="w-4 h-4 animate-spin inline mr-1" />
@@ -448,8 +419,7 @@ function handleBlockListScroll(event: Event) {
           </div>
         </div>
 
-        <!-- English UI note -->
-        <div class="flex-1 overflow-hidden">
+        <div class="flex-1 overflow-hidden min-w-0">
           <MessageList
             v-if="currentBlockMessages.length > 0"
             ref="messageListRef"
@@ -468,3 +438,50 @@ function handleBlockListScroll(event: Event) {
     </div>
   </div>
 </template>
+
+<style scoped>
+.xeno-preview-shell {
+  background:
+    radial-gradient(circle at top left, rgba(99, 102, 241, 0.12), transparent 36%),
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.08), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0));
+}
+
+.xeno-preview-header,
+.xeno-preview-sidebar,
+.xeno-preview-empty {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(15, 23, 42, 0.72);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 18px 40px rgba(2, 6, 23, 0.22);
+  backdrop-filter: blur(18px);
+}
+
+.xeno-preview-sidebar,
+.xeno-preview-empty {
+  margin: 0.75rem;
+  border-radius: 1.25rem;
+}
+
+.xeno-preview-header {
+  margin: 0.75rem 0.75rem 0;
+  border-radius: 1.25rem;
+}
+
+.xeno-preview-block {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.xeno-preview-block-active {
+  background:
+    linear-gradient(90deg, rgba(59, 130, 246, 0.18), rgba(59, 130, 246, 0.05)),
+    rgba(255, 255, 255, 0.02);
+  box-shadow: inset 3px 0 0 rgba(96, 165, 250, 0.88);
+}
+
+.xeno-preview-empty {
+  padding: 2.5rem;
+  max-width: 22rem;
+}
+</style>

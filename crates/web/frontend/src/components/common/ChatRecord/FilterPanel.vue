@@ -12,7 +12,7 @@ import type { ChatRecordQuery, FilterFormData } from './types'
 const { t } = useI18n()
 
 const props = defineProps<{
-  /** English note.
+  /** Active filter query mirrored from the drawer state. */
   query: ChatRecordQuery
 }>()
 
@@ -142,40 +142,38 @@ function resetFilter() {
 </script>
 
 <template>
-  <div class="border-b border-gray-200 px-4 py-3 dark:border-gray-800">
-    <!-- English UI note -->
-    <div class="flex items-center gap-3">
+  <div class="xeno-record-filter border-b px-4 py-3">
+    <div class="flex flex-wrap items-center gap-3">
       <UInput
         v-model="formData.messageId"
         type="number"
         :placeholder="t('records.filter.messageId')"
         size="sm"
-        class="w-24"
+        class="w-24 shrink-0"
       />
       <UInput
         v-model="formData.memberName"
         :placeholder="t('records.filter.memberNotSupported')"
         size="sm"
-        class="w-28"
+        class="w-32 shrink-0"
         disabled
       />
-      <div class="flex items-center gap-2">
-        <DatePicker v-model="formData.startDate" :placeholder="t('records.filter.startDate')" />
+      <div class="min-w-0 flex flex-1 flex-wrap items-center gap-2">
+        <DatePicker v-model="formData.startDate" :placeholder="t('records.filter.startDate')" class="min-w-[10rem]" />
         <span class="text-xs text-gray-400">~</span>
-        <DatePicker v-model="formData.endDate" :placeholder="t('records.filter.endDate')" />
+        <DatePicker v-model="formData.endDate" :placeholder="t('records.filter.endDate')" class="min-w-[10rem]" />
       </div>
     </div>
 
-    <!-- English UI note -->
-    <div class="mt-2 flex items-center gap-3">
+    <div class="mt-3 flex flex-wrap items-center gap-3">
       <UInput
         v-model="formData.keywords"
         :placeholder="`${t('records.filter.keywordsPlaceholder')} · ${t('records.filter.keywordsSemanticHint')}`"
         size="sm"
-        class="flex-1"
+        class="min-w-[15rem] flex-1"
         @keydown="handleKeywordsKeydown"
       />
-      <div class="flex gap-2">
+      <div class="flex shrink-0 gap-2">
         <UButton color="neutral" variant="ghost" size="sm" @click="resetFilter">
           {{ t('records.filter.reset') }}
         </UButton>
@@ -186,3 +184,12 @@ function resetFilter() {
     </div>
   </div>
 </template>
+
+<style scoped>
+.xeno-record-filter {
+  border-bottom-color: rgba(139, 166, 189, 0.14);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 110%),
+    rgba(6, 15, 24, 0.42);
+}
+</style>

@@ -8,7 +8,7 @@ export interface CaptureOptions {
   embedFonts?: boolean
   compress?: boolean
   filename?: string
-  /** English note.
+  /** Capture the full scrollable surface instead of only the visible viewport. */
   fullContent?: boolean
 }
 
@@ -33,12 +33,7 @@ function triggerDownload(href: string, filename: string) {
   a.remove()
 }
 
-/**
- * English note.
- * English note.
- * English note.
- * English note.
- */
+/** Capture a DOM surface and return it as a PNG data URL with stable background handling. */
 export async function captureAsImageData(rootEl: HTMLElement, options?: CaptureOptions): Promise<string> {
   // English engineering note.
   const maxExportWidth = options?.maxExportWidth ?? 2160

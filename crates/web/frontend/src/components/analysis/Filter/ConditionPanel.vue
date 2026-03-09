@@ -1,9 +1,4 @@
 <script setup lang="ts">
-/**
- * English note.
- * English note.
- */
-
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useSessionStore } from '@/stores/session'
@@ -19,20 +14,16 @@ const timeRange = defineModel<{ start: number; end: number } | null>('timeRange'
 const senderIds = defineModel<number[]>('senderIds', { default: () => [] })
 const contextSize = defineModel<number>('contextSize', { default: 10 })
 
-// English engineering note.
 const keywordInput = ref('')
 
-// English engineering note.
 const members = ref<MemberWithStats[]>([])
 const isLoadingMembers = ref(false)
 
-// English engineering note.
 type TimeRangePreset = 'all' | 'today' | 'week' | 'month' | '3months' | 'year' | 'custom'
 const timeRangeType = ref<TimeRangePreset>('all')
 const customStartDate = ref('')
 const customEndDate = ref('')
 
-// English engineering note.
 const timeRangePresets = [
   { id: 'all' as TimeRangePreset, label: 'analysis.filter.allTime' },
   { id: 'today' as TimeRangePreset, label: 'analysis.filter.today' },
@@ -43,7 +34,6 @@ const timeRangePresets = [
   { id: 'custom' as TimeRangePreset, label: 'analysis.filter.customTime' },
 ]
 
-// English engineering note.
 const timeRangeTabItems = computed(() =>
   timeRangePresets.map((preset) => ({
     label: t(preset.label),
@@ -51,15 +41,12 @@ const timeRangeTabItems = computed(() =>
   }))
 )
 
-// English engineering note.
 watch(timeRangeType, () => {
   updateTimeRange()
 })
 
-// English engineering note.
 const dbTimeRange = ref<{ start: number; end: number } | null>(null)
 
-// English engineering note.
 async function loadMembers() {
   const sessionId = sessionStore.currentSessionId
   if (!sessionId) return
@@ -68,13 +55,12 @@ async function loadMembers() {
   try {
     members.value = await window.chatApi.getMembers(sessionId)
   } catch (error) {
-    console.error('加载成员失败:', error)
+    console.error('[ConditionPanel] Failed to load members:', error)
   } finally {
     isLoadingMembers.value = false
   }
 }
 
-// English engineering note.
 async function loadTimeRange() {
   const sessionId = sessionStore.currentSessionId
   if (!sessionId) return
@@ -85,11 +71,10 @@ async function loadTimeRange() {
       dbTimeRange.value = range
     }
   } catch (error) {
-    console.error('加载时间范围失败:', error)
+    console.error('[ConditionPanel] Failed to load time range:', error)
   }
 }
 
-// English engineering note.
 function addKeyword() {
   const kw = keywordInput.value.trim()
   if (kw && !keywords.value.includes(kw)) {
@@ -98,12 +83,10 @@ function addKeyword() {
   }
 }
 
-// English engineering note.
 function removeKeyword(kw: string) {
   keywords.value = keywords.value.filter((k) => k !== kw)
 }
 
-// English engineering note.
 function handleKeywordKeydown(e: KeyboardEvent) {
   if (e.key === 'Enter') {
     e.preventDefault()
@@ -111,7 +94,6 @@ function handleKeywordKeydown(e: KeyboardEvent) {
   }
 }
 
-// English engineering note.
 function toggleMember(memberId: number) {
   if (senderIds.value.includes(memberId)) {
     senderIds.value = senderIds.value.filter((id) => id !== memberId)
@@ -120,7 +102,6 @@ function toggleMember(memberId: number) {
   }
 }
 
-// English engineering note.
 function updateTimeRange() {
   const now = Math.floor(Date.now() / 1000)
   const today = new Date()
@@ -149,14 +130,13 @@ function updateTimeRange() {
     case 'custom':
       if (customStartDate.value && customEndDate.value) {
         const start = new Date(customStartDate.value).getTime() / 1000
-        const end = new Date(customEndDate.value).getTime() / 1000 + 86399 // English engineering note.
+        const end = new Date(customEndDate.value).getTime() / 1000 + 86399
         timeRange.value = { start, end }
       }
       break
   }
 }
 
-// English engineering note.
 const memberSearch = ref('')
 const filteredMembers = computed(() => {
   if (!memberSearch.value) return members.value
@@ -177,9 +157,8 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="p-4 space-y-6">
-    <!-- English UI note -->
-    <div>
+  <div class="xeno-condition-shell space-y-6 p-4">
+    <div class="xeno-condition-section rounded-2xl p-4">
       <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
         {{ t('analysis.filter.keywords') }}
         <span class="text-gray-500 text-xs ml-1">({{ t('analysis.filter.keywordsHint') }})</span>
@@ -205,17 +184,14 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- English UI note -->
-    <div>
+    <div class="xeno-condition-section rounded-2xl p-4">
       <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
         {{ t('analysis.filter.timeRange') }}
       </label>
 
       <div class="space-y-2">
-        <!-- English UI note -->
         <Tabs v-model="timeRangeType" :items="timeRangeTabItems" size="sm" />
 
-        <!-- English UI note -->
         <div v-if="timeRangeType === 'custom'" class="flex gap-2 items-center">
           <input
             v-model="customStartDate"
@@ -234,8 +210,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- English UI note -->
-    <div>
+    <div class="xeno-condition-section rounded-2xl p-4">
       <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
         {{ t('analysis.filter.senders') }}
         <span class="text-gray-500 text-xs ml-1">({{ t('analysis.filter.sendersHint') }})</span>
@@ -249,7 +224,7 @@ onMounted(() => {
         class="mb-2"
       />
 
-      <div class="max-h-60 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-md">
+      <div class="xeno-member-list max-h-60 overflow-y-auto rounded-xl">
         <div v-if="isLoadingMembers" class="p-4 text-center text-gray-500">
           <UIcon name="i-heroicons-arrow-path" class="w-5 h-5 animate-spin" />
         </div>
@@ -260,7 +235,7 @@ onMounted(() => {
           <label
             v-for="member in filteredMembers"
             :key="member.id"
-            class="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
+            class="xeno-member-row flex cursor-pointer items-center gap-2 px-3 py-2"
           >
             <input
               type="checkbox"
@@ -281,8 +256,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- English UI note -->
-    <div>
+    <div class="xeno-condition-section rounded-2xl p-4">
       <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
         {{ t('analysis.filter.contextSize') }}
         <span class="text-gray-500 text-xs ml-1">±{{ contextSize }} {{ t('analysis.filter.messages') }}</span>
@@ -305,3 +279,35 @@ onMounted(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.xeno-condition-shell {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.01), transparent 120%);
+}
+
+.xeno-condition-section {
+  border: 1px solid rgba(139, 166, 189, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 120%),
+    rgba(8, 18, 28, 0.6);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.xeno-member-list {
+  border: 1px solid rgba(139, 166, 189, 0.14);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 120%),
+    rgba(7, 16, 24, 0.54);
+}
+
+.xeno-member-row {
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease;
+}
+
+.xeno-member-row:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+</style>

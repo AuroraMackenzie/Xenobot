@@ -1,5 +1,6 @@
 {
   "title": "Settings",
+  "description": "Tune local behavior, AI workflows, storage rules, and runtime integrations from one control surface.",
   "tabs": {
     "basic": "General",
     "ai": "AI Settings",
@@ -308,6 +309,7 @@
       "responseRulesPlaceholder": "Define AI response format and requirements...",
       "preview": "Full Prompt Preview",
       "previewHint": " (Preview shows group chat mode, actual will adjust based on analysis type)",
+      "previewResponseRulesLabel": "Response requirements:",
       "resetToDefault": "Reset to Default",
       "saveChanges": "Save Changes",
       "addPreset": "Add Preset"

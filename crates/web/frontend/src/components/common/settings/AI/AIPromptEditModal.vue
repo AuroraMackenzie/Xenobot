@@ -55,9 +55,7 @@ const canSave = computed(() => {
   return formData.value.name.trim() && formData.value.roleDefinition.trim() && formData.value.responseRules.trim()
 })
 
-/**
- * English note.
- */
+// Convert stored applicability into independent UI checkbox flags.
 function applicableToCheckboxes(applicableTo?: PresetApplicableType): { group: boolean; private: boolean } {
   if (!applicableTo || applicableTo === 'common') {
     return { group: true, private: true }
@@ -68,9 +66,7 @@ function applicableToCheckboxes(applicableTo?: PresetApplicableType): { group: b
   }
 }
 
-/**
- * English note.
- */
+// Convert UI checkbox flags back into the persisted applicability value.
 function checkboxesToApplicableTo(group: boolean, private_: boolean): PresetApplicableType {
   if (group && private_) return 'common'
   if (group) return 'group'
@@ -107,12 +103,12 @@ watch(
   }
 )
 
-/** English note.
+// Close the modal without saving.
 function closeModal() {
   emit('update:open', false)
 }
 
-/** English note.
+// Persist the edited or newly created prompt preset.
 function handleSave() {
   if (!canSave.value) return
 
@@ -149,7 +145,7 @@ function handleSave() {
   closeModal()
 }
 
-/** English note.
+// Restore a built-in preset to its original localized content.
 function handleReset() {
   if (!props.preset || !isBuiltIn.value) return
 
@@ -174,7 +170,7 @@ const previewContent = computed(() => {
   const lockedSection = getLockedPromptSectionPreview('group', undefined, locale.value as LocaleType)
 
   // English engineering note.
-  const responseRulesLabel = locale.value === 'zh-CN' ? '回答要求：' : 'Response requirements:'
+  const responseRulesLabel = t('settings.aiPrompt.modal.previewResponseRulesLabel')
   return `${formData.value.roleDefinition}
 
 ${lockedSection}
@@ -187,7 +183,7 @@ ${formData.value.responseRules}`
 <template>
   <UModal :open="open" :ui="{ content: 'md:w-full max-w-2xl' }" @update:open="emit('update:open', $event)">
     <template #content>
-      <div class="p-6">
+      <div class="xeno-ai-prompt-modal p-6">
         <!-- Header -->
         <div class="mb-4 flex items-center justify-between">
           <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ modalTitle }}</h2>
@@ -272,7 +268,7 @@ ${formData.value.responseRules}`
               {{ t('settings.aiPrompt.modal.preview') }}
               <span class="font-normal text-gray-500">{{ t('settings.aiPrompt.modal.previewHint') }}</span>
             </label>
-            <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50">
+            <div class="xeno-ai-prompt-preview rounded-xl p-4">
               <pre class="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300">{{ previewContent }}</pre>
             </div>
           </div>
@@ -294,3 +290,24 @@ ${formData.value.responseRules}`
     </template>
   </UModal>
 </template>
+
+<style scoped>
+.xeno-ai-prompt-modal {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1.5rem;
+  background:
+    radial-gradient(circle at top right, rgba(217, 70, 239, 0.08), transparent 24%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.78), rgba(15, 23, 42, 0.64));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 18px 38px rgba(2, 6, 23, 0.18);
+  backdrop-filter: blur(18px);
+}
+
+.xeno-ai-prompt-preview {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.58), rgba(15, 23, 42, 0.44));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+</style>

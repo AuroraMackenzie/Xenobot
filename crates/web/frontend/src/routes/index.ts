@@ -34,9 +34,7 @@ router.afterEach((to) => {
   document.body.id = `page-${to.name as string}`
 })
 
-/**
- * English note.
- */
+/** Warm the most common room views after the router becomes idle-ready. */
 function preloadCriticalRoutes() {
   requestIdleCallback(() => {
     // English engineering note.

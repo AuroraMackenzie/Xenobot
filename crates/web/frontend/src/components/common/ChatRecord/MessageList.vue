@@ -574,7 +574,7 @@ defineExpose({
 
     <!-- Empty state -->
     <div v-else-if="messages.length === 0" class="flex h-full items-center justify-center">
-      <div class="text-center">
+      <div class="xeno-record-empty text-center">
         <UIcon name="i-heroicons-chat-bubble-left-right" class="h-12 w-12 text-gray-300 dark:text-gray-600" />
         <p class="mt-2 text-sm text-gray-500">{{ t('records.messageList.noMessages') }}</p>
         <p class="mt-1 text-xs text-gray-400">{{ t('records.messageList.tryAdjustFilter') }}</p>
@@ -582,7 +582,7 @@ defineExpose({
     </div>
 
     <!-- Virtual scroll container -->
-    <div v-else ref="scrollContainerRef" class="h-full overflow-y-auto" @scroll="handleScroll">
+    <div v-else ref="scrollContainerRef" class="xeno-record-scroll h-full overflow-y-auto" @scroll="handleScroll">
       <!-- Top loading indicator -->
       <div v-if="hasMoreBefore" class="flex justify-center py-2">
         <span v-if="isLoadingMore" class="text-xs text-gray-400">
@@ -606,7 +606,7 @@ defineExpose({
         >
           <!-- Time separator -->
           <div v-if="getTimeSeparator(virtualItem.index)" class="flex items-center justify-center py-2">
-            <div class="flex items-center gap-2 text-xs text-gray-400">
+            <div class="xeno-record-separator flex items-center gap-2 text-xs text-gray-400">
               <div class="h-px w-8 bg-gray-200 dark:bg-gray-700" />
               <span>{{ getTimeSeparator(virtualItem.index) }}</span>
               <div class="h-px w-8 bg-gray-200 dark:bg-gray-700" />
@@ -636,3 +636,24 @@ defineExpose({
     </div>
   </div>
 </template>
+
+<style scoped>
+.xeno-record-empty {
+  border: 1px solid rgba(139, 166, 189, 0.12);
+  border-radius: 1.2rem;
+  padding: 1.5rem 1.75rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 110%),
+    rgba(6, 15, 24, 0.48);
+}
+
+.xeno-record-scroll {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 120%),
+    rgba(5, 13, 21, 0.12);
+}
+
+.xeno-record-separator {
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.16);
+}
+</style>

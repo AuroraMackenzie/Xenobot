@@ -101,7 +101,7 @@ async function loadBaseData() {
     const sessionData = await window.chatApi.getSession(currentSessionId.value)
     session.value = sessionData
   } catch (error) {
-    console.error('加载基础数据失败:', error)
+    console.error('[DirectSpace] Failed to load base data:', error)
   }
 }
 
@@ -126,7 +126,7 @@ async function loadAnalysisData() {
     dailyActivity.value = daily
     messageTypes.value = types
   } catch (error) {
-    console.error('加载分析数据失败:', error)
+    console.error('[DirectSpace] Failed to load analysis data:', error)
   } finally {
     isLoading.value = false
   }

@@ -268,10 +268,10 @@ export function useAIChat(
           platformId: ownerId,
           displayName: ownerMember.groupNickname || ownerMember.accountName || ownerId,
         }
-        console.log('[AI] Owner 信息已加载:', ownerInfo.value)
+        console.log('[AI] Owner info loaded:', ownerInfo.value)
       }
     } catch (error) {
-      console.error('[AI] 获取 Owner 信息失败:', error)
+      console.error('[AI] Failed to load owner info:', error)
       ownerInfo.value = undefined
     }
   }
@@ -296,21 +296,21 @@ export function useAIChat(
    * English note.
    */
   async function sendMessage(content: string): Promise<void> {
-    console.log('[AI] ====== 开始处理用户消息 ======')
-    console.log('[AI] 用户输入:', content)
+    console.log('[AI] ====== Begin user message pipeline ======')
+    console.log('[AI] User input:', content)
 
     if (!content.trim() || isAIThinking.value) {
-      console.log('[AI] 跳过：内容为空或正在思考')
+      console.log('[AI] Skipped because content is empty or the assistant is already thinking')
       return
     }
 
     // English engineering note.
-    console.log('[AI] 检查 LLM 配置...')
+    console.log('[AI] Checking LLM configuration...')
     const hasConfig = await window.llmApi.hasConfig()
-    console.log('[AI] LLM 配置状态:', hasConfig)
+    console.log('[AI] LLM configuration state:', hasConfig)
 
     if (!hasConfig) {
-      console.log('[AI] 未配置 LLM，显示提示')
+      console.log('[AI] No LLM configuration found, returning setup hint')
       messages.value.push({
         id: generateId('error'),
         role: 'assistant',
@@ -329,7 +329,7 @@ export function useAIChat(
       toolCalls: [], // English engineering note.
     }
     messages.value.push(userMessage)
-    console.log('[AI] 已添加用户消息')
+    console.log('[AI] User message appended')
 
     // English engineering note.
     isAIThinking.value = true
@@ -340,7 +340,7 @@ export function useAIChat(
     // English engineering note.
     currentRequestId = generateId('req')
     const thisRequestId = currentRequestId
-    console.log('[AI] 开始 Agent 处理...', { requestId: thisRequestId })
+    console.log('[AI] Starting agent processing...', { requestId: thisRequestId })
 
     // English engineering note.
     const aiMessageId = generateId('ai')
@@ -470,7 +470,7 @@ export function useAIChat(
           : undefined,
       }
 
-      console.log('[AI] 构建 context:', {
+      console.log('[AI] Built context:', {
         sessionId,
         maxMessagesLimit: context.maxMessagesLimit,
         ownerInfo: context.ownerInfo,
@@ -492,7 +492,7 @@ export function useAIChat(
           content: msg.content,
         }))
 
-      console.log('[AI] 调用 Agent API...', {
+      console.log('[AI] Calling agent API...', {
         context,
         historyLength: historyMessages.length,
         chatType,
@@ -506,7 +506,7 @@ export function useAIChat(
         (chunk) => {
           // English engineering note.
           if (isAborted || thisRequestId !== currentRequestId) {
-            console.log('[AI] 已中止或请求已过期，忽略 chunk', {
+            console.log('[AI] Ignoring chunk because the request was aborted or expired', {
               isAborted,
               thisRequestId,
               currentRequestId,
@@ -539,7 +539,7 @@ export function useAIChat(
 
             case 'tool_start':
               // English engineering note.
-              console.log('[AI] 工具开始执行:', chunk.toolName, chunk.toolParams)
+              console.log('[AI] Tool execution started:', chunk.toolName, chunk.toolParams)
               if (chunk.toolName) {
                 const normalizedToolName = normalizeAgentToolName(chunk.toolName)
                 if (!normalizedToolName) {
@@ -560,7 +560,7 @@ export function useAIChat(
 
             case 'tool_result':
               // English engineering note.
-              console.log('[AI] 工具执行结果:', chunk.toolName, chunk.toolResult)
+              console.log('[AI] Tool execution result:', chunk.toolName, chunk.toolResult)
               if (chunk.toolName) {
                 const normalizedToolName = normalizeAgentToolName(chunk.toolName)
                 if (!normalizedToolName) {
@@ -580,7 +580,7 @@ export function useAIChat(
 
             case 'done':
               // English engineering note.
-              console.log('[AI] Agent 完成', chunk.usage)
+              console.log('[AI] Agent completed', chunk.usage)
               currentToolStatus.value = null
               // English engineering note.
               if (chunk.usage) {
@@ -589,13 +589,13 @@ export function useAIChat(
                   completionTokens: sessionTokenUsage.value.completionTokens + chunk.usage.completionTokens,
                   totalTokens: sessionTokenUsage.value.totalTokens + chunk.usage.totalTokens,
                 }
-                console.log('[AI] Token 使用量更新:', sessionTokenUsage.value)
+                console.log('[AI] Token usage updated:', sessionTokenUsage.value)
               }
               break
 
             case 'error':
               // English engineering note.
-              console.error('[AI] Agent 错误:', chunk.error)
+              console.error('[AI] Agent error:', chunk.error)
               if (currentToolStatus.value) {
                 currentToolStatus.value = {
                   ...currentToolStatus.value,
@@ -607,9 +607,9 @@ export function useAIChat(
               if (!hasStreamError) {
                 hasStreamError = true
                 const errorCode = chunk.errorCode || 'error.agent_runtime'
-                const errorMessage = chunk.errorMessage || chunk.error || '未知错误'
+                const errorMessage = chunk.errorMessage || chunk.error || 'Unknown error'
                 // English engineering note.
-                appendTextToBlocks(`\n\n❌ 处理失败（${errorCode}）：${errorMessage}`)
+                appendTextToBlocks(`\n\n❌ Processing failed (${errorCode}): ${errorMessage}`)
                 updateAIMessage({ isStreaming: false })
               }
               break
@@ -627,15 +627,15 @@ export function useAIChat(
 
       // English engineering note.
       currentAgentRequestId = agentReqId
-      console.log('[AI] Agent 请求已启动，agentReqId:', agentReqId)
+      console.log('[AI] Agent request started, agentReqId:', agentReqId)
 
       // English engineering note.
       const result = await agentPromise
-      console.log('[AI] Agent 返回结果:', result)
+      console.log('[AI] Agent returned:', result)
 
       // English engineering note.
       if (thisRequestId !== currentRequestId) {
-        console.log('[AI] 请求已过期，跳过结果处理')
+        console.log('[AI] Request expired, skipping result handling')
         return
       }
 
@@ -651,18 +651,18 @@ export function useAIChat(
         }
 
         // English engineering note.
-        console.log('[AI] 保存对话...')
+        console.log('[AI] Saving conversation...')
         await saveConversation(userMessage, messages.value[aiMessageIndex])
-        console.log('[AI] 对话已保存')
+        console.log('[AI] Conversation saved')
       } else {
         // English engineering note.
         const detail =
           (result as { error?: string; errorMessage?: string }).errorMessage ||
           result.error ||
-          '未知错误'
+          'Unknown error'
         const errorCode =
           (result as { error?: string; errorMessage?: string }).error || 'error.agent_runtime'
-        const errorText = `❌ 处理失败（${errorCode}）：${detail}`
+        const errorText = `❌ Processing failed (${errorCode}): ${detail}`
         if (!hasStreamError) {
           // English engineering note.
           appendTextToBlocks(`\n\n${errorText}`)
@@ -673,19 +673,19 @@ export function useAIChat(
         }
       }
 
-      console.log('[AI] ====== 处理完成 ======')
+      console.log('[AI] ====== Message pipeline completed ======')
     } catch (error) {
-      console.error('[AI] ====== 处理失败 ======')
-      console.error('[AI] 错误:', error)
+      console.error('[AI] ====== Message pipeline failed ======')
+      console.error('[AI] Error:', error)
 
       messages.value[aiMessageIndex] = {
         ...messages.value[aiMessageIndex],
-        content: `❌ 处理失败：${error instanceof Error ? error.message : '未知错误'}
+        content: `❌ Processing failed: ${error instanceof Error ? error.message : 'Unknown error'}
 
-请检查：
-- 网络连接是否正常
-- API Key 是否有效
-- 配置是否正确`,
+Please check:
+- network connectivity
+- API key validity
+- model configuration`,
         isStreaming: false,
       }
     } finally {
@@ -698,7 +698,7 @@ export function useAIChat(
    * English note.
    */
   async function saveConversation(userMsg: ChatMessage, aiMsg: ChatMessage): Promise<void> {
-    console.log('[AI] saveConversation 调用')
+    console.log('[AI] saveConversation invoked')
 
     try {
       // English engineering note.
@@ -706,7 +706,7 @@ export function useAIChat(
         const title = userMsg.content.slice(0, 50) + (userMsg.content.length > 50 ? '...' : '')
         const conversation = await window.aiApi.createConversation(sessionId, title)
         currentConversationId.value = conversation.id
-        console.log('[AI] 创建了新对话:', conversation.id)
+        console.log('[AI] Created new conversation:', conversation.id)
       }
 
       // English engineering note.
@@ -717,7 +717,7 @@ export function useAIChat(
       const serializableContentBlocks = aiMsg.contentBlocks
         ? JSON.parse(JSON.stringify(aiMsg.contentBlocks))
         : undefined
-      console.log('[AI] 保存 AI 消息:', {
+      console.log('[AI] Saving AI message:', {
         contentLength: aiMsg.content?.length,
         hasContentBlocks: !!serializableContentBlocks,
         contentBlocksLength: serializableContentBlocks?.length,
@@ -730,9 +730,9 @@ export function useAIChat(
         undefined,
         serializableContentBlocks // English engineering note.
       )
-      console.log('[AI] 消息保存完成')
+      console.log('[AI] Message save completed')
     } catch (error) {
-      console.error('[AI] 保存对话失败：', error)
+      console.error('[AI] Failed to save conversation:', error)
     }
   }
 
@@ -740,13 +740,13 @@ export function useAIChat(
    * English note.
    */
   async function loadConversation(conversationId: string): Promise<void> {
-    console.log('[AI] 加载对话历史，conversationId:', conversationId)
+    console.log('[AI] Loading conversation history, conversationId:', conversationId)
     try {
       const history = await window.aiApi.getMessages(conversationId)
       currentConversationId.value = conversationId
 
       console.log(
-        '[AI] 从数据库加载的原始消息:',
+        '[AI] Raw messages loaded from database:',
         history.map((m) => ({
           id: m.id,
           role: m.role,
@@ -764,9 +764,9 @@ export function useAIChat(
         // English engineering note.
         contentBlocks: msg.contentBlocks as ContentBlock[] | undefined,
       }))
-      console.log('[AI] 加载完成，messages.value 数量:', messages.value.length)
+      console.log('[AI] Conversation history loaded, messages count:', messages.value.length)
     } catch (error) {
-      console.error('[AI] 加载对话历史失败：', error)
+      console.error('[AI] Failed to load conversation history:', error)
     }
   }
 
@@ -811,7 +811,7 @@ export function useAIChat(
   async function stopGeneration(): Promise<void> {
     if (!isAIThinking.value) return
 
-    console.log('[AI] 用户停止生成')
+    console.log('[AI] User stopped generation')
     isAborted = true
     isAIThinking.value = false
     isLoadingSource.value = false
@@ -819,12 +819,12 @@ export function useAIChat(
 
     // English engineering note.
     if (currentAgentRequestId) {
-      console.log('[AI] 中止 Agent 请求:', currentAgentRequestId)
+      console.log('[AI] Aborting agent request:', currentAgentRequestId)
       try {
         await window.agentApi.abort(currentAgentRequestId)
-        console.log('[AI] Agent 请求已中止')
+        console.log('[AI] Agent request aborted')
       } catch (error) {
-        console.error('[AI] 中止 Agent 请求失败:', error)
+        console.error('[AI] Failed to abort agent request:', error)
       }
       currentAgentRequestId = ''
     }

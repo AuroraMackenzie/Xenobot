@@ -87,7 +87,7 @@ async function loadWeekdayActivity() {
   try {
     weekdayActivity.value = await window.chatApi.getWeekdayActivity(props.session.id, props.timeFilter)
   } catch (error) {
-    console.error('加载星期活跃度失败:', error)
+    console.error('[CircleSpaceOverview] Failed to load weekday activity:', error)
   }
 }
 
@@ -102,7 +102,7 @@ watch(
 </script>
 
 <template>
-  <div class="main-content space-y-6 p-6">
+  <div class="xeno-overview-shell main-content space-y-6 p-6">
     <!-- English UI note -->
     <OverviewIdentityCard
       :session="session"
@@ -148,3 +148,11 @@ watch(
     <DailyTrendCard :daily-activity="dailyActivity" :daily-chart-data="dailyChartData" />
   </div>
 </template>
+
+<style scoped>
+.xeno-overview-shell {
+  background:
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.08), transparent 26%),
+    radial-gradient(circle at left center, rgba(14, 165, 233, 0.06), transparent 24%);
+}
+</style>

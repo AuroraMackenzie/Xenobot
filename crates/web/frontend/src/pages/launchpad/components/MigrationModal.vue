@@ -51,22 +51,26 @@ onMounted(async () => {
 </script>
 
 <template>
-  <UModal :open="showModal" :ui="{ content: 'max-w-md' }" :prevent-close="!canClose">
+  <UModal :open="showModal" :ui="{ content: 'max-w-2xl' }" :prevent-close="!canClose">
     <template #content>
-      <div class="p-6 text-center">
+      <div class="xeno-migration-shell p-6 text-center">
         <div
-          class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full"
-          :class="migrationError ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-blue-100 dark:bg-blue-900/30'"
+          class="xeno-migration-icon mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full"
+          :class="
+            migrationError
+              ? 'xeno-migration-icon-error'
+              : 'xeno-migration-icon-normal'
+          "
         >
           <UIcon
             :name="migrationError ? 'i-heroicons-exclamation-triangle' : 'i-heroicons-arrow-up-circle'"
             :class="migrationError ? 'h-7 w-7 text-amber-500' : 'h-7 w-7 text-blue-500'"
           />
         </div>
-        <h3 class="mb-2 text-lg font-semibold text-gray-900 dark:text-white">
+        <h3 class="mb-2 break-words text-lg font-semibold text-gray-900 dark:text-white">
           {{ migrationError ? t('home.migration.partialFailed') : t('home.migration.title') }}
         </h3>
-        <p v-if="!migrationError" class="mb-3 text-sm text-gray-500 dark:text-gray-400">
+        <p v-if="!migrationError" class="mb-3 break-words text-sm text-gray-500 dark:text-gray-400">
           {{ t('home.migration.description', { count: migrationCount }) }}
           <br />
           {{ t('home.migration.note') }}
@@ -75,7 +79,7 @@ onMounted(async () => {
         <!-- English UI note -->
         <div
           v-if="pendingMigrations.length > 0 && !migrationError"
-          class="mb-4 rounded-lg bg-gray-50 p-3 text-left dark:bg-gray-800"
+          class="xeno-migration-panel mb-4 rounded-lg p-3 text-left"
         >
           <p class="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">
             {{ t('home.migration.upgradeContent') }}
@@ -83,9 +87,9 @@ onMounted(async () => {
           <ul class="space-y-2">
             <li v-for="migration in pendingMigrations" :key="migration.version" class="flex items-start gap-2">
               <UIcon name="i-heroicons-check-circle" class="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
-              <div>
-                <p class="text-sm text-gray-700 dark:text-gray-300">{{ migration.userMessage }}</p>
-                <p class="text-xs text-gray-400 dark:text-gray-500">{{ migration.description }}</p>
+              <div class="min-w-0">
+                <p class="break-words text-sm text-gray-700 dark:text-gray-300">{{ migration.userMessage }}</p>
+                <p class="break-words text-xs text-gray-400 dark:text-gray-500">{{ migration.description }}</p>
               </div>
             </li>
           </ul>
@@ -94,12 +98,12 @@ onMounted(async () => {
         <!-- English UI note -->
         <div
           v-if="migrationError"
-          class="mb-4 rounded-lg bg-red-50 p-3 text-left text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400"
+          class="xeno-migration-error mb-4 rounded-lg p-3 text-left text-sm text-red-600 dark:text-red-400"
         >
           <div class="flex flex-col gap-2">
             <div class="flex items-start gap-2">
               <UIcon name="i-heroicons-exclamation-circle" class="mt-0.5 h-4 w-4 shrink-0" />
-              <span>{{ migrationError }}</span>
+              <span class="break-words">{{ migrationError }}</span>
             </div>
             <p class="text-xs text-red-500 dark:text-red-400">
               {{ t('home.migration.errorHint') }}
@@ -135,3 +139,49 @@ onMounted(async () => {
     </template>
   </UModal>
 </template>
+
+<style scoped>
+.xeno-migration-shell {
+  border: 1px solid var(--xeno-border-soft);
+  border-radius: 1.6rem;
+  background:
+    radial-gradient(circle at top center, rgba(110, 186, 255, 0.14), transparent 30%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 26%),
+    rgba(7, 18, 29, 0.94);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 30px 72px rgba(2, 8, 16, 0.34);
+  backdrop-filter: blur(22px) saturate(132%);
+}
+
+.xeno-migration-icon {
+  border: 1px solid rgba(139, 166, 189, 0.18);
+  box-shadow: 0 14px 32px rgba(4, 11, 18, 0.24);
+}
+
+.xeno-migration-icon-normal {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 120%),
+    rgba(8, 29, 48, 0.84);
+}
+
+.xeno-migration-icon-error {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 120%),
+    rgba(52, 16, 21, 0.82);
+}
+
+.xeno-migration-panel {
+  border: 1px solid rgba(139, 166, 189, 0.14);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 120%),
+    rgba(7, 17, 26, 0.58);
+}
+
+.xeno-migration-error {
+  border: 1px solid rgba(248, 113, 113, 0.16);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 120%),
+    rgba(57, 17, 22, 0.44);
+}
+</style>

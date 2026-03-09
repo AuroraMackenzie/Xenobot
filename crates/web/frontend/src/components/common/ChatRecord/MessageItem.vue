@@ -1,7 +1,6 @@
 <script setup lang="ts">
 /**
- * English note.
- * English note.
+ * Chat record message row with sender identity, reply context, and keyword highlights.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -12,13 +11,13 @@ import { useSessionStore } from '@/stores/session'
 const { t } = useI18n()
 
 const props = defineProps<{
-  /** English note.
+  /** Normalized chat message payload. */
   message: ChatRecordMessage
-  /** English note.
+  /** True when the row is the current scroll/jump target. */
   isTarget?: boolean
-  /** English note.
+  /** Keywords or semantic terms highlighted in the bubble body. */
   highlightKeywords?: string[]
-  /** English note.
+  /** Shows context jump affordance in filtered mode. */
   isFiltered?: boolean
 }>()
 
@@ -45,8 +44,7 @@ const colorIndex = computed(() => {
   return Math.abs(hash) % 16
 })
 
-// English engineering note.
-// English engineering note.
+// Build a stable palette index from the sender label.
 const colorPalette = [
   { avatar: 'bg-rose-400 dark:bg-rose-500', name: 'text-rose-600 dark:text-rose-400' },
   { avatar: 'bg-pink-400 dark:bg-pink-500', name: 'text-pink-600 dark:text-pink-400' },
@@ -92,8 +90,6 @@ const avatarLetter = computed(() => {
   const name = props.message.senderName || ''
   if (!name) return '?'
 
-  // English engineering note.
-  // English engineering note.
   try {
     const segmenter = new Intl.Segmenter('zh', { granularity: 'grapheme' })
     const segments = [...segmenter.segment(name)]
@@ -105,7 +101,6 @@ const avatarLetter = computed(() => {
     const chars = [...name]
     if (chars.length > 0) {
       const firstChar = chars[0]
-      // English engineering note.
       if (/^[a-zA-Z]$/.test(firstChar)) {
         return firstChar.toUpperCase()
       }
@@ -163,9 +158,9 @@ function highlightContent(content: string): string {
 
         <!-- English UI note -->
         <!-- English UI note -->
-        <div class="flex items-start gap-1 max-w-[calc(100%-68px)]" :class="isOwner ? 'flex-row-reverse' : ''">
+        <div class="flex min-w-0 items-start gap-1" :class="isOwner ? 'flex-row-reverse' : ''">
           <div
-            class="relative inline-block rounded-lg px-3 py-2 transition-shadow"
+            class="xeno-record-bubble relative inline-block w-fit max-w-[42rem] rounded-lg px-3 py-2 transition-shadow"
             :class="[bubbleColor, isTarget ? 'ring-2 ring-yellow-400 dark:ring-yellow-500' : '']"
           >
             <!-- English UI note -->
@@ -182,7 +177,7 @@ function highlightContent(content: string): string {
               </p>
             </div>
             <p
-              class="whitespace-pre-wrap break-all text-sm text-gray-700 dark:text-gray-200"
+              class="whitespace-pre-wrap break-words text-sm text-gray-700 dark:text-gray-200"
               v-html="highlightContent(message.content || '')"
             />
           </div>
@@ -201,3 +196,10 @@ function highlightContent(content: string): string {
     </div>
   </div>
 </template>
+
+<style scoped>
+.xeno-record-bubble {
+  border: 1px solid rgba(139, 166, 189, 0.12);
+  box-shadow: 0 10px 22px rgba(2, 8, 16, 0.12);
+}
+</style>

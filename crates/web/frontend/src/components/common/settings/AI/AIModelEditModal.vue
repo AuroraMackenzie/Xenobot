@@ -276,9 +276,7 @@ async function validateKey() {
   }
 }
 
-/**
- * English note.
- */
+// Build a readable default name from the selected provider or endpoint.
 function getDefaultName(): string {
   switch (configType.value) {
     case 'preset': {
@@ -334,7 +332,7 @@ async function saveConfig() {
         emit('update:open', false)
         emit('saved')
       } else {
-        console.error('添加配置失败：', result.error)
+        console.error('[AIModelEditModal] Failed to add configuration:', result.error)
       }
     } else {
       const updates: Record<string, unknown> = {
@@ -357,11 +355,11 @@ async function saveConfig() {
         emit('update:open', false)
         emit('saved')
       } else {
-        console.error('更新配置失败：', result.error)
+        console.error('[AIModelEditModal] Failed to update configuration:', result.error)
       }
     }
   } catch (error) {
-    console.error('保存配置失败：', error)
+    console.error('[AIModelEditModal] Failed to save configuration:', error)
   } finally {
     isSaving.value = false
   }
@@ -370,8 +368,6 @@ async function saveConfig() {
 function closeModal() {
   emit('update:open', false)
 }
-
-// English engineering note.
 
 watch(
   () => props.open,
@@ -410,11 +406,11 @@ watch(
 <template>
   <UModal :open="open" @update:open="emit('update:open', $event)">
     <template #content>
-      <div class="p-6">
+      <div class="xeno-ai-model-modal p-6">
         <h3 class="mb-4 text-lg font-semibold text-gray-900 dark:text-white">{{ modalTitle }}</h3>
 
         <!-- English UI note -->
-        <div v-if="mode === 'add'" class="mb-6">
+        <div v-if="mode === 'add'" class="xeno-ai-model-form mb-6">
           <div class="grid grid-cols-3 gap-2">
             <!-- English UI note -->
             <button
@@ -609,7 +605,7 @@ watch(
             </div>
 
             <!-- English UI note -->
-            <div class="flex items-center justify-between rounded-lg bg-gray-50 p-3 dark:bg-gray-800">
+            <div class="xeno-ai-model-panel flex items-center justify-between rounded-xl p-3">
               <div>
                 <p class="text-sm font-medium text-gray-700 dark:text-gray-300">
                   {{ t('settings.aiConfig.modal.disableThinking') }}
@@ -622,7 +618,7 @@ watch(
             </div>
 
             <!-- English UI note -->
-            <div class="flex items-center justify-between rounded-lg bg-gray-50 p-3 dark:bg-gray-800">
+            <div class="xeno-ai-model-panel flex items-center justify-between rounded-xl p-3">
               <div>
                 <p class="text-sm font-medium text-gray-700 dark:text-gray-300">
                   {{ t('settings.aiConfig.modal.isReasoningModel') }}
@@ -666,7 +662,7 @@ watch(
                 {{ t('settings.aiConfig.modal.advancedOptions') }}
               </button>
 
-              <div v-if="showAdvanced" class="mt-3 rounded-lg bg-gray-50 p-4 dark:bg-gray-800">
+              <div v-if="showAdvanced" class="xeno-ai-model-panel mt-3 rounded-xl p-4">
                 <ApiKeyInput
                   v-model="formData.apiKey"
                   :placeholder="t('settings.aiConfig.modal.apiKeyPlaceholderLocal')"
@@ -733,3 +729,28 @@ watch(
     </template>
   </UModal>
 </template>
+
+<style scoped>
+.xeno-ai-model-modal {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1.5rem;
+  background:
+    radial-gradient(circle at top right, rgba(139, 92, 246, 0.08), transparent 24%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.78), rgba(15, 23, 42, 0.64));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 18px 38px rgba(2, 6, 23, 0.18);
+  backdrop-filter: blur(18px);
+}
+
+.xeno-ai-model-form,
+.xeno-ai-model-panel {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.xeno-ai-model-panel {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.58), rgba(15, 23, 42, 0.44));
+}
+</style>

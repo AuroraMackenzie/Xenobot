@@ -8,7 +8,6 @@ import AlertTips from './AlertTips.vue'
 
 const { t, locale } = useI18n()
 
-// Emits
 const emit = defineEmits<{
   'config-changed': []
 }>()
@@ -20,17 +19,12 @@ const aiTips = computed(() => {
   return config.aiTips || {}
 })
 
-// ============ Store ============
-
 const llmStore = useLLMStore()
 const { configs, providers, activeConfigId, isLoading, isMaxConfigs } = storeToRefs(llmStore)
 
-// English engineering note.
 const showEditModal = ref(false)
 const editMode = ref<'add' | 'edit'>('add')
 const editingConfig = ref<AIServiceConfigDisplay | null>(null)
-
-// English engineering note.
 
 function openAddModal() {
   editMode.value = 'add'
@@ -56,10 +50,10 @@ async function deleteConfig(id: string) {
       await llmStore.refreshConfigs()
       emit('config-changed')
     } else {
-      console.error('删除配置失败：', result.error)
+      console.error('[AIModelConfigTab] Failed to delete configuration:', result.error)
     }
   } catch (error) {
-    console.error('删除配置失败：', error)
+    console.error('[AIModelConfigTab] Failed to delete configuration:', error)
   }
 }
 
@@ -81,8 +75,6 @@ function getProviderName(providerId: string): string {
   return llmStore.getProviderName(providerId)
 }
 
-// English engineering note.
-
 function refresh() {
   llmStore.refreshConfigs()
 }
@@ -90,7 +82,6 @@ function refresh() {
 defineExpose({ refresh })
 
 onMounted(() => {
-  // English engineering note.
   if (!llmStore.isInitialized) {
     llmStore.init()
   } else {
@@ -106,7 +97,7 @@ onMounted(() => {
   </div>
 
   <!-- English UI note -->
-  <div v-else class="space-y-4">
+  <div v-else class="xeno-ai-config-shell space-y-4">
     <!-- English UI note -->
     <h4 class="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
       <UIcon name="i-heroicons-sparkles" class="h-4 w-4 text-violet-500" />
@@ -118,7 +109,7 @@ onMounted(() => {
       <div
         v-for="config in configs"
         :key="config.id"
-        class="group flex cursor-pointer items-center justify-between rounded-lg border p-3 transition-colors"
+        class="xeno-ai-config-card group flex cursor-pointer items-center justify-between rounded-xl p-3 transition-colors"
         :class="[
           config.id === activeConfigId
             ? 'border-primary-300 bg-primary-50 dark:border-primary-700 dark:bg-primary-900/20'
@@ -177,7 +168,7 @@ onMounted(() => {
     <!-- English UI note -->
     <div
       v-else
-      class="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-200 py-12 dark:border-gray-700"
+      class="xeno-ai-config-empty flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 py-12 dark:border-gray-700"
     >
       <UIcon name="i-heroicons-sparkles" class="h-12 w-12 text-gray-300 dark:text-gray-600" />
       <p class="mt-4 text-sm text-gray-500 dark:text-gray-400">{{ t('settings.aiConfig.empty.title') }}</p>
@@ -202,3 +193,23 @@ onMounted(() => {
     @saved="handleModalSaved"
   />
 </template>
+
+<style scoped>
+.xeno-ai-config-shell {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1.5rem;
+  padding: 1rem;
+  background:
+    radial-gradient(circle at top right, rgba(139, 92, 246, 0.08), transparent 24%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.72), rgba(15, 23, 42, 0.6));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 18px 38px rgba(2, 6, 23, 0.18);
+  backdrop-filter: blur(18px);
+}
+
+.xeno-ai-config-card,
+.xeno-ai-config-empty {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+</style>

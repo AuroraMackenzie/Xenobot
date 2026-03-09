@@ -185,7 +185,7 @@ async function fetchSessions() {
       await checkCanGenerate()
     }
   } catch (error) {
-    console.error('查询会话失败:', error)
+    console.error('[BatchSummaryModal] Failed to query sessions:', error)
     sessions.value = []
   } finally {
     isLoading.value = false
@@ -201,7 +201,7 @@ async function checkCanGenerate() {
   try {
     canGenerateMap.value = await window.sessionApi.checkCanGenerateSummary(props.sessionId, noSummaryIds)
   } catch (error) {
-    console.error('检查会话摘要失败:', error)
+    console.error('[BatchSummaryModal] Failed to check summary availability:', error)
   } finally {
     isChecking.value = false
   }
@@ -339,19 +339,24 @@ function formatTs(ts: number) {
 </script>
 
 <template>
-  <UModal v-model:open="isOpen" :ui="{ overlay: 'z-[10001]', content: 'z-[10001]' }">
+  <UModal v-model:open="isOpen" :ui="{ overlay: 'z-[10001]', content: 'z-[10001] max-w-4xl' }">
     <template #content>
-      <UCard>
+      <UCard class="xeno-batch-summary-card">
         <template #header>
-          <div class="flex items-center justify-between">
-            <h3 class="text-lg font-semibold">{{ t('records.batchSummary.title', '批量生成摘要') }}</h3>
+          <div class="flex items-center justify-between gap-3">
+            <div class="min-w-0">
+              <h3 class="break-words text-lg font-semibold">{{ t('records.batchSummary.title') }}</h3>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {{ t('records.batchSummary.description') }}
+              </p>
+            </div>
             <UButton color="neutral" variant="ghost" icon="i-heroicons-x-mark" size="sm" @click="close" />
           </div>
         </template>
 
         <div class="space-y-4">
           <!-- English UI note -->
-          <div class="flex gap-2 border-b border-gray-200 dark:border-gray-700 pb-3">
+          <div class="flex flex-wrap gap-2 border-b border-gray-200 pb-3 dark:border-gray-700">
             <UButton
               :color="queryMode === 'range' ? 'primary' : 'neutral'"
               :variant="queryMode === 'range' ? 'solid' : 'ghost'"
@@ -359,7 +364,7 @@ function formatTs(ts: number) {
               :disabled="isGenerating"
               @click="queryMode = 'range'"
             >
-              {{ t('records.batchSummary.byRange', '按范围') }}
+              {{ t('records.batchSummary.byRange') }}
             </UButton>
             <UButton
               :color="queryMode === 'time' ? 'primary' : 'neutral'"
@@ -368,14 +373,14 @@ function formatTs(ts: number) {
               :disabled="isGenerating"
               @click="queryMode = 'time'"
             >
-              {{ t('records.batchSummary.byTime', '按时间') }}
+              {{ t('records.batchSummary.byTime') }}
             </UButton>
           </div>
 
           <!-- English UI note -->
-          <div v-if="queryMode === 'range'">
+          <div v-if="queryMode === 'range'" class="xeno-batch-summary-panel rounded-xl p-4">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              {{ t('records.batchSummary.selectRange', '选择范围') }}
+              {{ t('records.batchSummary.selectRange') }}
             </label>
             <div class="space-y-3">
               <div class="flex items-center gap-4">
@@ -387,28 +392,28 @@ function formatTs(ts: number) {
               <div class="text-xs text-gray-500 flex justify-between">
                 <span>{{ t('records.batchSummary.rangeStart', '最早') }}</span>
                 <span v-if="totalSessionCount > 0">
-                  {{ t('records.batchSummary.rangeInfo', '约') }}
+                  {{ t('records.batchSummary.rangeInfo') }}
                   {{ Math.ceil((totalSessionCount * rangePercent) / 100) }} / {{ totalSessionCount }}
-                  {{ t('records.batchSummary.sessionsUnit', '个会话') }}
+                  {{ t('records.batchSummary.sessionsUnit') }}
                 </span>
-                <span>{{ t('records.batchSummary.rangeEnd', '最近') }}</span>
+                <span>{{ t('records.batchSummary.rangeEnd') }}</span>
               </div>
             </div>
           </div>
 
           <!-- English UI note -->
-          <div v-else-if="queryMode === 'time'">
+          <div v-else-if="queryMode === 'time'" class="xeno-batch-summary-panel rounded-xl p-4">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              {{ t('records.batchSummary.timeRange', '选择时间范围') }}
+              {{ t('records.batchSummary.timeRange') }}
             </label>
             <div class="flex flex-wrap gap-2">
               <UButton
                 v-for="preset in [
-                  { key: 'today', label: t('records.batchSummary.today', '今天') },
-                  { key: 'yesterday', label: t('records.batchSummary.yesterday', '昨天') },
-                  { key: 'week', label: t('records.batchSummary.week', '最近7天') },
-                  { key: 'month', label: t('records.batchSummary.month', '最近30天') },
-                  { key: 'custom', label: t('records.batchSummary.custom', '自定义') },
+                  { key: 'today', label: t('records.batchSummary.today') },
+                  { key: 'yesterday', label: t('records.batchSummary.yesterday') },
+                  { key: 'week', label: t('records.batchSummary.week') },
+                  { key: 'month', label: t('records.batchSummary.month') },
+                  { key: 'custom', label: t('records.batchSummary.custom') },
                 ]"
                 :key="preset.key"
                 :color="selectedPreset === preset.key ? 'primary' : 'neutral'"
@@ -422,31 +427,31 @@ function formatTs(ts: number) {
             </div>
 
             <!-- English UI note -->
-            <div v-if="selectedPreset === 'custom'" class="mt-3 flex items-center gap-2">
-              <UInput v-model="customStartDate" type="date" :disabled="isGenerating" size="sm" />
+            <div v-if="selectedPreset === 'custom'" class="mt-3 flex flex-wrap items-center gap-2">
+              <UInput v-model="customStartDate" type="date" :disabled="isGenerating" size="sm" class="min-w-[12rem]" />
               <span class="text-gray-500">—</span>
-              <UInput v-model="customEndDate" type="date" :disabled="isGenerating" size="sm" />
+              <UInput v-model="customEndDate" type="date" :disabled="isGenerating" size="sm" class="min-w-[12rem]" />
             </div>
           </div>
 
           <!-- English UI note -->
-          <div v-if="!isLoading && !isChecking" class="text-sm text-gray-600 dark:text-gray-400">
+          <div v-if="!isLoading && !isChecking" class="xeno-batch-summary-panel rounded-xl p-4 text-sm text-gray-600 dark:text-gray-400">
             <template v-if="sessions.length > 0">
               <p>
-                {{ t('records.batchSummary.found', '找到') }} {{ sessions.length }}
-                {{ t('records.batchSummary.sessionsUnit', '个会话') }}
+                {{ t('records.batchSummary.found') }} {{ sessions.length }}
+                {{ t('records.batchSummary.sessionsUnit') }}
                 <template v-if="existingSummaryCount > 0 || tooFewMessagesCount > 0">
                   <span class="text-gray-500">
                     （
                     <template v-if="existingSummaryCount > 0">
                       <span class="text-green-600 dark:text-green-400">
-                        {{ existingSummaryCount }} {{ t('records.batchSummary.hasSummary', '个已有摘要') }}
+                        {{ existingSummaryCount }} {{ t('records.batchSummary.hasSummary') }}
                       </span>
                     </template>
                     <template v-if="existingSummaryCount > 0 && tooFewMessagesCount > 0">，</template>
                     <template v-if="tooFewMessagesCount > 0">
                       <span class="text-gray-400">
-                        {{ tooFewMessagesCount }} {{ t('records.batchSummary.tooFewMessages', '个消息太少') }}
+                        {{ tooFewMessagesCount }} {{ t('records.batchSummary.tooFewMessages') }}
                       </span>
                     </template>
                     ）
@@ -454,30 +459,30 @@ function formatTs(ts: number) {
                 </template>
               </p>
               <p v-if="pendingSessions.length > 0" class="mt-1 font-medium">
-                {{ t('records.batchSummary.pending', '待生成:') }} {{ pendingSessions.length }}
-                {{ t('records.batchSummary.unit', '个') }}
+                {{ t('records.batchSummary.pending') }} {{ pendingSessions.length }}
+                {{ t('records.batchSummary.unit') }}
               </p>
               <p v-else class="mt-1 text-gray-400">
-                {{ t('records.batchSummary.noPending', '没有可生成的会话') }}
+                {{ t('records.batchSummary.noPending') }}
               </p>
             </template>
             <p v-else class="text-gray-400">
-              {{ t('records.batchSummary.noSessions', '该时间范围内没有会话') }}
+              {{ t('records.batchSummary.noSessions') }}
             </p>
           </div>
-          <div v-else-if="isChecking" class="flex items-center gap-2 text-sm text-gray-500">
+          <div v-else-if="isChecking" class="xeno-batch-summary-panel flex items-center gap-2 rounded-xl p-4 text-sm text-gray-500">
             <UIcon name="i-heroicons-arrow-path" class="animate-spin" />
-            {{ t('records.batchSummary.checking', '检查中...') }}
+            {{ t('records.batchSummary.checking') }}
           </div>
-          <div v-else class="flex items-center gap-2 text-sm text-gray-500">
+          <div v-else class="xeno-batch-summary-panel flex items-center gap-2 rounded-xl p-4 text-sm text-gray-500">
             <UIcon name="i-heroicons-arrow-path" class="animate-spin" />
-            {{ t('records.batchSummary.loading', '加载中...') }}
+            {{ t('records.batchSummary.loading') }}
           </div>
 
           <!-- English UI note -->
           <div v-if="isGenerating || results.length > 0" class="space-y-2">
             <div class="flex items-center justify-between text-sm">
-              <span>{{ t('records.batchSummary.progress', '进度') }}</span>
+              <span>{{ t('records.batchSummary.progress') }}</span>
               <span>{{ currentIndex }} / {{ totalToGenerate || pendingSessions.length }}</span>
             </div>
             <!-- English UI note -->
@@ -490,12 +495,12 @@ function formatTs(ts: number) {
           <div
             v-if="results.length > 0"
             ref="resultsContainer"
-            class="max-h-64 overflow-y-auto rounded border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50"
+            class="xeno-batch-summary-results max-h-64 overflow-y-auto rounded"
           >
             <div
               v-for="result in results"
               :key="result.id"
-              class="flex flex-col gap-1 px-3 py-2 text-sm border-b border-gray-200 dark:border-gray-700 last:border-b-0"
+              class="flex flex-col gap-1 border-b border-gray-200 px-3 py-2 text-sm last:border-b-0 dark:border-gray-700"
             >
               <!-- English UI note -->
               <div class="flex items-center gap-2">
@@ -514,7 +519,7 @@ function formatTs(ts: number) {
                     'text-red-500': result.status === 'failed',
                   }"
                 />
-                <span class="flex-1 font-medium">{{ t('records.batchSummary.session', '会话') }} #{{ result.id }}</span>
+                <span class="flex-1 font-medium">{{ t('records.batchSummary.session') }} #{{ result.id }}</span>
                 <span
                   class="flex-shrink-0 text-xs"
                   :class="{
@@ -525,22 +530,21 @@ function formatTs(ts: number) {
                 >
                   {{
                     result.status === 'success'
-                      ? t('records.batchSummary.statusSuccess', '成功')
+                      ? t('records.batchSummary.statusSuccess')
                       : result.status === 'skipped'
-                        ? t('records.batchSummary.statusSkipped', '跳过')
-                        : t('records.batchSummary.statusFailed', '失败')
+                        ? t('records.batchSummary.statusSkipped')
+                        : t('records.batchSummary.statusFailed')
                   }}
                 </span>
               </div>
-              <!-- English UI note -->
-              <div v-if="result.summary" class="pl-6 text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
+              <div v-if="result.summary" class="break-words pl-6 text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
                 {{ result.summary }}
               </div>
-              <div v-else-if="result.status === 'failed' && result.message" class="pl-6 text-xs text-red-500">
+              <div v-else-if="result.status === 'failed' && result.message" class="break-words pl-6 text-xs text-red-500">
                 {{ result.message }}
               </div>
               <div v-else-if="result.status === 'skipped'" class="pl-6 text-xs text-gray-400 italic">
-                {{ t('records.batchSummary.tooFewMessages', '消息数量太少') }}
+                {{ t('records.batchSummary.tooFewMessages') }}
               </div>
             </div>
           </div>
@@ -549,15 +553,15 @@ function formatTs(ts: number) {
           <div v-if="!isGenerating && results.length > 0" class="flex items-center gap-4 text-sm">
             <span class="text-green-600 dark:text-green-400">
               <UIcon name="i-heroicons-check-circle" class="mr-1" />
-              {{ t('records.batchSummary.success', '成功:') }} {{ stats.success }}
+              {{ t('records.batchSummary.success') }} {{ stats.success }}
             </span>
             <span v-if="stats.failed > 0" class="text-red-600 dark:text-red-400">
               <UIcon name="i-heroicons-x-circle" class="mr-1" />
-              {{ t('records.batchSummary.failed', '失败:') }} {{ stats.failed }}
+              {{ t('records.batchSummary.failed') }} {{ stats.failed }}
             </span>
             <span v-if="stats.skipped > 0" class="text-gray-500">
               <UIcon name="i-heroicons-minus-circle" class="mr-1" />
-              {{ t('records.batchSummary.skipped', '跳过:') }} {{ stats.skipped }}
+              {{ t('records.batchSummary.skipped') }} {{ stats.skipped }}
             </span>
           </div>
         </div>
@@ -573,10 +577,10 @@ function formatTs(ts: number) {
               :disabled="pendingSessions.length === 0 || isLoading"
               @click="startGenerate"
             >
-              {{ t('records.batchSummary.start', '开始生成') }}
+              {{ t('records.batchSummary.start') }}
             </UButton>
             <UButton v-else color="error" @click="stopGenerate">
-              {{ t('records.batchSummary.stop', '停止') }}
+              {{ t('records.batchSummary.stop') }}
             </UButton>
           </div>
         </template>
@@ -584,3 +588,33 @@ function formatTs(ts: number) {
     </template>
   </UModal>
 </template>
+
+<style scoped>
+.xeno-batch-summary-card {
+  border: 1px solid var(--xeno-border-soft);
+  border-radius: 1.6rem;
+  background:
+    radial-gradient(circle at top left, rgba(84, 214, 255, 0.12), transparent 24%),
+    radial-gradient(circle at top right, rgba(255, 122, 172, 0.08), transparent 18%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 22%),
+    rgba(7, 18, 29, 0.95);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 30px 72px rgba(2, 8, 16, 0.36);
+  backdrop-filter: blur(22px) saturate(134%);
+}
+
+.xeno-batch-summary-panel {
+  border: 1px solid rgba(139, 166, 189, 0.14);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 120%),
+    rgba(6, 16, 24, 0.54);
+}
+
+.xeno-batch-summary-results {
+  border: 1px solid rgba(139, 166, 189, 0.14);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 120%),
+    rgba(6, 16, 24, 0.48);
+}
+</style>

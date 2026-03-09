@@ -74,7 +74,7 @@ async function loadMembers() {
     total.value = result.total
     totalPages.value = result.totalPages
   } catch (error) {
-    console.error('加载成员列表失败:', error)
+    console.error('[CircleSpaceMemberList] Failed to load paginated members:', error)
   } finally {
     isLoading.value = false
   }
@@ -86,7 +86,7 @@ async function loadAllMembers() {
   try {
     allMembers.value = await window.chatApi.getMembers(props.sessionId)
   } catch (error) {
-    console.error('加载所有成员失败:', error)
+    console.error('[CircleSpaceMemberList] Failed to load all members:', error)
   }
 }
 
@@ -114,7 +114,7 @@ async function updateAliases(member: MemberWithStats, newAliases: string[]) {
       }
     }
   } catch (error) {
-    console.error('保存别名失败:', error)
+    console.error('[CircleSpaceMemberList] Failed to save aliases:', error)
   } finally {
     savingAliasesId.value = null
   }
@@ -145,7 +145,7 @@ async function confirmDelete() {
       emit('data-changed')
     }
   } catch (error) {
-    console.error('删除成员失败:', error)
+    console.error('[CircleSpaceMemberList] Failed to delete member:', error)
   } finally {
     isDeleting.value = false
     deletingMember.value = null
@@ -216,7 +216,7 @@ onMounted(() => {
         v-model="searchQuery"
         :placeholder="t('members.list.searchPlaceholder')"
         icon="i-heroicons-magnifying-glass"
-        class="w-100"
+        class="max-w-xl"
       >
         <template v-if="searchQuery" #trailing>
           <UButton icon="i-heroicons-x-mark" variant="link" color="neutral" size="xs" @click="searchQuery = ''" />
@@ -225,7 +225,7 @@ onMounted(() => {
     </div>
 
     <!-- English UI note -->
-    <div class="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
+    <div class="xeno-member-ledger rounded-2xl">
       <!-- English UI note -->
       <div v-if="isLoading" class="flex h-60 items-center justify-center">
         <UIcon name="i-heroicons-arrow-path" class="h-8 w-8 animate-spin text-pink-500" />
@@ -241,13 +241,13 @@ onMounted(() => {
 
       <!-- English UI note -->
       <div v-else>
-        <div class="max-h-[500px] overflow-y-auto">
-          <table class="w-full">
-            <thead class="sticky top-0 bg-gray-50 dark:bg-gray-800">
+        <div class="max-h-[500px] overflow-auto">
+          <table class="min-w-[860px] w-full">
+            <thead class="sticky top-0 bg-slate-950/90 backdrop-blur-md">
               <tr class="text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
-                <th class="px-4 py-4">{{ t('members.list.table.accountName') }}</th>
-                <th class="px-4 py-4">{{ t('members.list.table.groupNickname') }}</th>
-                <th class="px-4 py-4">
+                <th class="px-4 py-4 min-w-[240px]">{{ t('members.list.table.accountName') }}</th>
+                <th class="px-4 py-4 min-w-[180px]">{{ t('members.list.table.groupNickname') }}</th>
+                <th class="px-4 py-4 min-w-[120px]">
                   <button
                     class="flex items-center gap-1.5 hover:text-gray-700 dark:hover:text-gray-200"
                     @click="toggleSort"
@@ -259,16 +259,14 @@ onMounted(() => {
                     />
                   </button>
                 </th>
-                <th class="px-4 py-4 w-64">{{ t('members.list.table.customAlias') }}</th>
-                <th class="px-4 py-4 text-right">{{ t('members.list.table.actions') }}</th>
+                <th class="px-4 py-4 min-w-[300px]">{{ t('members.list.table.customAlias') }}</th>
+                <th class="px-4 py-4 min-w-[96px] text-right">{{ t('members.list.table.actions') }}</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-              <tr v-for="member in members" :key="member.id" class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                <!-- English UI note -->
+              <tr v-for="member in members" :key="member.id" class="hover:bg-white/5">
                 <td class="px-4 py-4">
-                  <div class="flex items-center gap-2">
-                    <!-- English UI note -->
+                  <div class="flex items-center gap-2 min-w-0">
                     <img
                       v-if="member.avatar"
                       :src="member.avatar"
@@ -281,47 +279,47 @@ onMounted(() => {
                     >
                       {{ getFirstChar(member) }}
                     </div>
-                    <div>
-                      <span class="text-sm font-medium text-gray-900 dark:text-white">
+                    <div class="min-w-0">
+                      <span class="block truncate text-sm font-medium text-gray-900 dark:text-white">
                         {{ member.accountName || '-' }}
                       </span>
-                      <span class="ml-1 text-sm text-gray-500 dark:text-gray-400">({{ member.platformId }})</span>
+                      <span class="block truncate text-sm text-gray-500 dark:text-gray-400">
+                        ({{ member.platformId }})
+                      </span>
                     </div>
                   </div>
                 </td>
 
-                <!-- English UI note -->
                 <td class="px-4 py-4">
-                  <span v-if="member.groupNickname" class="text-sm font-medium text-gray-900 dark:text-white">
+                  <span
+                    v-if="member.groupNickname"
+                    class="block break-words text-sm font-medium text-gray-900 dark:text-white"
+                  >
                     {{ member.groupNickname }}
                   </span>
                   <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
                 </td>
 
-                <!-- English UI note -->
                 <td class="px-4 py-4">
                   <span class="text-sm font-semibold text-gray-900 dark:text-white">
                     {{ member.messageCount.toLocaleString() }}
                   </span>
                 </td>
 
-                <!-- English UI note -->
                 <td class="px-4 py-4">
-                  <div class="max-w-xs">
+                  <div class="relative min-w-0">
                     <UInputTags
                       :model-value="member.aliases"
                       :placeholder="t('members.list.aliasPlaceholder')"
-                      class="w-80"
+                      class="w-full"
                       @update:model-value="(val) => updateAliases(member, val)"
                     />
-                    <!-- English UI note -->
                     <div v-if="savingAliasesId === member.id" class="absolute right-2 top-1/2 -translate-y-1/2">
                       <UIcon name="i-heroicons-arrow-path" class="h-4 w-4 animate-spin text-pink-500" />
                     </div>
                   </div>
                 </td>
 
-                <!-- English UI note -->
                 <td class="px-4 py-4 text-right">
                   <UButton :label="t('members.list.delete')" size="xs" @click="showDeleteConfirm(member)" />
                 </td>
@@ -333,7 +331,7 @@ onMounted(() => {
         <!-- English UI note -->
         <div
           v-if="totalPages > 1"
-          class="flex items-center justify-between border-t border-gray-200 px-6 py-4 dark:border-gray-700"
+          class="flex items-center justify-between border-t border-white/10 px-6 py-4"
         >
           <p class="text-sm text-gray-500 dark:text-gray-400">
             {{
@@ -368,7 +366,7 @@ onMounted(() => {
     </div>
 
     <!-- English UI note -->
-    <div class="mt-4 flex items-start gap-3 rounded-xl bg-amber-50 p-4 dark:bg-amber-900/20">
+    <div class="xeno-member-warning mt-4 flex items-start gap-3 rounded-2xl p-4">
       <UIcon name="i-heroicons-exclamation-triangle" class="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
       <div>
         <p class="text-sm font-medium text-amber-800 dark:text-amber-200">
@@ -380,7 +378,7 @@ onMounted(() => {
     <!-- English UI note -->
     <UModal :open="!!deletingMember" :ui="{ content: 'max-w-sm' }" @update:open="deletingMember = null">
       <template #content>
-        <div class="p-6 text-center">
+        <div class="xeno-delete-card p-6 text-center">
           <div
             class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30"
           >
@@ -406,3 +404,23 @@ onMounted(() => {
     </UModal>
   </div>
 </template>
+
+<style scoped>
+.xeno-member-ledger,
+.xeno-member-warning,
+.xeno-delete-card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.08), transparent 24%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.74), rgba(15, 23, 42, 0.62));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 18px 38px rgba(2, 6, 23, 0.18);
+  backdrop-filter: blur(18px);
+}
+
+.xeno-member-warning {
+  background:
+    linear-gradient(180deg, rgba(217, 119, 6, 0.14), rgba(15, 23, 42, 0.62));
+}
+</style>

@@ -275,19 +275,19 @@ defineExpose({ open, openWithData, close, fetchChangelogs, getLatestVersion })
 </script>
 
 <template>
-  <UModal :open="showModal" :ui="{ content: 'max-w-2xl' }" @update:open="showModal = $event">
+  <UModal :open="showModal" :ui="{ content: 'max-w-3xl' }" @update:open="showModal = $event">
     <template #content>
-      <div class="flex max-h-[80vh] flex-col">
+      <div class="xeno-changelog-shell flex max-h-[80vh] flex-col">
         <!-- Header -->
-        <div class="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-700">
+        <div class="xeno-changelog-header flex items-center justify-between px-6 py-4">
           <div class="flex items-center gap-3">
             <div
-              class="flex h-10 w-10 items-center justify-center rounded-xl bg-linear-to-br from-pink-500 to-pink-600"
+              class="xeno-changelog-icon flex h-10 w-10 items-center justify-center rounded-xl"
             >
               <UIcon name="i-heroicons-document-text" class="h-5 w-5 text-white" />
             </div>
-            <div>
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+            <div class="min-w-0">
+              <h2 class="break-words text-lg font-semibold text-gray-900 dark:text-white">
                 {{ t('home.changelog.title') }}
               </h2>
               <p class="text-sm text-gray-500 dark:text-gray-400">
@@ -338,11 +338,11 @@ defineExpose({ open, openWithData, close, fetchChangelogs, getLatestVersion })
                 </div>
 
                 <!-- Version info -->
-                <div class="flex-1 pt-0.5">
+                <div class="min-w-0 flex-1 pt-0.5">
                   <!-- Clickable header -->
                   <div class="cursor-pointer select-none" @click="toggleVersion(log.version, index)">
-                    <div class="flex items-center gap-3">
-                      <h3 class="text-base font-bold text-gray-900 dark:text-white">v{{ log.version }}</h3>
+                    <div class="flex flex-wrap items-center gap-3">
+                      <h3 class="break-all text-base font-bold text-gray-900 dark:text-white">v{{ log.version }}</h3>
                       <span
                         v-if="index === 0"
                         class="rounded-full bg-pink-100 px-2 py-0.5 text-xs font-medium text-pink-600 dark:bg-pink-900/30 dark:text-pink-400"
@@ -367,7 +367,7 @@ defineExpose({ open, openWithData, close, fetchChangelogs, getLatestVersion })
                       {{ formatDate(log.date) }}
                     </p>
                     <p
-                      class="mt-2 text-sm font-medium text-gray-700 dark:text-gray-300"
+                      class="mt-2 break-words text-sm font-medium text-gray-700 dark:text-gray-300"
                       v-html="sanitizeSummary(log.summary, SUMMARY_SANITIZE_OPTIONS)"
                     />
                   </div>
@@ -377,7 +377,7 @@ defineExpose({ open, openWithData, close, fetchChangelogs, getLatestVersion })
                     <div
                       v-for="change in log.changes"
                       :key="change.type"
-                      class="rounded-lg border border-gray-100 bg-gray-50/50 p-3 dark:border-gray-700/50 dark:bg-gray-800/30"
+                      class="xeno-changelog-block rounded-lg p-3"
                     >
                       <!-- Change type header -->
                       <div class="mb-2 flex items-center gap-2">
@@ -400,7 +400,7 @@ defineExpose({ open, openWithData, close, fetchChangelogs, getLatestVersion })
                         <li
                           v-for="(item, idx) in change.items"
                           :key="idx"
-                          class="relative text-sm text-gray-600 dark:text-gray-400"
+                          class="relative break-words text-sm text-gray-600 dark:text-gray-400"
                         >
                           <span class="absolute -left-4 top-2 h-1.5 w-1.5 rounded-full bg-gray-300 dark:bg-gray-600" />
                           {{ item }}
@@ -415,7 +415,7 @@ defineExpose({ open, openWithData, close, fetchChangelogs, getLatestVersion })
         </div>
 
         <!-- Footer -->
-        <div class="border-t border-gray-200 px-6 py-4 dark:border-gray-700">
+        <div class="xeno-changelog-footer px-6 py-4">
           <div class="flex items-center justify-between">
             <p v-if="changelogs.length > 0" class="text-sm text-gray-500 dark:text-gray-400">
               {{ t('home.changelog.total', { count: changelogs.length }) }}
@@ -430,3 +430,41 @@ defineExpose({ open, openWithData, close, fetchChangelogs, getLatestVersion })
     </template>
   </UModal>
 </template>
+
+<style scoped>
+.xeno-changelog-shell {
+  border: 1px solid var(--xeno-border-soft);
+  border-radius: 1.6rem;
+  background:
+    radial-gradient(circle at top left, rgba(255, 122, 172, 0.14), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 24%),
+    rgba(7, 18, 29, 0.94);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 32px 74px rgba(2, 8, 16, 0.36);
+  backdrop-filter: blur(22px) saturate(132%);
+}
+
+.xeno-changelog-header {
+  border-bottom: 1px solid rgba(139, 166, 189, 0.16);
+}
+
+.xeno-changelog-icon {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 120%),
+    linear-gradient(135deg, rgba(255, 122, 172, 0.92), rgba(219, 39, 119, 0.9));
+  border: 1px solid rgba(255, 163, 201, 0.22);
+  box-shadow: 0 14px 32px rgba(21, 7, 15, 0.24);
+}
+
+.xeno-changelog-block {
+  border: 1px solid rgba(139, 166, 189, 0.14);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 120%),
+    rgba(7, 17, 26, 0.58);
+}
+
+.xeno-changelog-footer {
+  border-top: 1px solid rgba(139, 166, 189, 0.16);
+}
+</style>

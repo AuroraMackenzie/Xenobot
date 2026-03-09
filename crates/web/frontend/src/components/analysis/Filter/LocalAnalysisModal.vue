@@ -1,15 +1,9 @@
 <script setup lang="ts">
-/**
- * English note.
- * English note.
- */
-
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useSessionStore } from '@/stores/session'
 import MarkdownIt from 'markdown-it'
 
-// English engineering note.
 const md = new MarkdownIt({
   html: false,
   breaks: true,
@@ -20,7 +14,6 @@ const md = new MarkdownIt({
 const { t } = useI18n()
 const sessionStore = useSessionStore()
 
-// English engineering note.
 interface FilterMessage {
   id: number
   senderName: string
@@ -56,19 +49,15 @@ const props = defineProps<{
 
 const open = defineModel<boolean>('open', { default: false })
 
-// English engineering note.
 const DATA_TOO_LARGE_THRESHOLD = 5000
 
-// English engineering note.
 const isDataTooLarge = computed(() => {
   if (!props.filterResult) return false
   return props.filterResult.stats.totalMessages > DATA_TOO_LARGE_THRESHOLD
 })
 
-// English engineering note.
 const analysisMode = ref<'preset' | 'custom'>('preset')
 
-// English engineering note.
 const presetOptions = [
   { id: 'summary', label: '总结对话要点', prompt: '请总结这段对话的主要内容和关键要点。' },
   { id: 'sentiment', label: '情感分析', prompt: '请分析这段对话中参与者的情感变化和整体氛围。' },
@@ -79,25 +68,21 @@ const presetOptions = [
 const selectedPreset = ref(presetOptions[0].id)
 const customPrompt = ref('')
 
-// English engineering note.
 const editablePresetPrompt = ref(presetOptions[0].prompt)
 
-// English engineering note.
 const isAnalyzing = ref(false)
 const analysisResult = ref('')
 const analysisError = ref('')
 
-// English engineering note.
 let currentRequestId: string | null = null
 
-// English engineering note.
 const contextContent = computed(() => {
   if (!props.filterResult) return ''
 
   let content = ''
   for (const block of props.filterResult.blocks) {
     const startTime = new Date(block.startTs * 1000).toLocaleString()
-    content += `\n--- 对话段落 (${startTime}) ---\n`
+    content += `\n--- ${t('analysis.filter.blockTitle', { index: startTime })} ---\n`
 
     for (const msg of block.messages) {
       const time = new Date(msg.timestamp * 1000).toLocaleTimeString()
@@ -107,7 +92,6 @@ const contextContent = computed(() => {
   return content
 })
 
-// English engineering note.
 const userQuestion = computed(() => {
   if (analysisMode.value === 'preset') {
     return editablePresetPrompt.value
@@ -115,7 +99,6 @@ const userQuestion = computed(() => {
   return customPrompt.value
 })
 
-// English engineering note.
 async function executeAnalysis() {
   if (!props.filterResult || !userQuestion.value) return
 
@@ -124,15 +107,13 @@ async function executeAnalysis() {
   analysisError.value = ''
 
   try {
-    // English engineering note.
-    const fullMessage = `以下是一段聊天记录，请根据用户的问题进行分析：
+    const fullMessage = `${t('analysis.filter.analysisPromptPrefix')}
 
 ${contextContent.value}
 
 ---
-用户问题：${userQuestion.value}`
+${t('analysis.filter.analysisPromptQuestion')}${userQuestion.value}`
 
-    // English engineering note.
     const context = {
       sessionId: sessionStore.currentSessionId || '',
     }
@@ -144,10 +125,10 @@ ${contextContent.value}
         if (chunk.type === 'content' && chunk.content) {
           analysisResult.value += chunk.content
         } else if (chunk.type === 'error') {
-          analysisError.value = chunk.error || '分析出错'
+          analysisError.value = chunk.error || t('analysis.filter.analysisRuntimeError')
         }
       },
-      [], // English engineering note.
+      [],
       sessionStore.currentSession?.type === 'group' ? 'group' : 'private'
     )
 
@@ -159,7 +140,7 @@ ${contextContent.value}
       analysisError.value = result.error
     }
   } catch (error) {
-    console.error('分析失败:', error)
+    console.error('[LocalAnalysisModal] Failed to execute analysis:', error)
     analysisError.value = String(error)
   } finally {
     isAnalyzing.value = false
@@ -167,29 +148,26 @@ ${contextContent.value}
   }
 }
 
-// English engineering note.
 async function abortAnalysis() {
   if (currentRequestId) {
     try {
       await window.agentApi.abort(currentRequestId)
     } catch (error) {
-      console.error('中止失败:', error)
+      console.error('[LocalAnalysisModal] Failed to abort analysis:', error)
     }
     isAnalyzing.value = false
     currentRequestId = null
   }
 }
 
-// English engineering note.
 async function copyResult() {
   try {
     await navigator.clipboard.writeText(analysisResult.value)
   } catch (error) {
-    console.error('复制失败:', error)
+    console.error('[LocalAnalysisModal] Failed to copy analysis result:', error)
   }
 }
 
-// English engineering note.
 watch(selectedPreset, (newPresetId) => {
   const preset = presetOptions.find((p) => p.id === newPresetId)
   if (preset) {
@@ -197,7 +175,6 @@ watch(selectedPreset, (newPresetId) => {
   }
 })
 
-// English engineering note.
 watch(open, (val) => {
   if (!val) {
     analysisResult.value = ''
@@ -206,7 +183,6 @@ watch(open, (val) => {
       abortAnalysis()
     }
   } else {
-    // English engineering note.
     editablePresetPrompt.value = presetOptions.find((p) => p.id === selectedPreset.value)?.prompt || ''
   }
 })
@@ -215,7 +191,7 @@ watch(open, (val) => {
 <template>
   <UModal v-model:open="open" :ui="{ width: 'max-w-3xl' }">
     <template #content>
-      <UCard>
+      <UCard class="xeno-local-analysis-card">
         <template #header>
           <div class="flex items-center justify-between">
             <h3 class="text-lg font-semibold">{{ t('analysis.filter.localAnalysisTitle') }}</h3>
@@ -224,19 +200,17 @@ watch(open, (val) => {
         </template>
 
         <div class="space-y-4">
-          <!-- English UI note -->
-          <div class="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-sm">
+          <div class="xeno-local-analysis-panel rounded-xl p-3 text-sm">
             <div class="flex items-center gap-4 text-gray-600 dark:text-gray-400">
-              <span>{{ filterResult?.blocks.length || 0 }} 个对话块</span>
-              <span>{{ filterResult?.stats.totalMessages || 0 }} 条消息</span>
-              <span>{{ filterResult?.stats.totalChars.toLocaleString() || 0 }} 字符</span>
+              <span>{{ filterResult?.blocks.length || 0 }} {{ t('analysis.filter.stats.blocks') }}</span>
+              <span>{{ filterResult?.stats.totalMessages || 0 }} {{ t('analysis.filter.stats.messages') }}</span>
+              <span>{{ filterResult?.stats.totalChars.toLocaleString() || 0 }} {{ t('analysis.filter.stats.chars') }}</span>
             </div>
           </div>
 
-          <!-- English UI note -->
           <div
             v-if="isDataTooLarge"
-            class="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg"
+            class="xeno-local-analysis-alert rounded-xl p-3"
           >
             <div class="flex items-start gap-2">
               <UIcon name="i-heroicons-exclamation-triangle" class="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
@@ -251,8 +225,7 @@ watch(open, (val) => {
             </div>
           </div>
 
-          <!-- English UI note -->
-          <div class="flex items-center gap-1 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg w-fit">
+          <div class="xeno-local-analysis-mode flex w-fit items-center gap-1 rounded-lg p-1">
             <button
               class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
               :class="
@@ -277,7 +250,6 @@ watch(open, (val) => {
             </button>
           </div>
 
-          <!-- English UI note -->
           <div v-if="analysisMode === 'preset'" class="space-y-3">
             <div class="grid grid-cols-2 gap-2">
               <label
@@ -295,8 +267,7 @@ watch(open, (val) => {
               </label>
             </div>
 
-            <!-- English UI note -->
-            <div class="space-y-1">
+            <div class="xeno-local-analysis-panel space-y-1 rounded-xl p-3">
               <label class="text-xs text-gray-500 dark:text-gray-400">
                 {{ t('analysis.filter.editablePromptLabel') }}
               </label>
@@ -314,7 +285,6 @@ watch(open, (val) => {
             />
           </div>
 
-          <!-- English UI note -->
           <div class="flex justify-end gap-2">
             <UButton v-if="isAnalyzing" color="red" variant="outline" @click="abortAnalysis">
               {{ t('common.cancel') }}
@@ -330,8 +300,7 @@ watch(open, (val) => {
             </UButton>
           </div>
 
-          <!-- English UI note -->
-          <div v-if="analysisResult || analysisError" class="border-t border-gray-200 dark:border-gray-700 pt-4">
+          <div v-if="analysisResult || analysisError" class="border-t border-gray-200 pt-4 dark:border-gray-700">
             <div class="flex items-center justify-between mb-2">
               <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">
                 {{ t('analysis.filter.analysisResult') }}
@@ -342,18 +311,16 @@ watch(open, (val) => {
               </UButton>
             </div>
 
-            <!-- English UI note -->
             <div
               v-if="analysisError"
-              class="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg text-sm"
+              class="xeno-local-analysis-alert rounded-xl p-3 text-sm text-red-600 dark:text-red-400"
             >
               {{ analysisError }}
             </div>
 
-            <!-- English UI note -->
             <div
               v-else-if="analysisResult"
-              class="prose prose-sm dark:prose-invert max-w-none p-4 bg-gray-50 dark:bg-gray-800 rounded-lg max-h-80 overflow-y-auto"
+              class="xeno-local-analysis-result prose prose-sm dark:prose-invert max-w-none max-h-80 overflow-y-auto rounded-xl p-4"
               v-html="md.render(analysisResult)"
             />
           </div>
@@ -362,3 +329,34 @@ watch(open, (val) => {
     </template>
   </UModal>
 </template>
+
+<style scoped>
+.xeno-local-analysis-card {
+  border: 1px solid var(--xeno-border-soft);
+  border-radius: 1.6rem;
+  background:
+    radial-gradient(circle at top left, rgba(84, 214, 255, 0.12), transparent 24%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 22%),
+    rgba(7, 18, 29, 0.95);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 30px 72px rgba(2, 8, 16, 0.36);
+  backdrop-filter: blur(22px) saturate(134%);
+}
+
+.xeno-local-analysis-panel,
+.xeno-local-analysis-result,
+.xeno-local-analysis-mode {
+  border: 1px solid rgba(139, 166, 189, 0.14);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 120%),
+    rgba(6, 16, 24, 0.48);
+}
+
+.xeno-local-analysis-alert {
+  border: 1px solid rgba(248, 113, 113, 0.18);
+  background:
+    linear-gradient(180deg, rgba(248, 113, 113, 0.08), transparent 120%),
+    rgba(40, 10, 16, 0.38);
+}
+</style>

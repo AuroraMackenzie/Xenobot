@@ -86,7 +86,7 @@ function close() {
   -webkit-app-region: drag;
 }
 
-/* English note.
+/* Platform spacer reserved for native traffic lights. */
 .traffic-light-spacer {
   width: 70px;
   height: 100%;
@@ -94,20 +94,20 @@ function close() {
   -webkit-app-region: no-drag;
 }
 
-/* English note.
+/* Stretch region keeps the window draggable outside controls. */
 .drag-region {
   flex: 1;
   height: 100%;
 }
 
-/* English note.
+/* Desktop window controls are shown on non-mac, non-windows shells. */
 .window-controls {
   display: flex;
   height: 100%;
   -webkit-app-region: no-drag;
 }
 
-/* English note.
+/* Shared control button surface. */
 .control-btn {
   width: 46px;
   height: 100%;
@@ -125,7 +125,7 @@ function close() {
   background-color: rgba(0, 0, 0, 0.1);
 }
 
-/* English note.
+/* Dark mode keeps contrast without adding noisy chrome. */
 :global(.dark) .control-btn {
   color: var(--color-gray-400);
 }
@@ -134,7 +134,7 @@ function close() {
   background-color: rgba(255, 255, 255, 0.1);
 }
 
-/* English note.
+/* Close action uses the destructive hover color. */
 .control-btn-close:hover {
   background-color: #e81123;
   color: white;
