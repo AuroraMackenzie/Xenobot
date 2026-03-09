@@ -1,8 +1,8 @@
 # Xenobot
 
-### Don’t Lose Memories, Xenobot Keeps Them
+### Do Not Lose Memories, Xenobot Keeps Them
 <br>
-<br>
+
 ## English
 
 ### Scope
