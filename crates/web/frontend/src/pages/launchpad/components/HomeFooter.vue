@@ -1,115 +1,120 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
+import { ref, computed, onMounted, watch } from "vue";
+import { useI18n } from "vue-i18n";
 
 const emit = defineEmits<{
-  openChangelog: []
-  openTerms: []
-}>()
+  openChangelog: [];
+  openTerms: [];
+}>();
 
-const { t, locale } = useI18n()
+const { t, locale } = useI18n();
 
 // English engineering note.
-const CONFIG_BASE_URL = 'https://xenobot.app'
+const CONFIG_BASE_URL = "https://xenobot.app";
 const configUrl = computed(() => {
-  const langPath = locale.value === 'zh-CN' ? 'cn' : 'en'
-  return `${CONFIG_BASE_URL}/${langPath}/config.json`
-})
+  const langPath = locale.value === "zh-CN" ? "cn" : "en";
+  return `${CONFIG_BASE_URL}/${langPath}/config.json`;
+});
 
 // English engineering note.
-const storageKey = computed(() => `xenobot_app_config_${locale.value}`)
+const storageKey = computed(() => `xenobot_app_config_${locale.value}`);
 
 // English engineering note.
 interface FooterLink {
-  id: string
-  icon: string
-  title: string
-  url?: string
-  action?: 'changelog'
+  id: string;
+  icon: string;
+  title: string;
+  url?: string;
+  action?: "changelog" | "terms";
 }
 
 // English engineering note.
 function getDefaultLinks(): FooterLink[] {
-  const isChinese = locale.value === 'zh-CN'
+  const isChinese = locale.value === "zh-CN";
   return [
     {
-      id: 'website',
-      icon: 'i-heroicons-globe-alt',
-      title: isChinese ? '官网' : 'Website',
-      url: isChinese ? 'https://xenobot.app/cn/' : 'https://xenobot.app/en/',
+      id: "website",
+      icon: "i-heroicons-globe-alt",
+      title: isChinese ? "官网" : "Website",
+      url: isChinese ? "https://xenobot.app/cn/" : "https://xenobot.app/en/",
     },
     {
-      id: 'github',
-      icon: 'i-simple-icons-github',
-      title: 'Github',
-      url: 'https://github.com/xenobot-labs/Xenobot',
+      id: "github",
+      icon: "i-simple-icons-github",
+      title: "Github",
+      url: "https://github.com/xenobot-labs/Xenobot",
     },
     {
-      id: 'terms',
-      icon: 'i-heroicons-document-text',
-      title: isChinese ? '使用条款' : 'Terms of Use',
-      action: 'terms',
+      id: "terms",
+      icon: "i-heroicons-document-text",
+      title: isChinese ? "使用条款" : "Terms of Use",
+      action: "terms",
     },
     {
-      id: 'changelog',
-      icon: 'i-heroicons-document-text',
-      title: t('home.changelog.title'),
-      action: 'changelog',
+      id: "changelog",
+      icon: "i-heroicons-document-text",
+      title: t("home.changelog.title"),
+      action: "changelog",
     },
-  ]
+  ];
 }
 
-const footerLinks = ref<FooterLink[]>(getDefaultLinks())
+const footerLinks = ref<FooterLink[]>(getDefaultLinks());
 
 // English engineering note.
 interface SocialConfig {
-  xiaohongshu?: { show: boolean; url: string }
-  x?: { show: boolean; url: string }
+  xiaohongshu?: { show: boolean; url: string };
+  x?: { show: boolean; url: string };
 }
 
-const socialConfig = ref<SocialConfig>({})
+const socialConfig = ref<SocialConfig>({});
 
 // English engineering note.
 const socialLink = computed(() => {
-  const isChinese = locale.value === 'zh-CN'
+  const isChinese = locale.value === "zh-CN";
 
   if (isChinese && socialConfig.value.xiaohongshu?.show) {
     return {
-      title: '小红书',
+      title: "小红书",
       url: socialConfig.value.xiaohongshu.url,
-    }
+    };
   }
 
   if (!isChinese && socialConfig.value.x?.show) {
     return {
-      title: 'X',
+      title: "X",
       url: socialConfig.value.x.url,
-    }
+    };
   }
 
-  return null
-})
+  return null;
+});
 
 /**
  * English note.
  */
 function getCachedConfigObject(): Record<string, unknown> | null {
-  const raw = localStorage.getItem(storageKey.value) || localStorage.getItem('xenobot_app_config')
-  if (!raw) return null
-  return JSON.parse(raw) as Record<string, unknown>
+  const raw =
+    localStorage.getItem(storageKey.value) ||
+    localStorage.getItem("xenobot_app_config");
+  if (!raw) return null;
+  return JSON.parse(raw) as Record<string, unknown>;
 }
 
 function loadCachedExtraLinks(): FooterLink[] | null {
   try {
-    const config = getCachedConfigObject()
-    if (!config) return null
+    const config = getCachedConfigObject();
+    if (!config) return null;
     // English engineering note.
-    return (config.homeFooterExtraLinks as FooterLink[] | undefined) || null
+    return (config.homeFooterExtraLinks as FooterLink[] | undefined) || null;
   } catch (error) {
     // English engineering note.
-    console.warn('[HomeFooter] Failed to read cached extra links. Falling back to defaults.', error)
+    console.warn(
+      "[HomeFooter] Failed to read cached extra links. Falling back to defaults.",
+      error,
+    );
   }
-  return null
+  return null;
 }
 
 /**
@@ -117,14 +122,17 @@ function loadCachedExtraLinks(): FooterLink[] | null {
  */
 function loadCachedSocialConfig(): SocialConfig | null {
   try {
-    const config = getCachedConfigObject()
-    if (!config) return null
-    return (config.social as SocialConfig | undefined) || null
+    const config = getCachedConfigObject();
+    if (!config) return null;
+    return (config.social as SocialConfig | undefined) || null;
   } catch (error) {
     // English engineering note.
-    console.warn('[HomeFooter] Failed to read cached social config. Falling back to defaults.', error)
+    console.warn(
+      "[HomeFooter] Failed to read cached social config. Falling back to defaults.",
+      error,
+    );
   }
-  return null
+  return null;
 }
 
 /**
@@ -137,72 +145,77 @@ function loadCachedSocialConfig(): SocialConfig | null {
  */
 async function fetchConfig(): Promise<void> {
   // English engineering note.
-  const cachedExtra = loadCachedExtraLinks()
+  const cachedExtra = loadCachedExtraLinks();
   if (cachedExtra && cachedExtra.length > 0) {
-    footerLinks.value = [...getDefaultLinks(), ...cachedExtra]
+    footerLinks.value = [...getDefaultLinks(), ...cachedExtra];
   }
 
   // English engineering note.
-  const cachedSocial = loadCachedSocialConfig()
+  const cachedSocial = loadCachedSocialConfig();
   if (cachedSocial) {
-    socialConfig.value = cachedSocial
+    socialConfig.value = cachedSocial;
   }
 
   try {
-    const result = await window.api.app.fetchRemoteConfig(configUrl.value)
-    if (!result.success || !result.data) return
+    const result = await window.api.app.fetchRemoteConfig(configUrl.value);
+    if (!result.success || !result.data) return;
 
-    const config = result.data as Record<string, unknown>
+    const config = result.data as Record<string, unknown>;
     // English engineering note.
-    localStorage.setItem(storageKey.value, JSON.stringify(config))
+    localStorage.setItem(storageKey.value, JSON.stringify(config));
     // English engineering note.
-    localStorage.setItem('xenobot_app_config', JSON.stringify(config))
+    localStorage.setItem("xenobot_app_config", JSON.stringify(config));
 
     // English engineering note.
-    if (config.homeFooterExtraLinks && Array.isArray(config.homeFooterExtraLinks)) {
-      footerLinks.value = [...getDefaultLinks(), ...(config.homeFooterExtraLinks as FooterLink[])]
+    if (
+      config.homeFooterExtraLinks &&
+      Array.isArray(config.homeFooterExtraLinks)
+    ) {
+      footerLinks.value = [
+        ...getDefaultLinks(),
+        ...(config.homeFooterExtraLinks as FooterLink[]),
+      ];
     }
 
     // English engineering note.
     if (config.social) {
-      socialConfig.value = config.social as SocialConfig
+      socialConfig.value = config.social as SocialConfig;
     }
   } catch (error) {
-    // English engineering note.
-    console.warn('[HomeFooter] Failed to fetch remote config. Keeping the local fallback.', error)
+    void error;
   }
 }
 
 // English engineering note.
 function handleLinkClick(link: FooterLink) {
-  if (link.action === 'changelog') {
-    emit('openChangelog')
-  } else if (link.action === 'terms') {
-    emit('openTerms')
+  if (link.action === "changelog") {
+    emit("openChangelog");
+  } else if (link.action === "terms") {
+    emit("openTerms");
   } else if (link.url) {
-    window.open(link.url, '_blank')
+    window.open(link.url, "_blank");
   }
 }
 
 // English engineering note.
 function openSocialLink() {
   if (socialLink.value?.url) {
-    window.open(socialLink.value.url, '_blank')
+    window.open(socialLink.value.url, "_blank");
   }
 }
 
 // English engineering note.
 onMounted(() => {
-  fetchConfig()
-})
+  fetchConfig();
+});
 
 // English engineering note.
 watch(locale, () => {
   // English engineering note.
-  footerLinks.value = getDefaultLinks()
+  footerLinks.value = getDefaultLinks();
   // English engineering note.
-  fetchConfig()
-})
+  fetchConfig();
+});
 </script>
 
 <template>
@@ -210,7 +223,9 @@ watch(locale, () => {
     <div class="xeno-home-footer flex items-center justify-center">
       <template v-for="(link, index) in footerLinks" :key="link.id">
         <!-- English UI note -->
-        <span v-if="index > 0" class="mx-2 text-gray-300 dark:text-gray-600">·</span>
+        <span v-if="index > 0" class="mx-2 text-gray-300 dark:text-gray-600"
+          >·</span
+        >
         <!-- English UI note -->
         <button
           class="xeno-home-footer-link text-sm text-gray-500 transition-colors hover:text-primary dark:text-gray-400 dark:hover:text-primary"

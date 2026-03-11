@@ -1,187 +1,194 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { useI18n } from 'vue-i18n'
+import { ref, onMounted, computed } from "vue";
+import { useI18n } from "vue-i18n";
 
-const { t } = useI18n()
+const { t } = useI18n();
 
 // English engineering note.
 interface CacheDirectoryInfo {
-  id: string
-  name: string
-  description: string
-  path: string
-  icon: string
-  canClear: boolean
-  size: number
-  fileCount: number
-  exists: boolean
+  id: string;
+  name: string;
+  description: string;
+  path: string;
+  icon: string;
+  canClear: boolean;
+  size: number;
+  fileCount: number;
+  exists: boolean;
 }
 
 interface CacheInfo {
-  baseDir: string
-  directories: CacheDirectoryInfo[]
-  totalSize: number
+  baseDir: string;
+  directories: CacheDirectoryInfo[];
+  totalSize: number;
 }
 
 // English engineering note.
-const cacheInfo = ref<CacheInfo | null>(null)
-const isLoading = ref(false)
-const clearingId = ref<string | null>(null)
-const dataDir = ref('')
-const isCustomDataDir = ref(false)
-const isUpdatingDataDir = ref(false)
-const dataDirError = ref<string | null>(null)
+const cacheInfo = ref<CacheInfo | null>(null);
+const isLoading = ref(false);
+const clearingId = ref<string | null>(null);
+const dataDir = ref("");
+const isCustomDataDir = ref(false);
+const isUpdatingDataDir = ref(false);
+const dataDirError = ref<string | null>(null);
 
 // English engineering note.
-const showConfirmModal = ref(false)
-const pendingNewDir = ref<string | null>(null)
-const pendingMigrate = ref(false)
+const showConfirmModal = ref(false);
+const pendingNewDir = ref<string | null>(null);
+const pendingMigrate = ref(false);
 
 // English engineering note.
-const showRelaunchModal = ref(false)
+const showRelaunchModal = ref(false);
 
 // English engineering note.
 function formatSize(bytes: number): string {
-  if (bytes === 0) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(1024))
-  const size = (bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0)
-  return `${size} ${units[i]}`
+  if (bytes === 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  const size = (bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0);
+  return `${size} ${units[i]}`;
 }
 
 // English engineering note.
 const totalSizeFormatted = computed(() => {
-  if (!cacheInfo.value) return '0 B'
-  return formatSize(cacheInfo.value.totalSize)
-})
+  if (!cacheInfo.value) return "0 B";
+  return formatSize(cacheInfo.value.totalSize);
+});
 
 // English engineering note.
 async function loadCacheInfo() {
-  isLoading.value = true
+  isLoading.value = true;
   try {
-    cacheInfo.value = await window.cacheApi.getInfo()
+    cacheInfo.value = await window.cacheApi.getInfo();
   } catch (error) {
-    console.error('[StorageManageSection] Failed to load cache info:', error)
+    console.error("[StorageManageSection] Failed to load cache info:", error);
   } finally {
-    isLoading.value = false
+    isLoading.value = false;
   }
 }
 
 // English engineering note.
 async function loadDataDir() {
   try {
-    const info = await window.cacheApi.getDataDir()
-    dataDir.value = info.path
-    isCustomDataDir.value = info.isCustom
+    const info = await window.cacheApi.getDataDir();
+    dataDir.value = info.path;
+    isCustomDataDir.value = info.isCustom;
   } catch (error) {
-    console.error('[StorageManageSection] Failed to load data directory:', error)
+    console.error(
+      "[StorageManageSection] Failed to load data directory:",
+      error,
+    );
   }
 }
 
 // English engineering note.
 async function clearCache(cacheId: string) {
-  clearingId.value = cacheId
+  clearingId.value = cacheId;
   try {
-    const result = await window.cacheApi.clear(cacheId)
+    const result = await window.cacheApi.clear(cacheId);
     if (result.success) {
       // English engineering note.
-      await loadCacheInfo()
+      await loadCacheInfo();
     } else {
-      console.error('[StorageManageSection] Failed to clear cache:', result.error)
+      console.error(
+        "[StorageManageSection] Failed to clear cache:",
+        result.error,
+      );
     }
   } catch (error) {
-    console.error('[StorageManageSection] Failed to clear cache:', error)
+    console.error("[StorageManageSection] Failed to clear cache:", error);
   } finally {
-    clearingId.value = null
+    clearingId.value = null;
   }
 }
 
 // English engineering note.
 async function openDirectory(cacheId: string) {
   try {
-    await window.cacheApi.openDir(cacheId)
+    await window.cacheApi.openDir(cacheId);
   } catch (error) {
-    console.error('[StorageManageSection] Failed to open directory:', error)
+    console.error("[StorageManageSection] Failed to open directory:", error);
   }
 }
 
 // English engineering note.
 async function openBaseDir() {
-  await openDirectory('base')
+  await openDirectory("base");
 }
 
 // English engineering note.
 async function selectDataDir() {
-  dataDirError.value = null
+  dataDirError.value = null;
   try {
-    const result = await window.cacheApi.selectDataDir()
-    if (!result.success || !result.path) return
+    const result = await window.cacheApi.selectDataDir();
+    if (!result.success || !result.path) return;
 
     // English engineering note.
-    pendingNewDir.value = result.path
-    pendingMigrate.value = true
-    showConfirmModal.value = true
+    pendingNewDir.value = result.path;
+    pendingMigrate.value = true;
+    showConfirmModal.value = true;
   } catch (error) {
-    dataDirError.value = error instanceof Error ? error.message : String(error)
+    dataDirError.value = error instanceof Error ? error.message : String(error);
   }
 }
 
 // English engineering note.
 async function resetDataDir() {
-  dataDirError.value = null
+  dataDirError.value = null;
   // English engineering note.
-  pendingNewDir.value = null
-  pendingMigrate.value = true
-  showConfirmModal.value = true
+  pendingNewDir.value = null;
+  pendingMigrate.value = true;
+  showConfirmModal.value = true;
 }
 
 // English engineering note.
 async function confirmDataDirChange() {
-  showConfirmModal.value = false
-  await applyDataDirChange(pendingNewDir.value, pendingMigrate.value)
+  showConfirmModal.value = false;
+  await applyDataDirChange(pendingNewDir.value, pendingMigrate.value);
 }
 
 // English engineering note.
 function cancelDataDirChange() {
-  showConfirmModal.value = false
-  pendingNewDir.value = null
-  pendingMigrate.value = false
+  showConfirmModal.value = false;
+  pendingNewDir.value = null;
+  pendingMigrate.value = false;
 }
 
 // English engineering note.
 async function applyDataDirChange(newDir: string | null, migrate: boolean) {
-  isUpdatingDataDir.value = true
+  isUpdatingDataDir.value = true;
   try {
-    const result = await window.cacheApi.setDataDir(newDir, migrate)
+    const result = await window.cacheApi.setDataDir(newDir, migrate);
     if (!result.success) {
-      dataDirError.value = result.error || 'Failed to update the data directory.'
-      return
+      dataDirError.value =
+        result.error || "Failed to update the data directory.";
+      return;
     }
 
     // English engineering note.
-    showRelaunchModal.value = true
+    showRelaunchModal.value = true;
   } catch (error) {
-    dataDirError.value = error instanceof Error ? error.message : String(error)
+    dataDirError.value = error instanceof Error ? error.message : String(error);
   } finally {
-    isUpdatingDataDir.value = false
+    isUpdatingDataDir.value = false;
   }
 }
 
 // English engineering note.
 async function relaunchApp() {
-  await window.api.app.relaunch()
+  await window.api.app.relaunch();
 }
 
 // English engineering note.
 onMounted(() => {
-  loadCacheInfo()
-  loadDataDir()
-})
+  loadCacheInfo();
+  loadDataDir();
+});
 
 // English engineering note.
 defineExpose({
   refresh: loadCacheInfo,
-})
+});
 </script>
 
 <template>
@@ -189,27 +196,52 @@ defineExpose({
     <!-- English UI note -->
     <div class="flex items-center justify-between">
       <div>
-        <h3 class="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
-          <UIcon name="i-heroicons-folder-open" class="h-4 w-4 text-amber-500" />
-          {{ t('settings.storage.title') }}
+        <h3
+          class="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white"
+        >
+          <UIcon
+            name="i-heroicons-folder-open"
+            class="h-4 w-4 text-amber-500"
+          />
+          {{ t("settings.storage.title") }}
         </h3>
-        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('settings.storage.description') }}</p>
+        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          {{ t("settings.storage.description") }}
+        </p>
       </div>
       <div class="flex items-center gap-2">
         <!-- English UI note -->
         <div class="xeno-storage-summary rounded-lg px-3 py-1.5">
-          <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('settings.storage.totalUsage') }}</span>
-          <span class="text-sm font-semibold text-gray-900 dark:text-white">{{ totalSizeFormatted }}</span>
+          <span class="text-xs text-gray-500 dark:text-gray-400">{{
+            t("settings.storage.totalUsage")
+          }}</span>
+          <span class="text-sm font-semibold text-gray-900 dark:text-white">{{
+            totalSizeFormatted
+          }}</span>
         </div>
         <!-- English UI note -->
-        <UButton icon="i-heroicons-arrow-path" variant="ghost" size="sm" :loading="isLoading" @click="loadCacheInfo" />
+        <UButton
+          icon="i-heroicons-arrow-path"
+          variant="ghost"
+          size="sm"
+          :loading="isLoading"
+          @click="loadCacheInfo"
+        />
       </div>
     </div>
 
     <!-- English UI note -->
-    <div v-if="isLoading && !cacheInfo" class="flex items-center justify-center py-8">
-      <UIcon name="i-heroicons-arrow-path" class="h-5 w-5 animate-spin text-gray-400" />
-      <span class="ml-2 text-sm text-gray-500">{{ t('settings.storage.loading') }}</span>
+    <div
+      v-if="isLoading && !cacheInfo"
+      class="flex items-center justify-center py-8"
+    >
+      <UIcon
+        name="i-heroicons-arrow-path"
+        class="h-5 w-5 animate-spin text-gray-400"
+      />
+      <span class="ml-2 text-sm text-gray-500">{{
+        t("settings.storage.loading")
+      }}</span>
     </div>
 
     <!-- English UI note -->
@@ -244,12 +276,21 @@ defineExpose({
             </div>
             <div>
               <div class="flex items-center gap-2">
-                <h4 class="text-sm font-medium text-gray-900 dark:text-white">{{ t(dir.name) }}</h4>
-                <UBadge v-if="!dir.exists" variant="soft" color="gray" size="xs">
-                  {{ t('settings.storage.notExist') }}
+                <h4 class="text-sm font-medium text-gray-900 dark:text-white">
+                  {{ t(dir.name) }}
+                </h4>
+                <UBadge
+                  v-if="!dir.exists"
+                  variant="soft"
+                  color="gray"
+                  size="xs"
+                >
+                  {{ t("settings.storage.notExist") }}
                 </UBadge>
               </div>
-              <p class="text-xs text-gray-500 dark:text-gray-400">{{ t(dir.description) }}</p>
+              <p class="text-xs text-gray-500 dark:text-gray-400">
+                {{ t(dir.description) }}
+              </p>
             </div>
           </div>
 
@@ -257,7 +298,9 @@ defineExpose({
           <div class="flex items-center">
             <!-- English UI note -->
             <div class="flex items-center gap-2 text-xs text-gray-400">
-              <span class="w-14 text-right">{{ dir.fileCount }} {{ t('settings.storage.files') }}</span>
+              <span class="w-14 text-right"
+                >{{ dir.fileCount }} {{ t("settings.storage.files") }}</span
+              >
               <span class="w-16 text-right">{{ formatSize(dir.size) }}</span>
             </div>
             <!-- English UI note -->
@@ -272,10 +315,15 @@ defineExpose({
                 :disabled="clearingId !== null"
                 @click="clearCache(dir.id)"
               >
-                {{ t('settings.storage.clear') }}
+                {{ t("settings.storage.clear") }}
               </UButton>
-              <UButton icon="i-heroicons-folder-open" variant="ghost" size="xs" @click="openDirectory(dir.id)">
-                {{ t('settings.storage.open') }}
+              <UButton
+                icon="i-heroicons-folder-open"
+                variant="ghost"
+                size="xs"
+                @click="openDirectory(dir.id)"
+              >
+                {{ t("settings.storage.open") }}
               </UButton>
             </div>
           </div>
@@ -284,19 +332,26 @@ defineExpose({
     </div>
 
     <!-- English UI note -->
-    <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50">
+    <div
+      class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50"
+    >
       <div class="flex items-start justify-between gap-3">
         <div class="min-w-0 flex-1">
           <p class="text-sm font-medium text-gray-900 dark:text-white">
-            {{ t('settings.storage.dataLocation.title') }}
+            {{ t("settings.storage.dataLocation.title") }}
           </p>
           <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-            {{ t('settings.storage.dataLocation.description') }}
+            {{ t("settings.storage.dataLocation.description") }}
           </p>
         </div>
         <div class="shrink-0">
-          <UButton icon="i-heroicons-folder-open" variant="ghost" size="xs" @click="openBaseDir">
-            {{ t('settings.storage.dataLocation.open') }}
+          <UButton
+            icon="i-heroicons-folder-open"
+            variant="ghost"
+            size="xs"
+            @click="openBaseDir"
+          >
+            {{ t("settings.storage.dataLocation.open") }}
           </UButton>
         </div>
       </div>
@@ -310,15 +365,21 @@ defineExpose({
           :disabled="isUpdatingDataDir"
           @click="selectDataDir"
         >
-          {{ t('settings.storage.dataLocation.choose') }}
+          {{ t("settings.storage.dataLocation.choose") }}
         </UButton>
-        <UButton v-if="isCustomDataDir" size="sm" variant="ghost" :disabled="isUpdatingDataDir" @click="resetDataDir">
-          {{ t('settings.storage.dataLocation.reset') }}
+        <UButton
+          v-if="isCustomDataDir"
+          size="sm"
+          variant="ghost"
+          :disabled="isUpdatingDataDir"
+          @click="resetDataDir"
+        >
+          {{ t("settings.storage.dataLocation.reset") }}
         </UButton>
       </div>
 
       <p class="mt-2 text-xs text-amber-600 dark:text-amber-400">
-        {{ t('settings.storage.dataLocation.restartTip') }}
+        {{ t("settings.storage.dataLocation.restartTip") }}
       </p>
       <p v-if="dataDirError" class="mt-1 text-xs text-red-500">
         {{ dataDirError }}
@@ -326,14 +387,21 @@ defineExpose({
     </div>
 
     <!-- English UI note -->
-    <div class="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800/50 dark:bg-amber-900/20">
+    <div
+      class="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800/50 dark:bg-amber-900/20"
+    >
       <div class="flex items-start gap-2">
-        <UIcon name="i-heroicons-exclamation-triangle" class="h-4 w-4 shrink-0 text-amber-500" />
+        <UIcon
+          name="i-heroicons-exclamation-triangle"
+          class="h-4 w-4 shrink-0 text-amber-500"
+        />
         <div class="text-xs text-amber-700 dark:text-amber-400">
-          <p class="font-medium">{{ t('settings.storage.notes.title') }}</p>
-          <ul class="mt-1 list-inside list-disc space-y-0.5 text-amber-600 dark:text-amber-500">
-            <li>{{ t('settings.storage.notes.logSafe') }}</li>
-            <li>{{ t('settings.storage.notes.noRecover') }}</li>
+          <p class="font-medium">{{ t("settings.storage.notes.title") }}</p>
+          <ul
+            class="mt-1 list-inside list-disc space-y-0.5 text-amber-600 dark:text-amber-500"
+          >
+            <li>{{ t("settings.storage.notes.logSafe") }}</li>
+            <li>{{ t("settings.storage.notes.noRecover") }}</li>
           </ul>
         </div>
       </div>
@@ -344,39 +412,47 @@ defineExpose({
       <template #content>
         <div class="p-5">
           <div class="mb-4 flex items-center gap-3">
-            <div class="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30">
-              <UIcon name="i-heroicons-exclamation-triangle" class="h-5 w-5 text-amber-600 dark:text-amber-400" />
+            <div
+              class="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30"
+            >
+              <UIcon
+                name="i-heroicons-exclamation-triangle"
+                class="h-5 w-5 text-amber-600 dark:text-amber-400"
+              />
             </div>
             <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
-              {{ t('settings.storage.dataLocation.confirmTitle') }}
+              {{ t("settings.storage.dataLocation.confirmTitle") }}
             </h3>
           </div>
 
           <div class="space-y-3 text-sm text-gray-600 dark:text-gray-400">
-            <p>{{ t('settings.storage.dataLocation.confirmMessage') }}</p>
+            <p>{{ t("settings.storage.dataLocation.confirmMessage") }}</p>
             <div class="rounded-lg bg-gray-100 p-3 dark:bg-gray-800">
               <p class="text-xs text-gray-500 dark:text-gray-400">
-                {{ t('settings.storage.dataLocation.newPath') }}
+                {{ t("settings.storage.dataLocation.newPath") }}
               </p>
               <p class="mt-1 font-mono text-sm text-gray-900 dark:text-white">
-                {{ pendingNewDir || t('settings.storage.dataLocation.defaultPath') }}
+                {{
+                  pendingNewDir ||
+                  t("settings.storage.dataLocation.defaultPath")
+                }}
               </p>
             </div>
             <div
               class="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800/50 dark:bg-amber-900/20"
             >
               <p class="text-xs text-amber-700 dark:text-amber-400">
-                {{ t('settings.storage.dataLocation.confirmWarning') }}
+                {{ t("settings.storage.dataLocation.confirmWarning") }}
               </p>
             </div>
           </div>
 
           <div class="mt-5 flex justify-end gap-2">
             <UButton variant="ghost" @click="cancelDataDirChange">
-              {{ t('settings.storage.dataLocation.cancel') }}
+              {{ t("settings.storage.dataLocation.cancel") }}
             </UButton>
             <UButton color="primary" @click="confirmDataDirChange">
-              {{ t('settings.storage.dataLocation.confirm') }}
+              {{ t("settings.storage.dataLocation.confirm") }}
             </UButton>
           </div>
         </div>
@@ -388,21 +464,26 @@ defineExpose({
       <template #content>
         <div class="p-5">
           <div class="mb-4 flex items-center gap-3">
-            <div class="flex h-10 w-10 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
-              <UIcon name="i-heroicons-check-circle" class="h-5 w-5 text-green-600 dark:text-green-400" />
+            <div
+              class="flex h-10 w-10 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30"
+            >
+              <UIcon
+                name="i-heroicons-check-circle"
+                class="h-5 w-5 text-green-600 dark:text-green-400"
+              />
             </div>
             <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
-              {{ t('settings.storage.dataLocation.migrationSuccessTitle') }}
+              {{ t("settings.storage.dataLocation.migrationSuccessTitle") }}
             </h3>
           </div>
 
           <p class="text-sm text-gray-600 dark:text-gray-400">
-            {{ t('settings.storage.dataLocation.migrationSuccessMessage') }}
+            {{ t("settings.storage.dataLocation.migrationSuccessMessage") }}
           </p>
 
           <div class="mt-5 flex justify-end">
             <UButton color="primary" @click="relaunchApp">
-              {{ t('settings.storage.dataLocation.relaunchNow') }}
+              {{ t("settings.storage.dataLocation.relaunchNow") }}
             </UButton>
           </div>
         </div>
@@ -417,7 +498,11 @@ defineExpose({
   border-radius: 1.5rem;
   padding: 1rem;
   background:
-    radial-gradient(circle at top right, rgba(250, 204, 21, 0.08), transparent 24%),
+    radial-gradient(
+      circle at top right,
+      rgba(250, 204, 21, 0.08),
+      transparent 24%
+    ),
     linear-gradient(180deg, rgba(15, 23, 42, 0.72), rgba(15, 23, 42, 0.6));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.05),
@@ -428,13 +513,19 @@ defineExpose({
 .xeno-storage-summary,
 .xeno-storage-card {
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background:
-    linear-gradient(180deg, rgba(15, 23, 42, 0.58), rgba(15, 23, 42, 0.44));
+  background: linear-gradient(
+    180deg,
+    rgba(15, 23, 42, 0.58),
+    rgba(15, 23, 42, 0.44)
+  );
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .xeno-storage-card:hover {
-  background:
-    linear-gradient(180deg, rgba(30, 41, 59, 0.68), rgba(15, 23, 42, 0.5));
+  background: linear-gradient(
+    180deg,
+    rgba(30, 41, 59, 0.68),
+    rgba(15, 23, 42, 0.5)
+  );
 }
 </style>

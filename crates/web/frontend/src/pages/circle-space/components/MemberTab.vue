@@ -1,40 +1,56 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { SubTabs } from '@/components/UI'
-import MemberList from './member/MemberList.vue'
-import NicknameHistory from './member/NicknameHistory.vue'
-import Relationships from './member/Relationships.vue'
-import { XenoClusterView } from '@/vendors/insight'
+import { ref, computed } from "vue";
+import { useI18n } from "vue-i18n";
+import { SubTabs } from "@/components/UI";
+import MemberList from "./member/MemberList.vue";
+import NicknameHistory from "./member/NicknameHistory.vue";
+import Relationships from "./member/Relationships.vue";
+import { XenoClusterView } from "@/vendors/insight";
 
-const { t } = useI18n()
+const { t } = useI18n();
 
 interface TimeFilter {
-  startTs?: number
-  endTs?: number
+  startTs?: number;
+  endTs?: number;
 }
 
 const props = defineProps<{
-  sessionId: string
-  timeFilter?: TimeFilter
-}>()
+  sessionId: string;
+  timeFilter?: TimeFilter;
+}>();
 
 const emit = defineEmits<{
-  'data-changed': []
-}>()
+  "data-changed": [];
+}>();
 
 // English engineering note.
 const subTabs = computed(() => [
-  { id: 'list', label: t('analysis.subTabs.member.memberList'), icon: 'i-heroicons-users' },
-  { id: 'relationships', label: t('analysis.subTabs.member.relationships'), icon: 'i-heroicons-heart' },
-  { id: 'cluster', label: t('analysis.subTabs.member.cluster'), icon: 'i-heroicons-user-group' },
-  { id: 'history', label: t('analysis.subTabs.member.nicknameHistory'), icon: 'i-heroicons-clock' },
-])
+  {
+    id: "list",
+    label: t("analysis.subTabs.member.memberList"),
+    icon: "i-heroicons-users",
+  },
+  {
+    id: "relationships",
+    label: t("analysis.subTabs.member.relationships"),
+    icon: "i-heroicons-heart",
+  },
+  {
+    id: "cluster",
+    label: t("analysis.subTabs.member.cluster"),
+    icon: "i-heroicons-user-group",
+  },
+  {
+    id: "history",
+    label: t("analysis.subTabs.member.nicknameHistory"),
+    icon: "i-heroicons-clock",
+  },
+]);
 
-const activeSubTab = ref('list')
+const activeSubTab = ref("list");
 
 function handleDataChanged() {
-  emit('data-changed')
+  emit("data-changed");
 }
 </script>
 
@@ -68,7 +84,10 @@ function handleDataChanged() {
         />
 
         <!-- English UI note -->
-        <NicknameHistory v-else-if="activeSubTab === 'history'" :session-id="props.sessionId" />
+        <NicknameHistory
+          v-else-if="activeSubTab === 'history'"
+          :session-id="props.sessionId"
+        />
       </Transition>
     </div>
   </div>

@@ -184,5 +184,14 @@
     ,
     "unknownSession": "未知会话",
     "selectExportDirectory": "选择导出目录"
+  },
+  "sqlLab": {
+    "summary": {
+      "previewRows": "（仅展示前 {maxRows} 行，共 {totalRows} 行）",
+      "queryIntent": "用户的查询意图：{prompt}",
+      "executedSql": "执行的 SQL 语句：",
+      "systemPrompt": "你是一名数据分析专家。请从 SQL 查询结果中提炼关键发现，并用简洁清晰的中文作答。",
+      "userPrompt": "请分析以下 SQL 查询结果，用简洁的中文总结关键发现和洞察。\n\n{contextInfo}查询结果（共 {rowCount} 行）：\n\n{resultSummary}\n\n请提供：\n1. 结果概述（一句话总结）\n2. 关键发现（2-4 个要点）\n3. 如有明显的趋势或异常，请指出"
+    }
   }
 }

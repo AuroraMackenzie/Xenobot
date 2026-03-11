@@ -3,83 +3,86 @@
  * Virtualized chat message list.
  * Powered by @tanstack/vue-virtual to keep large sessions responsive.
  */
-import { ref, watch, nextTick, toRaw, computed, onUnmounted } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { useVirtualizer } from '@tanstack/vue-virtual'
-import dayjs from 'dayjs'
-import MessageItem from './MessageItem.vue'
-import type { ChatRecordMessage, ChatRecordQuery } from './types'
-import { useSessionStore } from '@/stores/session'
+import { ref, watch, nextTick, toRaw, computed, onUnmounted } from "vue";
+import { useI18n } from "vue-i18n";
+import { useVirtualizer } from "@tanstack/vue-virtual";
+import dayjs from "dayjs";
+import MessageItem from "./MessageItem.vue";
+import type { ChatRecordMessage, ChatRecordQuery } from "./types";
+import { useSessionStore } from "@/stores/session";
 
 // Insert a separator when the gap between adjacent messages exceeds this threshold.
-const TIME_SEPARATOR_THRESHOLD = 5 * 60 // 5 minutes
+const TIME_SEPARATOR_THRESHOLD = 5 * 60; // 5 minutes
 
-const { t } = useI18n()
+const { t } = useI18n();
 
 const props = withDefaults(
   defineProps<{
     /** Active query parameters. */
-    query: ChatRecordQuery
+    query: ChatRecordQuery;
     /** Optional externally supplied message list (disables internal loading). */
-    externalMessages?: ChatRecordMessage[]
+    externalMessages?: ChatRecordMessage[];
     /** Message ids to highlight in external mode. */
-    hitMessageIds?: number[]
+    hitMessageIds?: number[];
     /** Scroll strategy when external messages refresh. */
-    externalScrollBehavior?: 'top' | 'preserve'
+    externalScrollBehavior?: "top" | "preserve";
   }>(),
   {
     externalMessages: undefined,
     hitMessageIds: () => [],
-    externalScrollBehavior: 'top',
-  }
-)
+    externalScrollBehavior: "top",
+  },
+);
 
 const emit = defineEmits<{
   /** Message count update. */
-  (e: 'count-change', count: number): void
+  (e: "count-change", count: number): void;
   /** Mid-viewport message changed (used by timeline sync). */
-  (e: 'visible-message-change', payload: { id: number; timestamp: number }): void
+  (
+    e: "visible-message-change",
+    payload: { id: number; timestamp: number },
+  ): void;
   /** Request context jump for the selected message. */
-  (e: 'jump-to-message', messageId: number): void
+  (e: "jump-to-message", messageId: number): void;
   /** External-mode pagination signal: reached bottom. */
-  (e: 'reach-bottom'): void
+  (e: "reach-bottom"): void;
   /** External-mode pagination signal: reached top. */
-  (e: 'reach-top'): void
+  (e: "reach-top"): void;
   /** Timestamp list update for session-timeline filtering. */
-  (e: 'message-timestamps-change', timestamps: number[]): void
-}>()
+  (e: "message-timestamps-change", timestamps: number[]): void;
+}>();
 
-const sessionStore = useSessionStore()
+const sessionStore = useSessionStore();
 
 // External mode bypasses internal fetch logic.
-const isExternalMode = computed(() => !!props.externalMessages?.length)
+const isExternalMode = computed(() => !!props.externalMessages?.length);
 
 // Context shortcut buttons are shown only in filtered internal mode.
 const isFiltered = computed(() => {
-  if (isExternalMode.value) return false
-  const q = props.query
-  return !!(q.memberId || q.keywords?.length)
-})
+  if (isExternalMode.value) return false;
+  const q = props.query;
+  return !!(q.memberId || q.keywords?.length);
+});
 
 // Message list state.
-const messages = ref<ChatRecordMessage[]>([])
-const isLoading = ref(false)
-const isLoadingMore = ref(false)
-const hasMoreBefore = ref(false)
-const hasMoreAfter = ref(false)
+const messages = ref<ChatRecordMessage[]>([]);
+const isLoading = ref(false);
+const isLoadingMore = ref(false);
+const hasMoreBefore = ref(false);
+const hasMoreAfter = ref(false);
 
 // Search pagination state (used by keyword and semantic modes).
-const isSearchMode = ref(false)
-const searchOffset = ref(0)
+const isSearchMode = ref(false);
+const searchOffset = ref(0);
 
 // Scroll container reference.
-const scrollContainerRef = ref<HTMLElement | null>(null)
+const scrollContainerRef = ref<HTMLElement | null>(null);
 
 // Deferred scroll target after initial fetch.
-const pendingScrollToId = ref<number | null>(null)
+const pendingScrollToId = ref<number | null>(null);
 
 // Initial row height estimate for virtualizer.
-const ESTIMATED_MESSAGE_HEIGHT = 80
+const ESTIMATED_MESSAGE_HEIGHT = 80;
 
 // Virtualizer instance.
 const virtualizer = useVirtualizer(
@@ -89,27 +92,32 @@ const virtualizer = useVirtualizer(
     estimateSize: () => ESTIMATED_MESSAGE_HEIGHT,
     overscan: 10, // Render 10 rows above and below the viewport.
     getItemKey: (index: number) => messages.value[index]?.id ?? index,
-  }))
-)
+  })),
+);
 
 // Current visible virtual rows.
-const virtualItems = computed(() => virtualizer.value.getVirtualItems())
+const virtualItems = computed(() => virtualizer.value.getVirtualItems());
 
 // Total virtualized list height.
-const totalSize = computed(() => virtualizer.value.getTotalSize())
+const totalSize = computed(() => virtualizer.value.getTotalSize());
 
 // Build normalized query params for data requests.
 function buildFilterParams(query: ChatRecordQuery) {
-  const mode: NonNullable<ChatRecordQuery['searchMode']> =
-    query.searchMode === 'semantic' ? 'semantic' : 'keyword'
+  const mode: NonNullable<ChatRecordQuery["searchMode"]> =
+    query.searchMode === "semantic" ? "semantic" : "keyword";
   return {
-    filter: query.startTs || query.endTs ? { startTs: query.startTs, endTs: query.endTs } : undefined,
+    filter:
+      query.startTs || query.endTs
+        ? { startTs: query.startTs, endTs: query.endTs }
+        : undefined,
     senderId: query.memberId,
     keywords: query.keywords ? [...toRaw(query.keywords)] : undefined,
     searchMode: mode,
     semanticThreshold:
-      typeof query.semanticThreshold === 'number' ? Math.max(-1, Math.min(1, query.semanticThreshold)) : 0.45,
-  }
+      typeof query.semanticThreshold === "number"
+        ? Math.max(-1, Math.min(1, query.semanticThreshold))
+        : 0.45,
+  };
 }
 
 // Normalize missing nullable reply fields.
@@ -119,77 +127,102 @@ function mapMessages(messages: any[]): ChatRecordMessage[] {
     replyToMessageId: m.replyToMessageId ?? null,
     replyToContent: m.replyToContent ?? null,
     replyToSenderName: m.replyToSenderName ?? null,
-  })) as ChatRecordMessage[]
+  })) as ChatRecordMessage[];
 }
 
 // External mode diffing helper.
-let previousExternalMessageCount = 0
+let previousExternalMessageCount = 0;
 
 // Initial load for the current query/session.
 async function loadInitialMessages() {
   // External mode: consume injected messages directly.
   if (isExternalMode.value) {
-    const currentCount = props.externalMessages!.length
-    const isExpanding = previousExternalMessageCount > 0 && currentCount > previousExternalMessageCount
+    const currentCount = props.externalMessages!.length;
+    const isExpanding =
+      previousExternalMessageCount > 0 &&
+      currentCount > previousExternalMessageCount;
 
-    messages.value = props.externalMessages!
-    hasMoreBefore.value = false
-    hasMoreAfter.value = false
-    isSearchMode.value = false
-    emit('count-change', messages.value.length)
+    messages.value = props.externalMessages!;
+    hasMoreBefore.value = false;
+    hasMoreAfter.value = false;
+    isSearchMode.value = false;
+    emit("count-change", messages.value.length);
 
-    previousExternalMessageCount = currentCount
+    previousExternalMessageCount = currentCount;
 
-    await nextTick()
+    await nextTick();
 
     // Keep the view stable when appending in preserve mode.
-    if (props.externalScrollBehavior === 'preserve' && isExpanding) {
+    if (props.externalScrollBehavior === "preserve" && isExpanding) {
     } else {
-      scrollToTop()
+      scrollToTop();
     }
-    return
+    return;
   }
 
-  const sessionId = sessionStore.currentSessionId
+  const sessionId = sessionStore.currentSessionId;
   if (!sessionId) {
-    messages.value = []
-    emit('count-change', 0)
-    return
+    messages.value = [];
+    emit("count-change", 0);
+    return;
   }
 
-  isLoading.value = true
-  messages.value = []
-  pendingScrollToId.value = null
+  isLoading.value = true;
+  messages.value = [];
+  pendingScrollToId.value = null;
 
   try {
-    const query = toRaw(props.query)
-    const { filter, senderId, keywords, searchMode, semanticThreshold } = buildFilterParams(query)
-    const targetId = query.scrollToMessageId
+    const query = toRaw(props.query);
+    const { filter, senderId, keywords, searchMode, semanticThreshold } =
+      buildFilterParams(query);
+    const targetId = query.scrollToMessageId;
 
     if (targetId) {
       // Center around the requested message id.
       const [beforeResult, afterResult] = await Promise.all([
-        window.aiApi.getMessagesBefore(sessionId, targetId, 50, filter, senderId, keywords),
-        window.aiApi.getMessagesAfter(sessionId, targetId, 50, filter, senderId, keywords),
-      ])
+        window.aiApi.getMessagesBefore(
+          sessionId,
+          targetId,
+          50,
+          filter,
+          senderId,
+          keywords,
+        ),
+        window.aiApi.getMessagesAfter(
+          sessionId,
+          targetId,
+          50,
+          filter,
+          senderId,
+          keywords,
+        ),
+      ]);
 
       // Include the target message itself.
-      const targetMessages = await window.aiApi.getMessageContext(sessionId, targetId, 0)
+      const targetMessages = await window.aiApi.getMessageContext(
+        sessionId,
+        targetId,
+        0,
+      );
 
       // Merge final centered list.
-      messages.value = mapMessages([...beforeResult.messages, ...targetMessages, ...afterResult.messages])
+      messages.value = mapMessages([
+        ...beforeResult.messages,
+        ...targetMessages,
+        ...afterResult.messages,
+      ]);
 
-      hasMoreBefore.value = beforeResult.hasMore
-      hasMoreAfter.value = afterResult.hasMore
+      hasMoreBefore.value = beforeResult.hasMore;
+      hasMoreAfter.value = afterResult.hasMore;
 
       // Scroll to target after virtualizer settles.
-      pendingScrollToId.value = targetId
+      pendingScrollToId.value = targetId;
     } else if (keywords && keywords.length > 0) {
       // Keyword or semantic search mode.
-      isSearchMode.value = true
-      searchOffset.value = 0
-      if (searchMode === 'semantic') {
-        const semanticQuery = keywords.join(' ').trim()
+      isSearchMode.value = true;
+      searchOffset.value = 0;
+      if (searchMode === "semantic") {
+        const semanticQuery = keywords.join(" ").trim();
         const result = await window.aiApi.semanticSearchMessages(
           sessionId,
           semanticQuery,
@@ -197,145 +230,172 @@ async function loadInitialMessages() {
           semanticThreshold,
           100,
           0,
-          senderId
-        )
-        messages.value = mapMessages(result.messages)
-        hasMoreBefore.value = false
-        searchOffset.value = result.messages.length
-        const total = Number.isFinite(Number(result.totalCount)) ? Number(result.totalCount) : result.messages.length
-        hasMoreAfter.value = total > searchOffset.value
+          senderId,
+        );
+        messages.value = mapMessages(result.messages);
+        hasMoreBefore.value = false;
+        searchOffset.value = result.messages.length;
+        const total = Number.isFinite(Number(result.totalCount))
+          ? Number(result.totalCount)
+          : result.messages.length;
+        hasMoreAfter.value = total > searchOffset.value;
       } else {
-        const result = await window.aiApi.searchMessages(sessionId, keywords, filter, 100, 0, senderId)
-        messages.value = mapMessages(result.messages)
-        hasMoreBefore.value = false
-        hasMoreAfter.value = result.messages.length >= 100
-        searchOffset.value = result.messages.length
+        const result = await window.aiApi.searchMessages(
+          sessionId,
+          keywords,
+          filter,
+          100,
+          0,
+          senderId,
+        );
+        messages.value = mapMessages(result.messages);
+        hasMoreBefore.value = false;
+        hasMoreAfter.value = result.messages.length >= 100;
+        searchOffset.value = result.messages.length;
       }
 
-      await nextTick()
-      scrollToTop()
+      await nextTick();
+      scrollToTop();
     } else {
       // Default mode: load newest messages.
-      isSearchMode.value = false
-      searchOffset.value = 0
-      const result = await window.aiApi.getAllRecentMessages(sessionId, filter, 100)
-      messages.value = mapMessages(result.messages)
-      hasMoreBefore.value = result.messages.length >= 100
-      hasMoreAfter.value = false
+      isSearchMode.value = false;
+      searchOffset.value = 0;
+      const result = await window.aiApi.getAllRecentMessages(
+        sessionId,
+        filter,
+        100,
+      );
+      messages.value = mapMessages(result.messages);
+      hasMoreBefore.value = result.messages.length >= 100;
+      hasMoreAfter.value = false;
 
       // Jump to the newest message once virtualizer layout is stable.
-      await nextTick()
+      await nextTick();
       setTimeout(() => {
-        scrollToBottom()
-      }, 50)
+        scrollToBottom();
+      }, 50);
     }
 
-    emit('count-change', messages.value.length)
+    emit("count-change", messages.value.length);
 
     // Keep timeline filter options aligned with loaded rows.
-    const timestamps = messages.value.map((m) => m.timestamp)
-    emit('message-timestamps-change', timestamps)
+    const timestamps = messages.value.map((m) => m.timestamp);
+    emit("message-timestamps-change", timestamps);
 
     // Finalize deferred scroll if needed.
     if (pendingScrollToId.value) {
-      await nextTick()
+      await nextTick();
       setTimeout(() => {
         if (pendingScrollToId.value) {
-          scrollToMessage(pendingScrollToId.value)
-          pendingScrollToId.value = null
+          scrollToMessage(pendingScrollToId.value);
+          pendingScrollToId.value = null;
         }
-      }, 100)
+      }, 100);
     }
   } catch (e) {
-    console.error('failed to load messages:', e)
-    messages.value = []
-    emit('count-change', 0)
+    console.error("failed to load messages:", e);
+    messages.value = [];
+    emit("count-change", 0);
   } finally {
-    isLoading.value = false
+    isLoading.value = false;
   }
 }
 
 // Scroll to top.
 function scrollToTop() {
-  virtualizer.value.scrollToOffset(0)
+  virtualizer.value.scrollToOffset(0);
 }
 
 // Scroll to bottom.
 function scrollToBottom() {
-  if (messages.value.length === 0) return
+  if (messages.value.length === 0) return;
 
   // First move by virtual index.
-  virtualizer.value.scrollToIndex(messages.value.length - 1, { align: 'end' })
+  virtualizer.value.scrollToIndex(messages.value.length - 1, { align: "end" });
 
   // Then force-scroll container in case row measurements changed.
   requestAnimationFrame(() => {
-    const container = scrollContainerRef.value
+    const container = scrollContainerRef.value;
     if (container) {
-      container.scrollTop = container.scrollHeight
+      container.scrollTop = container.scrollHeight;
     }
-  })
+  });
 }
 
 // Load older messages when user scrolls near the top.
 async function loadMoreBefore() {
-  if (isLoadingMore.value || !hasMoreBefore.value || messages.value.length === 0) return
+  if (
+    isLoadingMore.value ||
+    !hasMoreBefore.value ||
+    messages.value.length === 0
+  )
+    return;
 
-  const sessionId = sessionStore.currentSessionId
-  if (!sessionId) return
+  const sessionId = sessionStore.currentSessionId;
+  if (!sessionId) return;
 
-  const firstMessage = messages.value[0]
-  if (!firstMessage) return
+  const firstMessage = messages.value[0];
+  if (!firstMessage) return;
 
-  isLoadingMore.value = true
+  isLoadingMore.value = true;
 
   try {
-    const query = toRaw(props.query)
-    const { filter, senderId, keywords } = buildFilterParams(query)
-    const result = await window.aiApi.getMessagesBefore(sessionId, firstMessage.id, 50, filter, senderId, keywords)
+    const query = toRaw(props.query);
+    const { filter, senderId, keywords } = buildFilterParams(query);
+    const result = await window.aiApi.getMessagesBefore(
+      sessionId,
+      firstMessage.id,
+      50,
+      filter,
+      senderId,
+      keywords,
+    );
 
     if (result.messages.length > 0) {
       // Preserve viewport after prepending rows.
-      const currentOffset = virtualizer.value.scrollOffset ?? 0
+      const currentOffset = virtualizer.value.scrollOffset ?? 0;
 
-      const newMessages = [...mapMessages(result.messages), ...messages.value]
-      messages.value = newMessages
+      const newMessages = [...mapMessages(result.messages), ...messages.value];
+      messages.value = newMessages;
 
-      await nextTick()
-      const addedCount = result.messages.length
-      const estimatedAddedHeight = addedCount * ESTIMATED_MESSAGE_HEIGHT
-      virtualizer.value.scrollToOffset(currentOffset + estimatedAddedHeight)
+      await nextTick();
+      const addedCount = result.messages.length;
+      const estimatedAddedHeight = addedCount * ESTIMATED_MESSAGE_HEIGHT;
+      virtualizer.value.scrollToOffset(currentOffset + estimatedAddedHeight);
 
-      emit('count-change', messages.value.length)
+      emit("count-change", messages.value.length);
       emit(
-        'message-timestamps-change',
-        messages.value.map((m) => m.timestamp)
-      )
+        "message-timestamps-change",
+        messages.value.map((m) => m.timestamp),
+      );
     }
 
-    hasMoreBefore.value = result.hasMore
+    hasMoreBefore.value = result.hasMore;
   } catch (e) {
-    console.error('failed to load older messages:', e)
+    console.error("failed to load older messages:", e);
   } finally {
-    isLoadingMore.value = false
+    isLoadingMore.value = false;
   }
 }
 
 // Load newer messages when user scrolls near the bottom.
 async function loadMoreAfter() {
-  if (isLoadingMore.value || !hasMoreAfter.value || messages.value.length === 0) return
+  if (isLoadingMore.value || !hasMoreAfter.value || messages.value.length === 0)
+    return;
 
-  const sessionId = sessionStore.currentSessionId
-  if (!sessionId) return
+  const sessionId = sessionStore.currentSessionId;
+  if (!sessionId) return;
 
-  isLoadingMore.value = true
+  isLoadingMore.value = true;
 
   try {
-    const query = toRaw(props.query)
-    const { filter, senderId, keywords, searchMode, semanticThreshold } = buildFilterParams(query)
+    const query = toRaw(props.query);
+    const { filter, senderId, keywords, searchMode, semanticThreshold } =
+      buildFilterParams(query);
 
     if (isSearchMode.value && keywords && keywords.length > 0) {
-      if (searchMode === 'semantic') {
-        const semanticQuery = keywords.join(' ').trim()
+      if (searchMode === "semantic") {
+        const semanticQuery = keywords.join(" ").trim();
         const result = await window.aiApi.semanticSearchMessages(
           sessionId,
           semanticQuery,
@@ -343,185 +403,205 @@ async function loadMoreAfter() {
           semanticThreshold,
           50,
           searchOffset.value,
-          senderId
-        )
+          senderId,
+        );
         if (result.messages.length > 0) {
-          messages.value = [...messages.value, ...mapMessages(result.messages)]
-          searchOffset.value += result.messages.length
-          emit('count-change', messages.value.length)
+          messages.value = [...messages.value, ...mapMessages(result.messages)];
+          searchOffset.value += result.messages.length;
+          emit("count-change", messages.value.length);
           emit(
-            'message-timestamps-change',
-            messages.value.map((m) => m.timestamp)
-          )
+            "message-timestamps-change",
+            messages.value.map((m) => m.timestamp),
+          );
         }
-        const total = Number.isFinite(Number(result.totalCount)) ? Number(result.totalCount) : 0
-        hasMoreAfter.value = total > searchOffset.value
+        const total = Number.isFinite(Number(result.totalCount))
+          ? Number(result.totalCount)
+          : 0;
+        hasMoreAfter.value = total > searchOffset.value;
       } else {
-        const result = await window.aiApi.searchMessages(sessionId, keywords, filter, 50, searchOffset.value, senderId)
+        const result = await window.aiApi.searchMessages(
+          sessionId,
+          keywords,
+          filter,
+          50,
+          searchOffset.value,
+          senderId,
+        );
 
         if (result.messages.length > 0) {
-          messages.value = [...messages.value, ...mapMessages(result.messages)]
-          searchOffset.value += result.messages.length
-          emit('count-change', messages.value.length)
+          messages.value = [...messages.value, ...mapMessages(result.messages)];
+          searchOffset.value += result.messages.length;
+          emit("count-change", messages.value.length);
           emit(
-            'message-timestamps-change',
-            messages.value.map((m) => m.timestamp)
-          )
+            "message-timestamps-change",
+            messages.value.map((m) => m.timestamp),
+          );
         }
 
-        hasMoreAfter.value = result.messages.length >= 50
+        hasMoreAfter.value = result.messages.length >= 50;
       }
     } else {
       // Default paged flow by message id.
-      const lastMessage = messages.value[messages.value.length - 1]
-      if (!lastMessage) return
+      const lastMessage = messages.value[messages.value.length - 1];
+      if (!lastMessage) return;
 
-      const result = await window.aiApi.getMessagesAfter(sessionId, lastMessage.id, 50, filter, senderId, keywords)
+      const result = await window.aiApi.getMessagesAfter(
+        sessionId,
+        lastMessage.id,
+        50,
+        filter,
+        senderId,
+        keywords,
+      );
 
       if (result.messages.length > 0) {
-        messages.value = [...messages.value, ...mapMessages(result.messages)]
-        emit('count-change', messages.value.length)
+        messages.value = [...messages.value, ...mapMessages(result.messages)];
+        emit("count-change", messages.value.length);
         emit(
-          'message-timestamps-change',
-          messages.value.map((m) => m.timestamp)
-        )
+          "message-timestamps-change",
+          messages.value.map((m) => m.timestamp),
+        );
       }
 
-      hasMoreAfter.value = result.hasMore
+      hasMoreAfter.value = result.hasMore;
     }
   } catch (e) {
-    console.error('failed to load more messages:', e)
+    console.error("failed to load more messages:", e);
   } finally {
-    isLoadingMore.value = false
+    isLoadingMore.value = false;
   }
 }
 
 // Scroll to a specific message id.
 function scrollToMessage(messageId: number) {
-  const index = messages.value.findIndex((m) => m.id === messageId)
+  const index = messages.value.findIndex((m) => m.id === messageId);
   if (index !== -1) {
-    virtualizer.value.scrollToIndex(index, { align: 'center' })
+    virtualizer.value.scrollToIndex(index, { align: "center" });
   }
 }
 
 // Scroll handler for lazy loading and timeline sync.
 function handleScroll() {
-  const container = scrollContainerRef.value
-  if (!container) return
+  const container = scrollContainerRef.value;
+  if (!container) return;
 
-  const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight
+  const distanceFromBottom =
+    container.scrollHeight - container.scrollTop - container.clientHeight;
 
   // External mode emits pagination boundaries to parent.
   if (isExternalMode.value) {
     if (container.scrollTop < 50) {
-      emit('reach-top')
+      emit("reach-top");
     }
     if (distanceFromBottom < 50) {
-      emit('reach-bottom')
+      emit("reach-bottom");
     }
   }
 
   // Internal mode triggers lazy loading near boundaries.
   if (!isExternalMode.value && !isLoadingMore.value) {
     if (container.scrollTop < 100 && hasMoreBefore.value) {
-      loadMoreBefore()
+      loadMoreBefore();
     }
 
     if (distanceFromBottom < 100 && hasMoreAfter.value) {
-      loadMoreAfter()
+      loadMoreAfter();
     }
   }
 
   // Debounce timeline synchronization updates.
-  scheduleVisibleMessageUpdate()
+  scheduleVisibleMessageUpdate();
 }
 
 // Debounce timer for visible-row reporting.
-let visibleMessageTimer: ReturnType<typeof setTimeout> | null = null
-let lastEmittedMessageId = 0
+let visibleMessageTimer: ReturnType<typeof setTimeout> | null = null;
+let lastEmittedMessageId = 0;
 
 // Schedule visible-row update once per debounce window.
 function scheduleVisibleMessageUpdate() {
-  if (visibleMessageTimer) return
+  if (visibleMessageTimer) return;
 
   visibleMessageTimer = setTimeout(() => {
-    visibleMessageTimer = null
-    updateVisibleMessage()
-  }, 150)
+    visibleMessageTimer = null;
+    updateVisibleMessage();
+  }, 150);
 }
 
 // Report a representative visible message to parent for timeline alignment.
 function updateVisibleMessage() {
-  const items = virtualItems.value
-  if (items.length === 0) return
+  const items = virtualItems.value;
+  if (items.length === 0) return;
 
   // Use the middle visible row as the active anchor.
-  const middleIndex = Math.floor(items.length / 2)
-  const middleItem = items[middleIndex]
-  if (!middleItem) return
+  const middleIndex = Math.floor(items.length / 2);
+  const middleItem = items[middleIndex];
+  if (!middleItem) return;
 
-  const message = messages.value[middleItem.index]
+  const message = messages.value[middleItem.index];
   if (message && message.id !== lastEmittedMessageId) {
-    lastEmittedMessageId = message.id
-    emit('visible-message-change', { id: message.id, timestamp: message.timestamp })
+    lastEmittedMessageId = message.id;
+    emit("visible-message-change", {
+      id: message.id,
+      timestamp: message.timestamp,
+    });
   }
 }
 
 // Target highlight helper.
 function isTargetMessage(msgId: number): boolean {
   if (isExternalMode.value && props.hitMessageIds?.length) {
-    return props.hitMessageIds.includes(msgId)
+    return props.hitMessageIds.includes(msgId);
   }
-  return msgId === props.query.scrollToMessageId
+  return msgId === props.query.scrollToMessageId;
 }
 
 /**
  * Return the time-separator label for a message row if needed.
  */
 function getTimeSeparator(index: number): string | null {
-  const currentMsg = messages.value[index]
-  if (!currentMsg) return null
+  const currentMsg = messages.value[index];
+  if (!currentMsg) return null;
 
-  const prevMsg = index > 0 ? messages.value[index - 1] : null
+  const prevMsg = index > 0 ? messages.value[index - 1] : null;
 
   // Always show separator for the first row.
   if (!prevMsg) {
-    return formatSeparatorTime(currentMsg.timestamp)
+    return formatSeparatorTime(currentMsg.timestamp);
   }
 
-  const currentTs = currentMsg.timestamp
-  const prevTs = prevMsg.timestamp
-  const gap = currentTs - prevTs
+  const currentTs = currentMsg.timestamp;
+  const prevTs = prevMsg.timestamp;
+  const gap = currentTs - prevTs;
 
   // Add separator when day changes or idle gap is large.
-  const currentDay = dayjs.unix(currentTs).startOf('day')
-  const prevDay = dayjs.unix(prevTs).startOf('day')
-  const isDifferentDay = !currentDay.isSame(prevDay)
+  const currentDay = dayjs.unix(currentTs).startOf("day");
+  const prevDay = dayjs.unix(prevTs).startOf("day");
+  const isDifferentDay = !currentDay.isSame(prevDay);
 
   if (isDifferentDay || gap >= TIME_SEPARATOR_THRESHOLD) {
-    return formatSeparatorTime(currentTs)
+    return formatSeparatorTime(currentTs);
   }
 
-  return null
+  return null;
 }
 
 /**
  * Format separator timestamps.
  */
 function formatSeparatorTime(timestamp: number): string {
-  const msgTime = dayjs.unix(timestamp)
-  const today = dayjs().startOf('day')
+  const msgTime = dayjs.unix(timestamp);
+  const today = dayjs().startOf("day");
 
-  if (msgTime.isSame(today, 'day')) {
-    return msgTime.format('HH:mm')
+  if (msgTime.isSame(today, "day")) {
+    return msgTime.format("HH:mm");
   }
-  return msgTime.format('YYYY-MM-DD HH:mm')
+  return msgTime.format("YYYY-MM-DD HH:mm");
 }
 
 // Callback for dynamic row measurement.
 function measureElement(el: Element | null) {
   if (el) {
-    virtualizer.value.measureElement(el)
+    virtualizer.value.measureElement(el);
   }
 }
 
@@ -530,36 +610,36 @@ watch(
   () => props.query,
   () => {
     if (!isExternalMode.value) {
-      loadInitialMessages()
+      loadInitialMessages();
     }
   },
-  { deep: true }
-)
+  { deep: true },
+);
 
 // React to external message list updates.
 watch(
   () => props.externalMessages,
   () => {
     if (isExternalMode.value) {
-      loadInitialMessages()
+      loadInitialMessages();
     }
   },
-  { deep: true, immediate: true }
-)
+  { deep: true, immediate: true },
+);
 
 // Cleanup pending timers.
 onUnmounted(() => {
   if (visibleMessageTimer) {
-    clearTimeout(visibleMessageTimer)
-    visibleMessageTimer = null
+    clearTimeout(visibleMessageTimer);
+    visibleMessageTimer = null;
   }
-})
+});
 
 // Public methods exposed to parent component.
 defineExpose({
   refresh: loadInitialMessages,
   scrollToMessage,
-})
+});
 </script>
 
 <template>
@@ -567,29 +647,54 @@ defineExpose({
     <!-- Loading state -->
     <div v-if="isLoading" class="flex h-full items-center justify-center">
       <div class="text-center">
-        <UIcon name="i-heroicons-arrow-path" class="h-8 w-8 animate-spin text-gray-400" />
-        <p class="mt-2 text-sm text-gray-500">{{ t('records.messageList.loading') }}</p>
+        <UIcon
+          name="i-heroicons-arrow-path"
+          class="h-8 w-8 animate-spin text-gray-400"
+        />
+        <p class="mt-2 text-sm text-gray-500">
+          {{ t("records.messageList.loading") }}
+        </p>
       </div>
     </div>
 
     <!-- Empty state -->
-    <div v-else-if="messages.length === 0" class="flex h-full items-center justify-center">
+    <div
+      v-else-if="messages.length === 0"
+      class="flex h-full items-center justify-center"
+    >
       <div class="xeno-record-empty text-center">
-        <UIcon name="i-heroicons-chat-bubble-left-right" class="h-12 w-12 text-gray-300 dark:text-gray-600" />
-        <p class="mt-2 text-sm text-gray-500">{{ t('records.messageList.noMessages') }}</p>
-        <p class="mt-1 text-xs text-gray-400">{{ t('records.messageList.tryAdjustFilter') }}</p>
+        <UIcon
+          name="i-heroicons-chat-bubble-left-right"
+          class="h-12 w-12 text-gray-300 dark:text-gray-600"
+        />
+        <p class="mt-2 text-sm text-gray-500">
+          {{ t("records.messageList.noMessages") }}
+        </p>
+        <p class="mt-1 text-xs text-gray-400">
+          {{ t("records.messageList.tryAdjustFilter") }}
+        </p>
       </div>
     </div>
 
     <!-- Virtual scroll container -->
-    <div v-else ref="scrollContainerRef" class="xeno-record-scroll h-full overflow-y-auto" @scroll="handleScroll">
+    <div
+      v-else
+      ref="scrollContainerRef"
+      class="xeno-record-scroll h-full overflow-y-auto"
+      @scroll="handleScroll"
+    >
       <!-- Top loading indicator -->
       <div v-if="hasMoreBefore" class="flex justify-center py-2">
         <span v-if="isLoadingMore" class="text-xs text-gray-400">
-          <UIcon name="i-heroicons-arrow-path" class="mr-1 inline h-3 w-3 animate-spin" />
-          {{ t('records.messageList.loadingMore') }}
+          <UIcon
+            name="i-heroicons-arrow-path"
+            class="mr-1 inline h-3 w-3 animate-spin"
+          />
+          {{ t("records.messageList.loadingMore") }}
         </span>
-        <span v-else class="text-xs text-gray-400">{{ t('records.messageList.scrollUpForMore') }}</span>
+        <span v-else class="text-xs text-gray-400">{{
+          t("records.messageList.scrollUpForMore")
+        }}</span>
       </div>
 
       <!-- Virtualized list -->
@@ -605,8 +710,13 @@ defineExpose({
           :data-index="virtualItem.index"
         >
           <!-- Time separator -->
-          <div v-if="getTimeSeparator(virtualItem.index)" class="flex items-center justify-center py-2">
-            <div class="xeno-record-separator flex items-center gap-2 text-xs text-gray-400">
+          <div
+            v-if="getTimeSeparator(virtualItem.index)"
+            class="flex items-center justify-center py-2"
+          >
+            <div
+              class="xeno-record-separator flex items-center gap-2 text-xs text-gray-400"
+            >
               <div class="h-px w-8 bg-gray-200 dark:bg-gray-700" />
               <span>{{ getTimeSeparator(virtualItem.index) }}</span>
               <div class="h-px w-8 bg-gray-200 dark:bg-gray-700" />
@@ -628,10 +738,15 @@ defineExpose({
       <!-- Bottom loading indicator -->
       <div v-if="hasMoreAfter" class="flex justify-center py-2">
         <span v-if="isLoadingMore" class="text-xs text-gray-400">
-          <UIcon name="i-heroicons-arrow-path" class="mr-1 inline h-3 w-3 animate-spin" />
-          {{ t('records.messageList.loadingMore') }}
+          <UIcon
+            name="i-heroicons-arrow-path"
+            class="mr-1 inline h-3 w-3 animate-spin"
+          />
+          {{ t("records.messageList.loadingMore") }}
         </span>
-        <span v-else class="text-xs text-gray-400">{{ t('records.messageList.scrollDownForMore') }}</span>
+        <span v-else class="text-xs text-gray-400">{{
+          t("records.messageList.scrollDownForMore")
+        }}</span>
       </div>
     </div>
   </div>

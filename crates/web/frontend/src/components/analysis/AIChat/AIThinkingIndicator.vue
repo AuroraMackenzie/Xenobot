@@ -1,25 +1,25 @@
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n'
+import { useI18n } from "vue-i18n";
 
-const { t, te } = useI18n()
+const { t, te } = useI18n();
 
 // English engineering note.
 function localizedToolName(name: string, fallback?: string): string {
-  const key = `ai.chat.message.tools.${name}`
-  return te(key) ? t(key) : fallback || name
+  const key = `ai.chat.message.tools.${name}`;
+  return te(key) ? t(key) : fallback || name;
 }
 
 // Props
 defineProps<{
   // English engineering note.
   currentToolStatus: {
-    name: string
-    displayName: string
-    status: 'running' | 'done' | 'error'
-  } | null
+    name: string;
+    displayName: string;
+    status: "running" | "done" | "error";
+  } | null;
   // English engineering note.
-  toolsUsed: string[]
-}>()
+  toolsUsed: string[];
+}>();
 </script>
 
 <template>
@@ -32,7 +32,9 @@ defineProps<{
     </div>
 
     <!-- English UI note -->
-    <div class="rounded-2xl rounded-tl-sm bg-gray-100 px-4 py-3 dark:bg-gray-800">
+    <div
+      class="rounded-2xl rounded-tl-sm bg-gray-100 px-4 py-3 dark:bg-gray-800"
+    >
       <!-- English UI note -->
       <div v-if="currentToolStatus" class="space-y-2">
         <div class="flex items-center gap-2">
@@ -55,16 +57,32 @@ defineProps<{
                     : 'i-heroicons-x-circle'
               "
               class="h-3 w-3"
-              :class="{ 'animate-spin': currentToolStatus.status === 'running' }"
+              :class="{
+                'animate-spin': currentToolStatus.status === 'running',
+              }"
             />
-            {{ localizedToolName(currentToolStatus.name, currentToolStatus.displayName) }}
+            {{
+              localizedToolName(
+                currentToolStatus.name,
+                currentToolStatus.displayName,
+              )
+            }}
           </span>
 
           <!-- English UI note -->
-          <span v-if="currentToolStatus.status === 'running'" class="flex gap-1">
-            <span class="h-1.5 w-1.5 animate-bounce rounded-full bg-pink-500 [animation-delay:0ms]" />
-            <span class="h-1.5 w-1.5 animate-bounce rounded-full bg-pink-500 [animation-delay:150ms]" />
-            <span class="h-1.5 w-1.5 animate-bounce rounded-full bg-pink-500 [animation-delay:300ms]" />
+          <span
+            v-if="currentToolStatus.status === 'running'"
+            class="flex gap-1"
+          >
+            <span
+              class="h-1.5 w-1.5 animate-bounce rounded-full bg-pink-500 [animation-delay:0ms]"
+            />
+            <span
+              class="h-1.5 w-1.5 animate-bounce rounded-full bg-pink-500 [animation-delay:150ms]"
+            />
+            <span
+              class="h-1.5 w-1.5 animate-bounce rounded-full bg-pink-500 [animation-delay:300ms]"
+            />
           </span>
 
           <!-- English UI note -->
@@ -72,18 +90,26 @@ defineProps<{
             v-else-if="currentToolStatus.status === 'done'"
             class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400"
           >
-            <span>{{ t('ai.chat.thinking.processingResult') }}</span>
+            <span>{{ t("ai.chat.thinking.processingResult") }}</span>
             <span class="flex gap-1">
-              <span class="h-1 w-1 animate-bounce rounded-full bg-gray-400 [animation-delay:0ms]" />
-              <span class="h-1 w-1 animate-bounce rounded-full bg-gray-400 [animation-delay:150ms]" />
-              <span class="h-1 w-1 animate-bounce rounded-full bg-gray-400 [animation-delay:300ms]" />
+              <span
+                class="h-1 w-1 animate-bounce rounded-full bg-gray-400 [animation-delay:0ms]"
+              />
+              <span
+                class="h-1 w-1 animate-bounce rounded-full bg-gray-400 [animation-delay:150ms]"
+              />
+              <span
+                class="h-1 w-1 animate-bounce rounded-full bg-gray-400 [animation-delay:300ms]"
+              />
             </span>
           </span>
         </div>
 
         <!-- English UI note -->
         <div v-if="toolsUsed.length > 1" class="flex flex-wrap gap-1">
-          <span class="text-xs text-gray-400">{{ t('ai.chat.thinking.called') }}</span>
+          <span class="text-xs text-gray-400">{{
+            t("ai.chat.thinking.called")
+          }}</span>
           <span
             v-for="tool in toolsUsed.slice(0, -1)"
             :key="tool"
@@ -97,11 +123,19 @@ defineProps<{
 
       <!-- English UI note -->
       <div v-else class="flex items-center gap-2">
-        <span class="text-sm text-gray-600 dark:text-gray-400">{{ t('ai.chat.thinking.analyzing') }}</span>
+        <span class="text-sm text-gray-600 dark:text-gray-400">{{
+          t("ai.chat.thinking.analyzing")
+        }}</span>
         <span class="flex gap-1">
-          <span class="h-2 w-2 animate-bounce rounded-full bg-pink-500 [animation-delay:0ms]" />
-          <span class="h-2 w-2 animate-bounce rounded-full bg-pink-500 [animation-delay:150ms]" />
-          <span class="h-2 w-2 animate-bounce rounded-full bg-pink-500 [animation-delay:300ms]" />
+          <span
+            class="h-2 w-2 animate-bounce rounded-full bg-pink-500 [animation-delay:0ms]"
+          />
+          <span
+            class="h-2 w-2 animate-bounce rounded-full bg-pink-500 [animation-delay:150ms]"
+          />
+          <span
+            class="h-2 w-2 animate-bounce rounded-full bg-pink-500 [animation-delay:300ms]"
+          />
         </span>
       </div>
     </div>

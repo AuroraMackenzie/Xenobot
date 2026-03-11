@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, nextTick } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref, computed, watch, onMounted, nextTick } from "vue";
+import { useRoute, useRouter } from "vue-router";
 
 /**
  * English note.
@@ -9,103 +9,103 @@ import { useRoute, useRouter } from 'vue-router'
  * English note.
  */
 interface TabItem {
-  id: string
-  label: string
-  icon?: string
+  id: string;
+  label: string;
+  icon?: string;
 }
 
 interface Props {
-  modelValue: string
-  items: TabItem[]
-  /** English note.
-  persistKey?: string
-  /** English note.
-  orientation?: 'horizontal' | 'vertical'
+  modelValue: string;
+  items: TabItem[];
+  // English engineering note.
+  persistKey?: string;
+  // English engineering note.
+  orientation?: "horizontal" | "vertical";
 }
 
 interface Emits {
-  (e: 'update:modelValue', value: string): void
-  (e: 'change', value: string): void
+  (e: "update:modelValue", value: string): void;
+  (e: "change", value: string): void;
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  orientation: 'horizontal',
-})
-const emit = defineEmits<Emits>()
+  orientation: "horizontal",
+});
+const emit = defineEmits<Emits>();
 
-const route = useRoute()
-const router = useRouter()
-
-// English engineering note.
-const isVertical = computed(() => props.orientation === 'vertical')
+const route = useRoute();
+const router = useRouter();
 
 // English engineering note.
-const tabRefs = ref<Record<string, HTMLElement | null>>({})
-const containerRef = ref<HTMLElement | null>(null)
+const isVertical = computed(() => props.orientation === "vertical");
 
 // English engineering note.
-const indicatorStyle = ref<Record<string, string>>({})
+const tabRefs = ref<Record<string, HTMLElement | null>>({});
+const containerRef = ref<HTMLElement | null>(null);
+
+// English engineering note.
+const indicatorStyle = ref<Record<string, string>>({});
 
 // English engineering note.
 const activeTab = computed({
   get: () => props.modelValue,
   set: (value) => {
-    emit('update:modelValue', value)
-    emit('change', value)
+    emit("update:modelValue", value);
+    emit("change", value);
   },
-})
+});
 
 // English engineering note.
 function updateIndicator() {
-  const activeButton = tabRefs.value[activeTab.value]
+  const activeButton = tabRefs.value[activeTab.value];
   if (activeButton && containerRef.value) {
-    const containerRect = containerRef.value.getBoundingClientRect()
-    const buttonRect = activeButton.getBoundingClientRect()
+    const containerRect = containerRef.value.getBoundingClientRect();
+    const buttonRect = activeButton.getBoundingClientRect();
 
     if (isVertical.value) {
       // English engineering note.
       indicatorStyle.value = {
         top: `${buttonRect.top - containerRect.top}px`,
         height: `${buttonRect.height}px`,
-        right: '0px',
-        width: '2px',
-      }
+        right: "0px",
+        width: "2px",
+      };
     } else {
       // English engineering note.
       indicatorStyle.value = {
         left: `${buttonRect.left - containerRect.left}px`,
         width: `${buttonRect.width}px`,
-        bottom: '0px',
-        height: '2px',
-      }
+        bottom: "0px",
+        height: "2px",
+      };
     }
   }
 }
 
 // English engineering note.
 const handleTabClick = (tabId: string) => {
-  activeTab.value = tabId
-}
+  activeTab.value = tabId;
+};
 
 // English engineering note.
 function setTabRef(id: string, el: HTMLElement | null) {
-  tabRefs.value[id] = el
+  tabRefs.value[id] = el;
 }
 
 // English engineering note.
 onMounted(() => {
   if (props.persistKey) {
-    const savedTab = route.query[props.persistKey] as string
+    const savedTab = route.query[props.persistKey] as string;
     // English engineering note.
     if (savedTab && props.items.some((item) => item.id === savedTab)) {
-      activeTab.value = savedTab
+      activeTab.value = savedTab;
     }
   }
   // English engineering note.
   nextTick(() => {
-    updateIndicator()
-  })
-})
+    updateIndicator();
+  });
+});
 
 // English engineering note.
 watch(
@@ -118,25 +118,25 @@ watch(
           ...route.query,
           [props.persistKey]: newValue,
         },
-      })
+      });
     }
     // English engineering note.
     nextTick(() => {
-      updateIndicator()
-    })
-  }
-)
+      updateIndicator();
+    });
+  },
+);
 
 // English engineering note.
 watch(
   () => props.items,
   () => {
     nextTick(() => {
-      updateIndicator()
-    })
+      updateIndicator();
+    });
   },
-  { deep: true }
-)
+  { deep: true },
+);
 </script>
 
 <template>
@@ -147,7 +147,11 @@ watch(
         : 'flex items-center justify-between border-b border-gray-200/50 px-6 dark:border-gray-800/50',
     ]"
   >
-    <div ref="containerRef" class="relative" :class="[isVertical ? 'flex flex-col gap-1' : 'flex gap-1']">
+    <div
+      ref="containerRef"
+      class="relative"
+      :class="[isVertical ? 'flex flex-col gap-1' : 'flex gap-1']"
+    >
       <button
         v-for="tab in items"
         :key="tab.id"
@@ -165,7 +169,10 @@ watch(
         {{ tab.label }}
       </button>
       <!-- English UI note -->
-      <div class="absolute bg-primary-500 transition-all duration-300 ease-out" :style="indicatorStyle" />
+      <div
+        class="absolute bg-primary-500 transition-all duration-300 ease-out"
+        :style="indicatorStyle"
+      />
     </div>
     <!-- English UI note -->
     <slot v-if="!isVertical" name="right" />

@@ -1,8 +1,8 @@
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from "vue";
 
 export interface AnchorItem {
-  id: string
-  label: string
+  id: string;
+  label: string;
 }
 
 /**
@@ -13,96 +13,102 @@ export interface AnchorItem {
 export function usePageAnchors(
   anchors: AnchorItem[],
   options: {
-    /** English note.
-    threshold?: number
-    /** English note.
-    containerSelector?: string
-    /** English note.
-    scrollLockDuration?: number
-  } = {}
+    // English engineering note.
+    threshold?: number;
+    // English engineering note.
+    containerSelector?: string;
+    // English engineering note.
+    scrollLockDuration?: number;
+  } = {},
 ) {
-  const { threshold = 300, containerSelector = '.overflow-y-auto', scrollLockDuration = 800 } = options
+  const {
+    threshold = 300,
+    containerSelector = ".overflow-y-auto",
+    scrollLockDuration = 800,
+  } = options;
 
   // English engineering note.
-  const activeAnchor = ref(anchors[0]?.id || '')
+  const activeAnchor = ref(anchors[0]?.id || "");
   // English engineering note.
-  let isScrolling = false
+  let isScrolling = false;
   // English engineering note.
-  const contentRef = ref<HTMLElement | null>(null)
+  const contentRef = ref<HTMLElement | null>(null);
   // English engineering note.
-  let scrollContainer: Element | null = null
+  let scrollContainer: Element | null = null;
 
   /**
    * English note.
    */
   function updateActiveAnchor() {
-    if (isScrolling) return
+    if (isScrolling) return;
 
     // English engineering note.
-    const positions: { id: string; top: number }[] = []
+    const positions: { id: string; top: number }[] = [];
     anchors.forEach((anchor) => {
-      const element = document.getElementById(anchor.id)
+      const element = document.getElementById(anchor.id);
       if (element) {
-        const rect = element.getBoundingClientRect()
-        positions.push({ id: anchor.id, top: Math.round(rect.top) })
+        const rect = element.getBoundingClientRect();
+        positions.push({ id: anchor.id, top: Math.round(rect.top) });
       }
-    })
+    });
 
     // English engineering note.
-    let activeIndex = 0
+    let activeIndex = 0;
     for (let i = 0; i < positions.length; i++) {
       if (positions[i].top > threshold) {
-        activeIndex = Math.max(0, i - 1)
-        break
+        activeIndex = Math.max(0, i - 1);
+        break;
       }
-      activeIndex = i
+      activeIndex = i;
     }
 
-    activeAnchor.value = anchors[activeIndex]?.id || ''
+    activeAnchor.value = anchors[activeIndex]?.id || "";
   }
 
   /**
    * English note.
    */
   function scrollToAnchor(id: string) {
-    const element = document.getElementById(id)
+    const element = document.getElementById(id);
     if (element) {
       // English engineering note.
-      activeAnchor.value = id
+      activeAnchor.value = id;
       // English engineering note.
-      isScrolling = true
-      element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      isScrolling = true;
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
       // English engineering note.
       setTimeout(() => {
-        isScrolling = false
-        updateActiveAnchor()
-      }, scrollLockDuration)
+        isScrolling = false;
+        updateActiveAnchor();
+      }, scrollLockDuration);
     }
   }
 
   onMounted(() => {
     // English engineering note.
-    scrollContainer = contentRef.value?.closest(containerSelector) || null
+    scrollContainer = contentRef.value?.closest(containerSelector) || null;
     if (scrollContainer) {
-      scrollContainer.addEventListener('scroll', updateActiveAnchor, { passive: true })
-      updateActiveAnchor()
+      scrollContainer.addEventListener("scroll", updateActiveAnchor, {
+        passive: true,
+      });
+      updateActiveAnchor();
     }
-  })
+  });
 
   onUnmounted(() => {
     if (scrollContainer) {
-      scrollContainer.removeEventListener('scroll', updateActiveAnchor)
+      scrollContainer.removeEventListener("scroll", updateActiveAnchor);
     }
-  })
+  });
 
   return {
-    /** English note.
+    // English engineering note.
     contentRef,
-    /** English note.
+    // English engineering note.
     activeAnchor,
-    /** English note.
+    // English engineering note.
     scrollToAnchor,
-    /** English note.
+    // English engineering note.
     updateActiveAnchor,
-  }
+  };
 }

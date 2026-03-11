@@ -6,12 +6,25 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
+pub mod account;
+pub mod audio;
+pub mod config;
+pub mod media;
+pub mod monitor;
+pub mod service;
+
 use std::path::Path;
+use std::path::PathBuf;
 
 use thiserror::Error;
 use xenobot_analysis::parsers::{ParseError, ParsedChat, ParserRegistry};
 use xenobot_core::platform_sources::{discover_sources_for_platform, SourceCandidate};
 use xenobot_core::types::Platform;
+
+pub use config::LineConfig;
+pub use service::{AuthorizedLineWorkspace, LineService, StagedLineExport};
+/// Common result type used by LINE crate operations.
+pub type LineResult<T> = Result<T, LineError>;
 
 /// Stable platform identifier.
 pub const PLATFORM_ID: &str = "line";
@@ -72,6 +85,25 @@ pub enum LineError {
         /// Actual parsed platform identifier.
         actual: String,
     },
+
+    /// Export path does not belong to an authorized root.
+    #[error("unauthorized export path: {path}")]
+    UnauthorizedPath {
+        /// Rejected path.
+        path: PathBuf,
+    },
+
+    /// I/O error while reading export assets.
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+
+    /// File monitoring error.
+    #[error("file monitoring error: {0}")]
+    FileMonitor(#[from] notify::Error),
+
+    /// Internal orchestration or external tool failure.
+    #[error("internal error: {0}")]
+    Internal(#[from] anyhow::Error),
 }
 
 #[cfg(test)]

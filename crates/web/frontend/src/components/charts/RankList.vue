@@ -1,42 +1,46 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { getRankBadgeClass, getRankBarColor } from '@/utils'
+import { computed } from "vue";
+import { useI18n } from "vue-i18n";
+import { getRankBadgeClass, getRankBarColor } from "@/utils";
 
-const { t } = useI18n()
+const { t } = useI18n();
 
 export interface RankItem {
-  id: string
-  name: string
-  value: number
-  percentage: number
+  id: string;
+  name: string;
+  value: number;
+  percentage: number;
 }
 
 interface Props {
-  members: RankItem[]
-  showAvatar?: boolean
-  rankLimit?: number // English engineering note.
-  unit?: string // English engineering note.
+  members: RankItem[];
+  showAvatar?: boolean;
+  rankLimit?: number; // English engineering note.
+  unit?: string; // English engineering note.
 }
 
 const props = withDefaults(defineProps<Props>(), {
   showAvatar: false,
   rankLimit: 0,
-})
+});
 
 // English engineering note.
-const displayUnit = computed(() => props.unit || t('views.charts.rankList.unit'))
+const displayUnit = computed(
+  () => props.unit || t("views.charts.rankList.unit"),
+);
 
 const displayMembers = computed(() => {
-  return props.rankLimit > 0 ? props.members.slice(0, props.rankLimit) : props.members
-})
+  return props.rankLimit > 0
+    ? props.members.slice(0, props.rankLimit)
+    : props.members;
+});
 
 // English engineering note.
 function getRelativePercentage(index: number): number {
-  if (displayMembers.value.length === 0) return 0
-  const maxValue = displayMembers.value[0].value
-  if (maxValue === 0) return 0
-  return Math.round((displayMembers.value[index].value / maxValue) * 100)
+  if (displayMembers.value.length === 0) return 0;
+  const maxValue = displayMembers.value[0].value;
+  if (maxValue === 0) return 0;
+  return Math.round((displayMembers.value[index].value / maxValue) * 100);
 }
 </script>
 
@@ -72,7 +76,9 @@ function getRelativePercentage(index: number): number {
 
       <!-- English UI note -->
       <div class="flex flex-1 items-center">
-        <div class="h-2 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
+        <div
+          class="h-2 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800"
+        >
           <div
             class="h-full rounded-full bg-linear-to-r transition-all"
             :class="getRankBarColor(index)"
@@ -83,8 +89,12 @@ function getRelativePercentage(index: number): number {
 
       <!-- English UI note -->
       <div class="flex shrink-0 items-baseline gap-2 whitespace-nowrap">
-        <span class="text-lg font-bold text-gray-900 dark:text-white">{{ member.value }}</span>
-        <span class="text-sm text-gray-500">{{ displayUnit }} ({{ member.percentage }}%)</span>
+        <span class="text-lg font-bold text-gray-900 dark:text-white">{{
+          member.value
+        }}</span>
+        <span class="text-sm text-gray-500"
+          >{{ displayUnit }} ({{ member.percentage }}%)</span
+        >
       </div>
     </div>
   </div>

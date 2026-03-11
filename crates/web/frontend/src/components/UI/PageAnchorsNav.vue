@@ -1,30 +1,30 @@
 <script setup lang="ts">
-import type { AnchorItem } from '@/composables'
+import type { AnchorItem } from "@/composables";
 
 withDefaults(
   defineProps<{
-    /** English note.
-    anchors: AnchorItem[]
-    /** English note.
-    activeAnchor: string
-    /** English note.
-    width?: string
-    /** English note.
-    hideOnMobile?: boolean
+    // English engineering note.
+    anchors: AnchorItem[];
+    // English engineering note.
+    activeAnchor: string;
+    // English engineering note.
+    width?: string;
+    // English engineering note.
+    hideOnMobile?: boolean;
   }>(),
   {
-    width: 'w-44',
+    width: "w-44",
     hideOnMobile: true,
-  }
-)
+  },
+);
 
 const emit = defineEmits<{
-  /** English note.
-  click: [id: string]
-}>()
+  // English engineering note.
+  click: [id: string];
+}>();
 
 function handleClick(id: string) {
-  emit('click', id)
+  emit("click", id);
 }
 </script>
 

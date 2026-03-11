@@ -2,10 +2,10 @@
 //!
 //! This module focuses on `.dat` image decryption used by several WeChat exports.
 
+use std::fs;
 use crate::error::{WeChatError, WeChatResult};
 use aes::cipher::{block_padding::Pkcs7, BlockDecryptMut, KeyIvInit};
-use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 type Aes128CbcDec = cbc::Decryptor<aes::Aes128>;
 type Aes192CbcDec = cbc::Decryptor<aes::Aes192>;
@@ -74,6 +74,9 @@ pub struct DatImageDecryptResult {
     pub bytes_written: usize,
 }
 
+/// Metadata tuple returned by in-memory `.dat` image decryption.
+pub type DatImageDecryptMeta = (ImageFormat, Option<Vec<u8>>);
+
 /// Decrypt a `.dat` image file and write output image bytes.
 pub fn decrypt_dat_image_file(
     input_path: &Path,
@@ -99,7 +102,7 @@ pub fn decrypt_dat_image_file(
 pub fn decrypt_dat_image_bytes(
     encrypted: &[u8],
     params: &DatImageDecryptParams,
-) -> WeChatResult<(Vec<u8>, (ImageFormat, Option<Vec<u8>>))> {
+) -> WeChatResult<(Vec<u8>, DatImageDecryptMeta)> {
     if encrypted.is_empty() {
         return Err(WeChatError::Decryption(
             "empty .dat payload cannot be decrypted".to_string(),
@@ -247,13 +250,98 @@ fn detect_image_format(data: &[u8]) -> Option<ImageFormat> {
     None
 }
 
+/// Media kind inferred from a WeChat asset path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WeChatMediaKind {
+    /// Encrypted `.dat` image asset.
+    EncryptedDatImage,
+    /// Plain image asset.
+    Image,
+    /// Video asset.
+    Video,
+    /// Audio asset.
+    Audio,
+    /// Document asset.
+    Document,
+    /// Archive asset.
+    Archive,
+    /// Sticker asset.
+    Sticker,
+    /// Unknown or unsupported asset.
+    Unknown,
+}
+
+/// Classified media asset from an explicitly authorized WeChat tree.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WeChatMediaAsset {
+    /// Original asset path.
+    pub path: PathBuf,
+    /// Inferred media kind.
+    pub kind: WeChatMediaKind,
+    /// Lowercase file extension when available.
+    pub extension: Option<String>,
+    /// File size in bytes when metadata is available.
+    pub size_bytes: u64,
+}
+
+/// Classify one media path by extension.
+pub fn classify_media_path(path: &Path) -> WeChatMediaKind {
+    let ext = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(|value| value.to_ascii_lowercase());
+
+    match ext.as_deref() {
+        Some("dat") => WeChatMediaKind::EncryptedDatImage,
+        Some("jpg" | "jpeg" | "png" | "gif" | "bmp" | "heic" | "webp") => WeChatMediaKind::Image,
+        Some("mp4" | "mov" | "avi" | "mkv" | "webm") => WeChatMediaKind::Video,
+        Some("opus" | "ogg" | "silk" | "mp3" | "m4a" | "wav" | "aac") => WeChatMediaKind::Audio,
+        Some("pdf" | "doc" | "docx" | "xls" | "xlsx" | "ppt" | "pptx" | "txt" | "csv") => {
+            WeChatMediaKind::Document
+        }
+        Some("zip" | "7z" | "rar" | "tar" | "gz") => WeChatMediaKind::Archive,
+        Some("tgs") => WeChatMediaKind::Sticker,
+        _ => WeChatMediaKind::Unknown,
+    }
+}
+
+/// Build a media inventory from explicitly provided asset paths.
+pub fn collect_media_assets<I, P>(paths: I) -> Vec<WeChatMediaAsset>
+where
+    I: IntoIterator<Item = P>,
+    P: AsRef<Path>,
+{
+    paths.into_iter()
+        .filter_map(|path| {
+            let path = path.as_ref();
+            let metadata = fs::metadata(path).ok()?;
+            if !metadata.is_file() {
+                return None;
+            }
+
+            let extension = path
+                .extension()
+                .and_then(|value| value.to_str())
+                .map(|value| value.to_ascii_lowercase());
+
+            Some(WeChatMediaAsset {
+                path: path.to_path_buf(),
+                kind: classify_media_path(path),
+                extension,
+                size_bytes: metadata.len(),
+            })
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::tempdir;
 
     #[test]
     fn test_infer_wechat_dat_xor_key_jpeg() {
-        let plain = vec![0xFF, 0xD8, 0xFF, 0xE0, 0x00];
+        let plain = [0xFF, 0xD8, 0xFF, 0xE0, 0x00];
         let key = 0xAA_u8;
         let encrypted: Vec<u8> = plain.iter().map(|b| *b ^ key).collect();
         let inferred = infer_wechat_dat_xor_key(&encrypted);
@@ -285,5 +373,25 @@ mod tests {
         sample.extend_from_slice(&[0, 0, 0, 0]);
         sample.extend_from_slice(b"WEBP");
         assert_eq!(detect_image_format(&sample), Some(ImageFormat::Webp));
+    }
+
+    #[test]
+    fn test_classifies_dat_assets() {
+        assert_eq!(
+            classify_media_path(Path::new("cache/12345.dat")),
+            WeChatMediaKind::EncryptedDatImage
+        );
+    }
+
+    #[test]
+    fn test_collects_existing_media_assets() {
+        let dir = tempdir().expect("tempdir");
+        let image = dir.path().join("photo.dat");
+        fs::write(&image, [1_u8, 2, 3]).expect("write media asset");
+
+        let assets = collect_media_assets([image.as_path()]);
+        assert_eq!(assets.len(), 1);
+        assert_eq!(assets[0].kind, WeChatMediaKind::EncryptedDatImage);
+        assert_eq!(assets[0].size_bytes, 3);
     }
 }

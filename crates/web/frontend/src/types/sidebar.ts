@@ -1,49 +1,45 @@
 /**
- * English note.
+ * Footer action categories shown in the launchpad footer.
  */
 
-/**
- * English note.
- * English note.
- */
-export type FooterLinkType = 'link'
+export type FooterLinkType = "link";
 
 /**
- * English note.
+ * Launchpad footer link descriptor.
  */
 export interface FooterLinkConfig {
-  /** English note.
-  id: string
-  /** English note.
-  icon: string
-  /** English note.
-  title: string
-  /** English note.
-  subtitle: string
-  /** English note.
-  type: FooterLinkType
-  /** English note.
-  url: string
+  /** Stable identifier for rendering and analytics. */
+  id: string;
+  /** Icon name consumed by the frontend icon pipeline. */
+  icon: string;
+  /** Primary label shown in the launchpad footer. */
+  title: string;
+  /** Secondary descriptor shown below the title. */
+  subtitle: string;
+  /** Footer action kind. */
+  type: FooterLinkType;
+  /** Navigation target. */
+  url: string;
 }
 
 /**
- * English note.
+ * Default footer links shipped with the launchpad entry experience.
  */
 export const defaultFooterLinks: FooterLinkConfig[] = [
   {
-    id: 'website',
-    icon: 'heroicons:globe-alt',
-    title: '官网',
-    subtitle: '下载最新版客户端',
-    type: 'link',
-    url: 'https://xenobot.app/cn/',
+    id: "website",
+    icon: "heroicons:globe-alt",
+    title: "Website",
+    subtitle: "Download the latest desktop build",
+    type: "link",
+    url: "https://xenobot.app/cn/",
   },
   {
-    id: 'github',
-    icon: 'brand:github',
-    title: 'Github',
-    subtitle: '提交 Issue，反馈 BUG',
-    type: 'link',
-    url: 'https://github.com/xenobot-labs/Xenobot',
+    id: "github",
+    icon: "brand:github",
+    title: "Github",
+    subtitle: "Open issues and report bugs",
+    type: "link",
+    url: "https://github.com/xenobot-labs/Xenobot",
   },
-]
+];

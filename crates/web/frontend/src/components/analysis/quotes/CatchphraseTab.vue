@@ -1,51 +1,54 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
-import type { CatchphraseAnalysis } from '@/types/analysis'
-import { ListPro } from '@/components/charts'
-import { SectionCard, EmptyState, LoadingState } from '@/components/UI'
+import { ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
+import type { CatchphraseAnalysis } from "@/types/analysis";
+import { ListPro } from "@/components/charts";
+import { SectionCard, EmptyState, LoadingState } from "@/components/UI";
 
-const { t } = useI18n()
+const { t } = useI18n();
 
 interface TimeFilter {
-  startTs?: number
-  endTs?: number
+  startTs?: number;
+  endTs?: number;
 }
 
 const props = defineProps<{
-  sessionId: string
-  timeFilter?: TimeFilter
-}>()
+  sessionId: string;
+  timeFilter?: TimeFilter;
+}>();
 
 // English engineering note.
-const catchphraseAnalysis = ref<CatchphraseAnalysis | null>(null)
-const isLoading = ref(false)
+const catchphraseAnalysis = ref<CatchphraseAnalysis | null>(null);
+const isLoading = ref(false);
 
 async function loadCatchphraseAnalysis() {
-  if (!props.sessionId) return
-  isLoading.value = true
+  if (!props.sessionId) return;
+  isLoading.value = true;
   try {
-    catchphraseAnalysis.value = await window.chatApi.getCatchphraseAnalysis(props.sessionId, props.timeFilter)
+    catchphraseAnalysis.value = await window.chatApi.getCatchphraseAnalysis(
+      props.sessionId,
+      props.timeFilter,
+    );
   } catch (error) {
-    console.error('Failed to load catchphrase analysis:', error)
+    console.error("Failed to load catchphrase analysis:", error);
   } finally {
-    isLoading.value = false
+    isLoading.value = false;
   }
 }
 
 function truncateContent(content: string, maxLength = 20): string {
-  if (content.length <= maxLength) return content
-  return content.slice(0, maxLength) + '...'
+  if (content.length <= maxLength) return content;
+  return content.slice(0, maxLength) + "...";
 }
 
 // English engineering note.
 watch(
   () => [props.sessionId, props.timeFilter],
   () => {
-    loadCatchphraseAnalysis()
+    loadCatchphraseAnalysis();
   },
-  { immediate: true, deep: true }
-)
+  { immediate: true, deep: true },
+);
 </script>
 
 <template>
@@ -58,12 +61,18 @@ watch(
       v-else-if="catchphraseAnalysis && catchphraseAnalysis.members.length > 0"
       :items="catchphraseAnalysis.members"
       :title="t('quotes.catchphrase.title')"
-      :description="t('quotes.catchphrase.description', { count: catchphraseAnalysis.members.length })"
+      :description="
+        t('quotes.catchphrase.description', {
+          count: catchphraseAnalysis.members.length,
+        })
+      "
       :count-template="t('quotes.catchphrase.countTemplate')"
     >
       <template #item="{ item: member }">
         <div class="flex items-start gap-4">
-          <div class="w-28 shrink-0 pt-1 font-medium text-gray-900 dark:text-white">
+          <div
+            class="w-28 shrink-0 pt-1 font-medium text-gray-900 dark:text-white"
+          >
             {{ member.name }}
           </div>
 
@@ -83,13 +92,17 @@ watch(
               <span
                 class="text-sm"
                 :class="
-                  index === 0 ? 'font-medium text-amber-700 dark:text-amber-400' : 'text-gray-700 dark:text-gray-300'
+                  index === 0
+                    ? 'font-medium text-amber-700 dark:text-amber-400'
+                    : 'text-gray-700 dark:text-gray-300'
                 "
                 :title="phrase.content"
               >
                 {{ truncateContent(phrase.content) }}
               </span>
-              <span class="text-xs text-gray-400">{{ t('quotes.catchphrase.times', { count: phrase.count }) }}</span>
+              <span class="text-xs text-gray-400">{{
+                t("quotes.catchphrase.times", { count: phrase.count })
+              }}</span>
             </div>
           </div>
         </div>
@@ -108,7 +121,11 @@ watch(
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 1.5rem;
   background:
-    radial-gradient(circle at top right, rgba(236, 72, 153, 0.08), transparent 24%),
+    radial-gradient(
+      circle at top right,
+      rgba(236, 72, 153, 0.08),
+      transparent 24%
+    ),
     linear-gradient(180deg, rgba(15, 23, 42, 0.74), rgba(15, 23, 42, 0.62));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.05),

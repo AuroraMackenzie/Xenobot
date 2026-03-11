@@ -1,63 +1,60 @@
-import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { defineStore } from "pinia";
+import { ref, computed } from "vue";
 
 /**
- * English note.
+ * Presentation shape for an AI provider configuration row in the frontend.
  */
 export interface AIServiceConfigDisplay {
-  id: string
-  name: string
-  provider: string
-  apiKeySet: boolean
-  model?: string
-  baseUrl?: string
-  createdAt: number
-  updatedAt: number
+  id: string;
+  name: string;
+  provider: string;
+  apiKeySet: boolean;
+  model?: string;
+  baseUrl?: string;
+  createdAt: number;
+  updatedAt: number;
 }
 
 /**
- * English note.
+ * Static metadata for a supported LLM provider and its model catalog.
  */
 export interface LLMProvider {
-  id: string
-  name: string
-  description: string
-  defaultBaseUrl: string
-  models: Array<{ id: string; name: string; description?: string }>
+  id: string;
+  name: string;
+  description: string;
+  defaultBaseUrl: string;
+  models: Array<{ id: string; name: string; description?: string }>;
 }
 
 /**
- * English note.
- * English note.
+ * Frontend store for provider metadata and the active AI model selection.
  */
-export const useLLMStore = defineStore('llm', () => {
-  // English engineering note.
+export const useLLMStore = defineStore("llm", () => {
+  /** Available model configurations loaded from the desktop bridge. */
+  const configs = ref<AIServiceConfigDisplay[]>([]);
 
-  /** English note.
-  const configs = ref<AIServiceConfigDisplay[]>([])
+  /** Provider registry used by the settings UI. */
+  const providers = ref<LLMProvider[]>([]);
 
-  /** English note.
-  const providers = ref<LLMProvider[]>([])
+  /** Identifier of the currently selected model configuration. */
+  const activeConfigId = ref<string | null>(null);
 
-  /** English note.
-  const activeConfigId = ref<string | null>(null)
+  /** Loading state for provider and configuration requests. */
+  const isLoading = ref(false);
 
-  /** English note.
-  const isLoading = ref(false)
+  /** Prevents repeated bootstrap work. */
+  const isInitialized = ref(false);
 
-  /** English note.
-  const isInitialized = ref(false)
+  /** Resolved active configuration object. */
+  const activeConfig = computed(
+    () => configs.value.find((c) => c.id === activeConfigId.value) || null,
+  );
 
-  // English engineering note.
+  /** Whether any configuration is currently active. */
+  const hasConfig = computed(() => !!activeConfigId.value);
 
-  /** English note.
-  const activeConfig = computed(() => configs.value.find((c) => c.id === activeConfigId.value) || null)
-
-  /** English note.
-  const hasConfig = computed(() => !!activeConfigId.value)
-
-  /** English note.
-  const isMaxConfigs = computed(() => configs.value.length >= 10)
+  /** Hard cap used by the UI when creating new configurations. */
+  const isMaxConfigs = computed(() => configs.value.length >= 10);
 
   // English engineering note.
 
@@ -65,29 +62,29 @@ export const useLLMStore = defineStore('llm', () => {
    * English note.
    */
   async function init() {
-    if (isInitialized.value) return
-    await loadConfigs()
-    isInitialized.value = true
+    if (isInitialized.value) return;
+    await loadConfigs();
+    isInitialized.value = true;
   }
 
   /**
    * English note.
    */
   async function loadConfigs() {
-    isLoading.value = true
+    isLoading.value = true;
     try {
       const [providersData, configsData, activeId] = await Promise.all([
         window.llmApi.getProviders(),
         window.llmApi.getAllConfigs(),
         window.llmApi.getActiveConfigId(),
-      ])
-      providers.value = providersData
-      configs.value = configsData
-      activeConfigId.value = activeId
+      ]);
+      providers.value = providersData;
+      configs.value = configsData;
+      activeConfigId.value = activeId;
     } catch (error) {
-      console.error('[LLM Store] 加载配置失败：', error)
+      console.error("[LLM Store] Failed to load model configurations:", error);
     } finally {
-      isLoading.value = false
+      isLoading.value = false;
     }
   }
 
@@ -98,16 +95,22 @@ export const useLLMStore = defineStore('llm', () => {
    */
   async function setActiveConfig(id: string): Promise<boolean> {
     try {
-      const result = await window.llmApi.setActiveConfig(id)
+      const result = await window.llmApi.setActiveConfig(id);
       if (result.success) {
-        activeConfigId.value = id
-        return true
+        activeConfigId.value = id;
+        return true;
       }
-      console.error('[LLM Store] 设置激活配置失败：', result.error)
-      return false
+      console.error(
+        "[LLM Store] Failed to set active model configuration:",
+        result.error,
+      );
+      return false;
     } catch (error) {
-      console.error('[LLM Store] 设置激活配置失败：', error)
-      return false
+      console.error(
+        "[LLM Store] Failed to set active model configuration:",
+        error,
+      );
+      return false;
     }
   }
 
@@ -116,7 +119,7 @@ export const useLLMStore = defineStore('llm', () => {
    * English note.
    */
   async function refreshConfigs() {
-    await loadConfigs()
+    await loadConfigs();
   }
 
   /**
@@ -125,7 +128,7 @@ export const useLLMStore = defineStore('llm', () => {
    * English note.
    */
   function getProviderName(providerId: string): string {
-    return providers.value.find((p) => p.id === providerId)?.name || providerId
+    return providers.value.find((p) => p.id === providerId)?.name || providerId;
   }
 
   return {
@@ -145,5 +148,5 @@ export const useLLMStore = defineStore('llm', () => {
     setActiveConfig,
     refreshConfigs,
     getProviderName,
-  }
-})
+  };
+});

@@ -1,34 +1,37 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted } from "vue";
 
 // English engineering note.
-const isMac = ref(false)
-const isMaximized = ref(false)
+const isMac = ref(false);
+const isMaximized = ref(false);
 
 // English engineering note.
-const isWindows = ref(false)
+const isWindows = ref(false);
 
 onMounted(() => {
-  isMac.value = navigator.platform.toLowerCase().includes('mac')
-  isWindows.value = navigator.platform.toLowerCase().includes('win')
+  isMac.value = navigator.platform.toLowerCase().includes("mac");
+  isWindows.value = navigator.platform.toLowerCase().includes("win");
 
   // English engineering note.
-  window.electron?.ipcRenderer?.on('windowState', (_: unknown, maximized: boolean) => {
-    isMaximized.value = maximized
-  })
-})
+  window.electron?.ipcRenderer?.on(
+    "windowState",
+    (_: unknown, maximized: boolean) => {
+      isMaximized.value = maximized;
+    },
+  );
+});
 
 // English engineering note.
 function minimize() {
-  window.electron?.ipcRenderer?.send('window-min')
+  window.electron?.ipcRenderer?.send("window-min");
 }
 
 function maximize() {
-  window.electron?.ipcRenderer?.send('window-maxOrRestore')
+  window.electron?.ipcRenderer?.send("window-maxOrRestore");
 }
 
 function close() {
-  window.electron?.ipcRenderer?.send('window-close')
+  window.electron?.ipcRenderer?.send("window-close");
 }
 </script>
 

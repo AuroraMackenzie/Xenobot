@@ -1,44 +1,44 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { useI18n } from 'vue-i18n'
+import { ref, computed } from "vue";
+import { useI18n } from "vue-i18n";
 
-const { t } = useI18n()
+const { t } = useI18n();
 
 // Props
 const props = defineProps<{
-  disabled?: boolean
-  placeholder?: string
-  status?: 'ready' | 'submitted' | 'streaming' | 'error'
-}>()
+  disabled?: boolean;
+  placeholder?: string;
+  status?: "ready" | "submitted" | "streaming" | "error";
+}>();
 
 // Emits
 const emit = defineEmits<{
-  send: [content: string]
-  stop: []
-}>()
+  send: [content: string];
+  stop: [];
+}>();
 
 // English engineering note.
-const inputValue = ref('')
+const inputValue = ref("");
 
 // English engineering note.
 const chatStatus = computed(() => {
   if (props.disabled) {
-    return props.status || 'submitted'
+    return props.status || "submitted";
   }
-  return 'ready'
-})
+  return "ready";
+});
 
 // English engineering note.
 function handleSubmit() {
-  if (!inputValue.value.trim() || props.disabled) return
+  if (!inputValue.value.trim() || props.disabled) return;
 
-  emit('send', inputValue.value.trim())
-  inputValue.value = ''
+  emit("send", inputValue.value.trim());
+  inputValue.value = "";
 }
 
 // English engineering note.
 function handleStop() {
-  emit('stop')
+  emit("stop");
 }
 </script>
 
@@ -60,7 +60,13 @@ function handleStop() {
           class="rounded-full"
           @click="handleStop"
         />
-        <UChatPromptSubmit v-else :status="chatStatus" class="rounded-full" color="primary" @stop="handleStop" />
+        <UChatPromptSubmit
+          v-else
+          :status="chatStatus"
+          class="rounded-full"
+          color="primary"
+          @stop="handleStop"
+        />
       </UChatPrompt>
     </div>
   </div>

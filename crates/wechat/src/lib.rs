@@ -21,4 +21,4 @@ pub mod monitor;
 pub mod service;
 
 pub use error::{WeChatError, WeChatResult};
-pub use service::WeChatService;
+pub use service::{AuthorizedWeChatWorkspace, StagedWeChatExport, WeChatService};

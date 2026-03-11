@@ -8,6 +8,7 @@ repository = "https://github.com/AuroraMackenzie/Xenobot.git"
 
 [dependencies]
 xenobot-core = { path = "../core" }
+xenobot-analysis = { path = "../analysis" }
 tokio = { workspace = true, features = ["fs", "sync", "time", "macros", "rt-multi-thread"] }
 anyhow = { workspace = true }
 thiserror = { workspace = true }

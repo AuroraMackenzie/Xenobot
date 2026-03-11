@@ -43,7 +43,7 @@ fn parse_frontend_fallback_alias_pairs(
     frontend_file: &PathBuf,
 ) -> Result<HashMap<String, String>, Box<dyn std::error::Error>> {
     let content = fs::read_to_string(frontend_file)?;
-    let re = Regex::new(r"\[\s*'([^']+)'\s*,\s*'([^']+)'\s*\]")?;
+    let re = Regex::new(r#"\[\s*["']([^"']+)["']\s*,\s*["']([^"']+)["']\s*\]"#)?;
     let mut map = HashMap::new();
     for captures in re.captures_iter(&content) {
         let alias = normalize_agent_tool_alias_input(

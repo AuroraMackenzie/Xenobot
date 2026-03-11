@@ -1,62 +1,68 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
-import type { EmbeddingServiceConfig, EmbeddingServiceConfigDisplay } from '@electron/preload/index'
+import { ref, computed, watch } from "vue";
+import { useI18n } from "vue-i18n";
+import type {
+  EmbeddingServiceConfig,
+  EmbeddingServiceConfigDisplay,
+} from "@electron/preload/index";
 
-const { t } = useI18n()
+const { t } = useI18n();
 
 // ============ Props & Emits ============
 
 const props = defineProps<{
-  open: boolean
-  mode: 'add' | 'edit'
-  config: EmbeddingServiceConfigDisplay | null
-}>()
+  open: boolean;
+  mode: "add" | "edit";
+  config: EmbeddingServiceConfigDisplay | null;
+}>();
 
 const emit = defineEmits<{
-  'update:open': [value: boolean]
-  saved: []
-}>()
+  "update:open": [value: boolean];
+  saved: [];
+}>();
 
 // English engineering note.
 
-const isValidating = ref(false)
-const isSaving = ref(false)
+const isValidating = ref(false);
+const isSaving = ref(false);
 
 const formData = ref({
-  name: '',
-  apiSource: 'reuse_llm' as 'reuse_llm' | 'custom',
-  model: '',
-  baseUrl: '',
-  apiKey: '',
-})
+  name: "",
+  apiSource: "reuse_llm" as "reuse_llm" | "custom",
+  model: "",
+  baseUrl: "",
+  apiKey: "",
+});
 
-const validationResult = ref<'idle' | 'valid' | 'invalid'>('idle')
-const validationMessage = ref('')
+const validationResult = ref<"idle" | "valid" | "invalid">("idle");
+const validationMessage = ref("");
 
 // English engineering note.
 
 const isOpen = computed({
   get: () => props.open,
-  set: (val) => emit('update:open', val),
-})
+  set: (val) => emit("update:open", val),
+});
 
 const modalTitle = computed(() =>
-  props.mode === 'add' ? t('settings.embedding.addConfig') : t('settings.embedding.editConfig')
-)
+  props.mode === "add"
+    ? t("settings.embedding.addConfig")
+    : t("settings.embedding.editConfig"),
+);
 
 const canSave = computed(() => {
-  if (!formData.value.name.trim()) return false
-  if (!formData.value.model.trim()) return false
-  if (formData.value.apiSource === 'custom' && !formData.value.baseUrl.trim()) return false
-  return true
-})
+  if (!formData.value.name.trim()) return false;
+  if (!formData.value.model.trim()) return false;
+  if (formData.value.apiSource === "custom" && !formData.value.baseUrl.trim())
+    return false;
+  return true;
+});
 
 // English engineering note.
 const apiSourceOptions = computed(() => [
-  { label: t('settings.embedding.reuseLLM'), value: 'reuse_llm' },
-  { label: t('settings.embedding.customAPI'), value: 'custom' },
-])
+  { label: t("settings.embedding.reuseLLM"), value: "reuse_llm" },
+  { label: t("settings.embedding.customAPI"), value: "custom" },
+]);
 
 // English engineering note.
 
@@ -64,45 +70,45 @@ watch(
   () => props.open,
   async (open) => {
     if (open) {
-      validationResult.value = 'idle'
-      validationMessage.value = ''
+      validationResult.value = "idle";
+      validationMessage.value = "";
 
-      if (props.mode === 'edit' && props.config) {
+      if (props.mode === "edit" && props.config) {
         // English engineering note.
-        const fullConfig = await window.embeddingApi.getConfig(props.config.id)
+        const fullConfig = await window.embeddingApi.getConfig(props.config.id);
         if (fullConfig) {
           formData.value = {
             name: fullConfig.name,
             apiSource: fullConfig.apiSource,
             model: fullConfig.model,
-            baseUrl: fullConfig.baseUrl || '',
-            apiKey: fullConfig.apiKey || '',
-          }
+            baseUrl: fullConfig.baseUrl || "",
+            apiKey: fullConfig.apiKey || "",
+          };
         }
       } else {
         // English engineering note.
         formData.value = {
-          name: '',
-          apiSource: 'reuse_llm',
-          model: '',
-          baseUrl: '',
-          apiKey: '',
-        }
+          name: "",
+          apiSource: "reuse_llm",
+          model: "",
+          baseUrl: "",
+          apiKey: "",
+        };
       }
     }
-  }
-)
+  },
+);
 
 // English engineering note.
 
 async function validateConfig() {
-  isValidating.value = true
-  validationResult.value = 'idle'
-  validationMessage.value = ''
+  isValidating.value = true;
+  validationResult.value = "idle";
+  validationMessage.value = "";
 
   try {
     const testConfig: EmbeddingServiceConfig = {
-      id: 'test',
+      id: "test",
       name: formData.value.name,
       apiSource: formData.value.apiSource,
       model: formData.value.model,
@@ -110,59 +116,70 @@ async function validateConfig() {
       apiKey: formData.value.apiKey || undefined,
       createdAt: Date.now(),
       updatedAt: Date.now(),
-    }
+    };
 
-    const result = await window.embeddingApi.validateConfig(testConfig)
+    const result = await window.embeddingApi.validateConfig(testConfig);
 
     if (result.success) {
-      validationResult.value = 'valid'
-      validationMessage.value = t('settings.embedding.validateSuccess')
+      validationResult.value = "valid";
+      validationMessage.value = t("settings.embedding.validateSuccess");
     } else {
-      validationResult.value = 'invalid'
-      validationMessage.value = result.error || t('settings.embedding.validateFailed')
+      validationResult.value = "invalid";
+      validationMessage.value =
+        result.error || t("settings.embedding.validateFailed");
     }
   } catch (error) {
-    validationResult.value = 'invalid'
-    validationMessage.value = String(error)
+    validationResult.value = "invalid";
+    validationMessage.value = String(error);
   } finally {
-    isValidating.value = false
+    isValidating.value = false;
   }
 }
 
 async function saveConfig() {
-  if (!canSave.value) return
+  if (!canSave.value) return;
 
-  isSaving.value = true
+  isSaving.value = true;
 
   try {
     const configData = {
       name: formData.value.name.trim(),
       apiSource: formData.value.apiSource,
       model: formData.value.model.trim(),
-      baseUrl: formData.value.apiSource === 'custom' ? formData.value.baseUrl.trim() : undefined,
-      apiKey: formData.value.apiSource === 'custom' ? formData.value.apiKey.trim() || undefined : undefined,
-    }
+      baseUrl:
+        formData.value.apiSource === "custom"
+          ? formData.value.baseUrl.trim()
+          : undefined,
+      apiKey:
+        formData.value.apiSource === "custom"
+          ? formData.value.apiKey.trim() || undefined
+          : undefined,
+    };
 
-    let result: { success: boolean; error?: string }
+    let result: { success: boolean; error?: string };
 
-    if (props.mode === 'edit' && props.config) {
-      result = await window.embeddingApi.updateConfig(props.config.id, configData)
+    if (props.mode === "edit" && props.config) {
+      result = await window.embeddingApi.updateConfig(
+        props.config.id,
+        configData,
+      );
     } else {
-      result = await window.embeddingApi.addConfig(configData)
+      result = await window.embeddingApi.addConfig(configData);
     }
 
     if (result.success) {
-      emit('saved')
-      isOpen.value = false
+      emit("saved");
+      isOpen.value = false;
     } else {
-      validationResult.value = 'invalid'
-      validationMessage.value = result.error || t('settings.embedding.saveFailed')
+      validationResult.value = "invalid";
+      validationMessage.value =
+        result.error || t("settings.embedding.saveFailed");
     }
   } catch (error) {
-    validationResult.value = 'invalid'
-    validationMessage.value = String(error)
+    validationResult.value = "invalid";
+    validationMessage.value = String(error);
   } finally {
-    isSaving.value = false
+    isSaving.value = false;
   }
 }
 </script>
@@ -176,15 +193,23 @@ async function saveConfig() {
             <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
               {{ modalTitle }}
             </h3>
-            <UButton icon="i-heroicons-x-mark" color="neutral" variant="ghost" size="sm" @click="isOpen = false" />
+            <UButton
+              icon="i-heroicons-x-mark"
+              color="neutral"
+              variant="ghost"
+              size="sm"
+              @click="isOpen = false"
+            />
           </div>
         </template>
 
         <div class="space-y-4">
           <!-- English UI note -->
           <div>
-            <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-              {{ t('settings.embedding.configName') }}
+            <label
+              class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
+              {{ t("settings.embedding.configName") }}
               <span class="text-red-500">*</span>
             </label>
             <UInput
@@ -196,24 +221,37 @@ async function saveConfig() {
 
           <!-- English UI note -->
           <div>
-            <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-              {{ t('settings.embedding.apiSource') }}
+            <label
+              class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
+              {{ t("settings.embedding.apiSource") }}
             </label>
-            <USelectMenu v-model="formData.apiSource" :items="apiSourceOptions" value-key="value" class="w-full" />
+            <USelectMenu
+              v-model="formData.apiSource"
+              :items="apiSourceOptions"
+              value-key="value"
+              class="w-full"
+            />
             <p class="mt-1 text-xs text-gray-500">
-              {{ t('settings.embedding.apiSourceHint') }}
+              {{ t("settings.embedding.apiSourceHint") }}
             </p>
           </div>
 
           <!-- English UI note -->
           <div>
-            <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-              {{ t('settings.embedding.model') }}
+            <label
+              class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
+              {{ t("settings.embedding.model") }}
               <span class="text-red-500">*</span>
             </label>
-            <UInput v-model="formData.model" :placeholder="t('settings.embedding.modelPlaceholder')" class="w-full" />
+            <UInput
+              v-model="formData.model"
+              :placeholder="t('settings.embedding.modelPlaceholder')"
+              class="w-full"
+            />
             <p class="mt-1 text-xs text-gray-500">
-              {{ t('settings.embedding.modelHint') }}
+              {{ t("settings.embedding.modelHint") }}
             </p>
           </div>
 
@@ -221,8 +259,10 @@ async function saveConfig() {
           <template v-if="formData.apiSource === 'custom'">
             <!-- English UI note -->
             <div>
-              <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                {{ t('settings.embedding.baseUrl') }}
+              <label
+                class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+              >
+                {{ t("settings.embedding.baseUrl") }}
                 <span class="text-red-500">*</span>
               </label>
               <UInput
@@ -234,9 +274,13 @@ async function saveConfig() {
 
             <!-- API Key -->
             <div>
-              <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                {{ t('settings.embedding.apiKey') }}
-                <span class="font-normal text-gray-400">{{ t('settings.embedding.optional') }}</span>
+              <label
+                class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+              >
+                {{ t("settings.embedding.apiKey") }}
+                <span class="font-normal text-gray-400">{{
+                  t("settings.embedding.optional")
+                }}</span>
               </label>
               <UInput
                 v-model="formData.apiKey"
@@ -270,14 +314,19 @@ async function saveConfig() {
               :disabled="!canSave"
               @click="validateConfig"
             >
-              {{ t('settings.embedding.validate') }}
+              {{ t("settings.embedding.validate") }}
             </UButton>
             <div class="flex gap-2">
               <UButton color="neutral" variant="ghost" @click="isOpen = false">
-                {{ t('common.cancel') }}
+                {{ t("common.cancel") }}
               </UButton>
-              <UButton color="primary" :loading="isSaving" :disabled="!canSave" @click="saveConfig">
-                {{ t('common.save') }}
+              <UButton
+                color="primary"
+                :loading="isSaving"
+                :disabled="!canSave"
+                @click="saveConfig"
+              >
+                {{ t("common.save") }}
               </UButton>
             </div>
           </div>

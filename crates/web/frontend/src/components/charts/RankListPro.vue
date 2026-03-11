@@ -1,53 +1,67 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { useI18n } from 'vue-i18n'
-import RankList from './RankList.vue'
-import type { RankItem } from './RankList.vue'
-import CaptureButton from '@/components/common/CaptureButton.vue'
+import { computed, ref } from "vue";
+import { useI18n } from "vue-i18n";
+import RankList from "./RankList.vue";
+import type { RankItem } from "./RankList.vue";
+import CaptureButton from "@/components/common/CaptureButton.vue";
 
-const { t } = useI18n()
+const { t } = useI18n();
 
 interface Props {
-  /** English note.
-  members: RankItem[]
-  /** English note.
-  title: string
-  /** English note.
-  description?: string
-  /** English note.
-  topN?: number
-  /** English note.
-  unit?: string
+  // English engineering note.
+  members: RankItem[];
+  // English engineering note.
+  title: string;
+  // English engineering note.
+  description?: string;
+  // English engineering note.
+  topN?: number;
+  // English engineering note.
+  unit?: string;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   topN: 10,
-})
+});
 
 // English engineering note.
-const isOpen = ref(false)
+const isOpen = ref(false);
 
 // English engineering note.
-const cardRef = ref<HTMLElement | null>(null)
-const modalBodyRef = ref<HTMLElement | null>(null)
+const cardRef = ref<HTMLElement | null>(null);
+const modalBodyRef = ref<HTMLElement | null>(null);
 
 // English engineering note.
 const topNData = computed(() => {
-  return props.members.slice(0, props.topN)
-})
+  return props.members.slice(0, props.topN);
+});
 
 // English engineering note.
 const showViewAll = computed(() => {
-  return props.members.length > props.topN
-})
+  return props.members.length > props.topN;
+});
 </script>
 
 <template>
-  <div ref="cardRef" class="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
-    <div class="flex items-center justify-between border-b border-gray-200 px-5 py-3 dark:border-gray-800">
+  <div
+    ref="cardRef"
+    class="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900"
+  >
+    <div
+      class="flex items-center justify-between border-b border-gray-200 px-5 py-3 dark:border-gray-800"
+    >
       <div>
-        <h3 class="font-semibold text-gray-900 whitespace-nowrap dark:text-white">{{ title }}</h3>
-        <p v-if="description" class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ description }}</p>
+        <h3
+          class="font-semibold text-gray-900 whitespace-nowrap dark:text-white"
+        >
+          {{ title }}
+        </h3>
+        <p
+          v-if="description"
+          class="mt-1 text-sm text-gray-500 dark:text-gray-400"
+        >
+          {{ description }}
+        </p>
       </div>
 
       <div class="no-capture flex items-center gap-1">
@@ -56,8 +70,12 @@ const showViewAll = computed(() => {
 
         <!-- English UI note -->
         <UModal v-model:open="isOpen" :ui="{ content: 'md:w-full max-w-3xl' }">
-          <UButton v-if="showViewAll" icon="i-heroicons-list-bullet" variant="ghost">
-            {{ t('views.charts.rankListPro.fullRanking') }}
+          <UButton
+            v-if="showViewAll"
+            icon="i-heroicons-list-bullet"
+            variant="ghost"
+          >
+            {{ t("views.charts.rankListPro.fullRanking") }}
           </UButton>
           <template #content>
             <div ref="modalBodyRef" class="section-content flex flex-col">
@@ -66,12 +84,24 @@ const showViewAll = computed(() => {
                 class="flex w-full items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-700"
               >
                 <div class="flex items-center gap-2">
-                  <h3 class="text-lg font-semibold text-gray-900 whitespace-nowrap dark:text-white">{{ title }}</h3>
+                  <h3
+                    class="text-lg font-semibold text-gray-900 whitespace-nowrap dark:text-white"
+                  >
+                    {{ title }}
+                  </h3>
                   <span class="text-sm text-gray-500">
-                    （{{ t('views.charts.rankListPro.memberCount', { count: members.length }) }}）
+                    （{{
+                      t("views.charts.rankListPro.memberCount", {
+                        count: members.length,
+                      })
+                    }}）
                   </span>
                 </div>
-                <CaptureButton size="xs" type="element" :target-element="modalBodyRef" />
+                <CaptureButton
+                  size="xs"
+                  type="element"
+                  :target-element="modalBodyRef"
+                />
               </div>
               <!-- Body -->
               <div class="max-h-[60vh] p-4 overflow-y-auto">

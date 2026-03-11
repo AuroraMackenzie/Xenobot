@@ -2686,10 +2686,10 @@ fn runtime_platform_from_format(format: PlatformFormat) -> RuntimePlatform {
         PlatformFormat::Slack => RuntimePlatform::Slack,
         PlatformFormat::Teams => RuntimePlatform::Teams,
         PlatformFormat::Signal => RuntimePlatform::Signal,
-        PlatformFormat::Skype => RuntimePlatform::Custom("skype".to_string()),
-        PlatformFormat::GoogleChat => RuntimePlatform::Custom("googlechat".to_string()),
-        PlatformFormat::Zoom => RuntimePlatform::Custom("zoom".to_string()),
-        PlatformFormat::Viber => RuntimePlatform::Custom("viber".to_string()),
+        PlatformFormat::Skype => RuntimePlatform::Skype,
+        PlatformFormat::GoogleChat => RuntimePlatform::GoogleChat,
+        PlatformFormat::Zoom => RuntimePlatform::Zoom,
+        PlatformFormat::Viber => RuntimePlatform::Viber,
         PlatformFormat::Xenobot => RuntimePlatform::Custom("xenobot".to_string()),
     }
 }

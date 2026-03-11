@@ -1,46 +1,62 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { SubTabs } from '@/components/UI'
-import UserSelect from '@/components/common/UserSelect.vue'
-import { XenoMessageView, XenoInteractionView, XenoRankingView } from '@/vendors/insight'
-import { isFeatureSupported, type LocaleType } from '@/i18n'
+import { ref, computed } from "vue";
+import { useI18n } from "vue-i18n";
+import { SubTabs } from "@/components/UI";
+import UserSelect from "@/components/common/UserSelect.vue";
+import {
+  XenoMessageView,
+  XenoInteractionView,
+  XenoRankingView,
+} from "@/vendors/insight";
+import { isFeatureSupported, type LocaleType } from "@/i18n";
 
-const { t, locale } = useI18n()
+const { t, locale } = useI18n();
 
 interface TimeFilter {
-  startTs?: number
-  endTs?: number
+  startTs?: number;
+  endTs?: number;
 }
 
 const props = defineProps<{
-  sessionId: string
-  timeFilter?: TimeFilter
-}>()
+  sessionId: string;
+  timeFilter?: TimeFilter;
+}>();
 
 // English engineering note.
 const subTabs = computed(() => {
   const tabs = [
-    { id: 'message', label: t('analysis.subTabs.view.message'), icon: 'i-heroicons-chat-bubble-left-right' },
-    { id: 'interaction', label: t('analysis.subTabs.view.interaction'), icon: 'i-heroicons-arrows-right-left' },
-  ]
+    {
+      id: "message",
+      label: t("analysis.subTabs.view.message"),
+      icon: "i-heroicons-chat-bubble-left-right",
+    },
+    {
+      id: "interaction",
+      label: t("analysis.subTabs.view.interaction"),
+      icon: "i-heroicons-arrows-right-left",
+    },
+  ];
   // English engineering note.
-  if (isFeatureSupported('groupRanking', locale.value as LocaleType)) {
-    tabs.push({ id: 'ranking', label: t('analysis.subTabs.view.ranking'), icon: 'i-heroicons-trophy' })
+  if (isFeatureSupported("groupRanking", locale.value as LocaleType)) {
+    tabs.push({
+      id: "ranking",
+      label: t("analysis.subTabs.view.ranking"),
+      icon: "i-heroicons-trophy",
+    });
   }
-  return tabs
-})
+  return tabs;
+});
 
-const activeSubTab = ref('message')
+const activeSubTab = ref("message");
 
 // English engineering note.
-const selectedMemberId = ref<number | null>(null)
+const selectedMemberId = ref<number | null>(null);
 
 // English engineering note.
 const viewTimeFilter = computed(() => ({
   ...props.timeFilter,
   memberId: selectedMemberId.value,
-}))
+}));
 </script>
 
 <template>

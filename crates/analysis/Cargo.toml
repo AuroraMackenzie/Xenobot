@@ -29,8 +29,6 @@ async-openai = { version = "0.23", features = ["default"] }
 
 # Internal workspace dependencies
 xenobot-core = { path = "../core", version = "0.1.0" }
-xenobot-wechat = { path = "../wechat", version = "0.1.0", optional = true }
 
 [features]
 default = []
-wechat = ["xenobot-wechat"]

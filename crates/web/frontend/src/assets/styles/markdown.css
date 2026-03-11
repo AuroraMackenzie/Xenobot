@@ -1,10 +1,9 @@
 /**
- * English note.
- * English note.
- * English note.
+ * Markdown prose defaults used by Xenobot content surfaces.
+ * The rules here intentionally stay compact and favor readability over ornament.
  */
 
-/* English note.
+/* Paragraph rhythm */
 .prose p {
   margin: 0.5em 0;
   line-height: 1.6;
@@ -18,7 +17,7 @@
   margin-bottom: 0;
 }
 
-/* English note.
+/* Heading hierarchy */
 .prose h1 {
   font-size: 1.25rem;
   font-weight: 700;
@@ -46,7 +45,7 @@
   margin-top: 0;
 }
 
-/* English note.
+/* List spacing */
 .prose ul,
 .prose ol {
   margin: 0.5em 0;
@@ -70,7 +69,6 @@
   margin: 0.25em 0;
 }
 
-/* English note.
 .prose ul ul,
 .prose ol ol,
 .prose ul ol,
@@ -78,7 +76,7 @@
   margin: 0.25em 0;
 }
 
-/* English note.
+/* Inline code and blocks */
 .prose code {
   font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace;
   font-size: 0.875em;
@@ -91,7 +89,6 @@
   background-color: rgba(255, 255, 255, 0.1);
 }
 
-/* English note.
 .prose pre {
   margin: 0.75em 0;
   padding: 0.875em 1em;
@@ -99,13 +96,11 @@
   background-color: #f3f4f6;
   color: #111827;
   overflow-x: auto;
-  /* English note.
   white-space: pre-wrap;
   word-break: break-word;
   overflow-wrap: anywhere;
 }
 
-/* English note.
 .dark .prose pre {
   background-color: #1e293b;
   color: #e2e8f0;
@@ -119,7 +114,7 @@
   line-height: 1.6;
 }
 
-/* English note.
+/* Quotes and links */
 .prose blockquote {
   margin: 0.75em 0;
   padding: 0.5em 0 0.5em 1em;
@@ -137,7 +132,6 @@
   color: #9ca3af;
 }
 
-/* English note.
 .prose a {
   color: var(--color-pink-500, #ee4567);
   text-decoration: underline;
@@ -148,7 +142,7 @@
   color: var(--color-pink-600, #de335e);
 }
 
-/* English note.
+/* Rule and emphasis */
 .prose hr {
   margin: 1em 0;
   border: none;
@@ -159,7 +153,6 @@
   border-top-color: #374151;
 }
 
-/* English note.
 .prose strong {
   font-weight: 600;
 }
@@ -168,7 +161,7 @@
   font-style: italic;
 }
 
-/* English note.
+/* Tables */
 .prose table {
   width: 100%;
   margin: 0.75em 0;
@@ -197,7 +190,7 @@
   background-color: #1f2937;
 }
 
-/* English note.
+/* Inverted prose variants */
 .prose-invert code {
   background-color: rgba(255, 255, 255, 0.2);
 }

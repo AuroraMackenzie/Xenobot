@@ -1,27 +1,27 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
-import ConversationList from './ConversationList.vue'
-import DataSourcePanel from './DataSourcePanel.vue'
-import ChatMessage from './ChatMessage.vue'
-import ChatInput from './ChatInput.vue'
-import AIThinkingIndicator from './AIThinkingIndicator.vue'
-import ChatStatusBar from './ChatStatusBar.vue'
-import { useAIChat } from '@/composables/useAIChat'
-import CaptureButton from '@/components/common/CaptureButton.vue'
-import { usePromptStore } from '@/stores/prompt'
-import { useSettingsStore } from '@/stores/settings'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from "vue";
+import { useI18n } from "vue-i18n";
+import ConversationList from "./ConversationList.vue";
+import DataSourcePanel from "./DataSourcePanel.vue";
+import ChatMessage from "./ChatMessage.vue";
+import ChatInput from "./ChatInput.vue";
+import AIThinkingIndicator from "./AIThinkingIndicator.vue";
+import ChatStatusBar from "./ChatStatusBar.vue";
+import { useAIChat } from "@/composables/useAIChat";
+import CaptureButton from "@/components/common/CaptureButton.vue";
+import { usePromptStore } from "@/stores/prompt";
+import { useSettingsStore } from "@/stores/settings";
 
-const { t } = useI18n()
-const settingsStore = useSettingsStore()
+const { t } = useI18n();
+const settingsStore = useSettingsStore();
 
 // Props
 const props = defineProps<{
-  sessionId: string
-  sessionName: string
-  timeFilter?: { startTs: number; endTs: number }
-  chatType?: 'group' | 'private'
-}>()
+  sessionId: string;
+  sessionName: string;
+  timeFilter?: { startTs: number; endTs: number };
+  chatType?: "group" | "private";
+}>();
 
 // English engineering note.
 const {
@@ -40,104 +40,120 @@ const {
   loadMoreSourceMessages,
   updateMaxMessages,
   stopGeneration,
-} = useAIChat(props.sessionId, props.timeFilter, props.chatType ?? 'group', settingsStore.locale)
+} = useAIChat(
+  props.sessionId,
+  props.timeFilter,
+  props.chatType ?? "group",
+  settingsStore.locale,
+);
 
 // Store
-const promptStore = usePromptStore()
+const promptStore = usePromptStore();
 
 // English engineering note.
-const currentChatType = computed(() => props.chatType ?? 'group')
+const currentChatType = computed(() => props.chatType ?? "group");
 
 // English engineering note.
-const isSourcePanelCollapsed = ref(false)
-const hasLLMConfig = ref(false)
-const isCheckingConfig = ref(true)
-const messagesContainer = ref<HTMLElement | null>(null)
-const conversationListRef = ref<InstanceType<typeof ConversationList> | null>(null)
+const isSourcePanelCollapsed = ref(false);
+const hasLLMConfig = ref(false);
+const isCheckingConfig = ref(true);
+const messagesContainer = ref<HTMLElement | null>(null);
+const conversationListRef = ref<InstanceType<typeof ConversationList> | null>(
+  null,
+);
 
 // English engineering note.
-const isStickToBottom = ref(true) // English engineering note.
-const showScrollToBottom = ref(false) // English engineering note.
-const RESTICK_THRESHOLD = 30 // English engineering note.
+const isStickToBottom = ref(true); // English engineering note.
+const showScrollToBottom = ref(false); // English engineering note.
+const RESTICK_THRESHOLD = 30; // English engineering note.
 
 // English engineering note.
-const conversationContentRef = ref<HTMLElement | null>(null)
+const conversationContentRef = ref<HTMLElement | null>(null);
 
 // English engineering note.
 const qaPairs = computed(() => {
   const pairs: Array<{
-    user: (typeof messages.value)[0] | null
-    assistant: (typeof messages.value)[0] | null
-    id: string
-  }> = []
-  let currentUser: (typeof messages.value)[0] | null = null
+    user: (typeof messages.value)[0] | null;
+    assistant: (typeof messages.value)[0] | null;
+    id: string;
+  }> = [];
+  let currentUser: (typeof messages.value)[0] | null = null;
 
   for (const msg of messages.value) {
-    if (msg.role === 'user') {
+    if (msg.role === "user") {
       // English engineering note.
       if (currentUser) {
-        pairs.push({ user: currentUser, assistant: null, id: currentUser.id })
+        pairs.push({ user: currentUser, assistant: null, id: currentUser.id });
       }
-      currentUser = msg
-    } else if (msg.role === 'assistant') {
-      pairs.push({ user: currentUser, assistant: msg, id: currentUser?.id || msg.id })
-      currentUser = null
+      currentUser = msg;
+    } else if (msg.role === "assistant") {
+      pairs.push({
+        user: currentUser,
+        assistant: msg,
+        id: currentUser?.id || msg.id,
+      });
+      currentUser = null;
     }
   }
 
   // English engineering note.
   if (currentUser) {
-    pairs.push({ user: currentUser, assistant: null, id: currentUser.id })
+    pairs.push({ user: currentUser, assistant: null, id: currentUser.id });
   }
 
-  return pairs
-})
+  return pairs;
+});
 
 // English engineering note.
 async function checkLLMConfig() {
-  isCheckingConfig.value = true
+  isCheckingConfig.value = true;
   try {
-    hasLLMConfig.value = await window.llmApi.hasConfig()
+    hasLLMConfig.value = await window.llmApi.hasConfig();
   } catch (error) {
-    console.error('检查 LLM 配置失败：', error)
-    hasLLMConfig.value = false
+    console.error("[ChatExplorer] Failed to check LLM configuration:", error);
+    hasLLMConfig.value = false;
   } finally {
-    isCheckingConfig.value = false
+    isCheckingConfig.value = false;
   }
 }
 
 // English engineering note.
 async function refreshConfig() {
-  await checkLLMConfig()
+  await checkLLMConfig();
   if (hasLLMConfig.value) {
-    await updateMaxMessages()
+    await updateMaxMessages();
   }
   // English engineering note.
-  const welcomeMsg = messages.value.find((m) => m.id.startsWith('welcome'))
+  const welcomeMsg = messages.value.find((m) => m.id.startsWith("welcome"));
   if (welcomeMsg) {
-    welcomeMsg.content = generateWelcomeMessage()
+    welcomeMsg.content = generateWelcomeMessage();
   }
 }
 
 // English engineering note.
 defineExpose({
   refreshConfig,
-})
+});
 
 // English engineering note.
 function generateWelcomeMessage() {
-  const configHint = hasLLMConfig.value ? t('ai.chat.welcome.configReady') : t('ai.chat.welcome.configNeeded')
+  const configHint = hasLLMConfig.value
+    ? t("ai.chat.welcome.configReady")
+    : t("ai.chat.welcome.configNeeded");
 
-  return t('ai.chat.welcome.message', { sessionName: props.sessionName, configHint })
+  return t("ai.chat.welcome.message", {
+    sessionName: props.sessionName,
+    configHint,
+  });
 }
 
 // English engineering note.
 async function handleSend(content: string) {
-  await sendMessage(content)
+  await sendMessage(content);
   // English engineering note.
-  scrollToBottom(true)
+  scrollToBottom(true);
   // English engineering note.
-  conversationListRef.value?.refresh()
+  conversationListRef.value?.refresh();
 }
 
 // English engineering note.
@@ -146,12 +162,13 @@ function scrollToBottom(force = false) {
     if (messagesContainer.value) {
       // English engineering note.
       if (force || isStickToBottom.value) {
-        messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
-        isStickToBottom.value = true
-        showScrollToBottom.value = false
+        messagesContainer.value.scrollTop =
+          messagesContainer.value.scrollHeight;
+        isStickToBottom.value = true;
+        showScrollToBottom.value = false;
       }
     }
-  }, 100)
+  }, 100);
 }
 
 // English engineering note.
@@ -159,119 +176,121 @@ function handleWheel(event: WheelEvent) {
   // English engineering note.
   if (event.deltaY < 0 && isAIThinking.value) {
     // English engineering note.
-    isStickToBottom.value = false
-    showScrollToBottom.value = true
+    isStickToBottom.value = false;
+    showScrollToBottom.value = true;
   }
 }
 
 // English engineering note.
 function checkScrollPosition() {
-  if (!messagesContainer.value) return
+  if (!messagesContainer.value) return;
 
-  const { scrollTop, scrollHeight, clientHeight } = messagesContainer.value
-  const distanceFromBottom = scrollHeight - scrollTop - clientHeight
+  const { scrollTop, scrollHeight, clientHeight } = messagesContainer.value;
+  const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
 
   // English engineering note.
   if (distanceFromBottom < RESTICK_THRESHOLD) {
-    isStickToBottom.value = true
-    showScrollToBottom.value = false
+    isStickToBottom.value = true;
+    showScrollToBottom.value = false;
   }
 }
 
 // English engineering note.
 function handleScrollToBottom() {
-  scrollToBottom(true)
+  scrollToBottom(true);
 }
 
 // English engineering note.
 function toggleSourcePanel() {
-  isSourcePanelCollapsed.value = !isSourcePanelCollapsed.value
+  isSourcePanelCollapsed.value = !isSourcePanelCollapsed.value;
 }
 
 // English engineering note.
 async function handleLoadMore() {
-  await loadMoreSourceMessages()
+  await loadMoreSourceMessages();
 }
 
 // English engineering note.
 async function handleSelectConversation(convId: string) {
-  await loadConversation(convId)
-  scrollToBottom(true) // English engineering note.
+  await loadConversation(convId);
+  scrollToBottom(true); // English engineering note.
 }
 
 // English engineering note.
 function handleCreateConversation() {
-  startNewConversation(generateWelcomeMessage())
+  startNewConversation(generateWelcomeMessage());
 }
 
 // English engineering note.
 function handleDeleteConversation(convId: string) {
   // English engineering note.
   if (currentConversationId.value === convId) {
-    startNewConversation(generateWelcomeMessage())
+    startNewConversation(generateWelcomeMessage());
   }
 }
 
 // English engineering note.
 onMounted(async () => {
-  await checkLLMConfig()
-  await updateMaxMessages()
+  await checkLLMConfig();
+  await updateMaxMessages();
 
   // English engineering note.
-  startNewConversation(generateWelcomeMessage())
+  startNewConversation(generateWelcomeMessage());
 
   // English engineering note.
   if (messagesContainer.value) {
-    messagesContainer.value.addEventListener('scroll', checkScrollPosition)
-    messagesContainer.value.addEventListener('wheel', handleWheel, { passive: true })
+    messagesContainer.value.addEventListener("scroll", checkScrollPosition);
+    messagesContainer.value.addEventListener("wheel", handleWheel, {
+      passive: true,
+    });
   }
-})
+});
 
 // English engineering note.
 onBeforeUnmount(() => {
-  stopGeneration()
+  stopGeneration();
   if (messagesContainer.value) {
-    messagesContainer.value.removeEventListener('scroll', checkScrollPosition)
-    messagesContainer.value.removeEventListener('wheel', handleWheel)
+    messagesContainer.value.removeEventListener("scroll", checkScrollPosition);
+    messagesContainer.value.removeEventListener("wheel", handleWheel);
   }
-})
+});
 
 // English engineering note.
 function handleStop() {
-  stopGeneration()
+  stopGeneration();
 }
 
 // English engineering note.
 watch(
   () => messages.value.length,
   () => {
-    scrollToBottom()
-  }
-)
+    scrollToBottom();
+  },
+);
 
 // English engineering note.
 watch(
   () => messages.value[messages.value.length - 1]?.content,
   () => {
-    scrollToBottom()
-  }
-)
+    scrollToBottom();
+  },
+);
 
 // English engineering note.
 watch(
   () => messages.value[messages.value.length - 1]?.contentBlocks?.length,
   () => {
-    scrollToBottom()
-  }
-)
+    scrollToBottom();
+  },
+);
 
 // English engineering note.
 watch(
   () => promptStore.aiConfigVersion,
   async () => {
-    await refreshConfig()
-  }
-)
+    await refreshConfig();
+  },
+);
 </script>
 
 <template>
@@ -289,12 +308,17 @@ watch(
 
     <!-- English UI note -->
     <div class="flex h-full flex-1">
-      <div class="xeno-chat-main relative flex min-w-[480px] flex-1 flex-col overflow-hidden">
+      <div
+        class="xeno-chat-main relative flex min-w-[480px] flex-1 flex-col overflow-hidden"
+      >
         <!-- English UI note -->
         <div ref="messagesContainer" class="min-h-0 flex-1 overflow-y-auto p-4">
           <div ref="conversationContentRef" class="mx-auto max-w-3xl space-y-4">
             <!-- English UI note -->
-            <div v-if="qaPairs.length > 0 && !isAIThinking" class="flex justify-end">
+            <div
+              v-if="qaPairs.length > 0 && !isAIThinking"
+              class="flex justify-end"
+            >
               <CaptureButton
                 :label="t('ai.chat.capture')"
                 size="xs"
@@ -308,7 +332,10 @@ watch(
               <div class="qa-pair space-y-4">
                 <!-- English UI note -->
                 <ChatMessage
-                  v-if="pair.user && (pair.user.role === 'user' || pair.user.content)"
+                  v-if="
+                    pair.user &&
+                    (pair.user.role === 'user' || pair.user.content)
+                  "
                   :role="pair.user.role"
                   :content="pair.user.content"
                   :timestamp="pair.user.timestamp"
@@ -320,7 +347,8 @@ watch(
                   v-if="
                     pair.assistant &&
                     (pair.assistant.content ||
-                      (pair.assistant.contentBlocks && pair.assistant.contentBlocks.length > 0))
+                      (pair.assistant.contentBlocks &&
+                        pair.assistant.contentBlocks.length > 0))
                   "
                   :role="pair.assistant.role"
                   :content="pair.assistant.content"
@@ -353,7 +381,7 @@ watch(
             @click="handleScrollToBottom"
           >
             <UIcon name="i-heroicons-arrow-down" class="h-3.5 w-3.5" />
-            <span>{{ t('ai.chat.scrollToBottom') }}</span>
+            <span>{{ t("ai.chat.scrollToBottom") }}</span>
           </button>
         </Transition>
 
@@ -405,7 +433,8 @@ watch(
 }
 
 .xeno-chat-main {
-  border-right: 1px solid color-mix(in srgb, var(--xeno-border-soft) 72%, transparent);
+  border-right: 1px solid
+    color-mix(in srgb, var(--xeno-border-soft) 72%, transparent);
 }
 
 .xeno-scroll-chip {

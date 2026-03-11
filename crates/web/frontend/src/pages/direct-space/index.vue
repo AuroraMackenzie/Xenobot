@@ -1,144 +1,166 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { storeToRefs } from 'pinia'
-import { useI18n } from 'vue-i18n'
-import type { AnalysisSession, MessageType } from '@/types/base'
-import type { MemberActivity, HourlyActivity, DailyActivity } from '@/types/analysis'
-import CaptureButton from '@/components/common/CaptureButton.vue'
-import TimeSelect from '@/components/common/TimeSelect.vue'
-import AITab from '@/components/analysis/AITab.vue'
-import OverviewTab from './components/OverviewTab.vue'
-import ViewTab from './components/ViewTab.vue'
-import QuotesTab from './components/QuotesTab.vue'
-import MemberTab from './components/MemberTab.vue'
-import PageHeader from '@/components/layout/PageHeader.vue'
-import SessionIndexModal from '@/components/analysis/SessionIndexModal.vue'
-import IncrementalImportModal from '@/components/analysis/IncrementalImportModal.vue'
-import LoadingState from '@/components/UI/LoadingState.vue'
-import { useSessionStore } from '@/stores/session'
-import { useLayoutStore } from '@/stores/layout'
-import { useTimeSelect } from '@/composables'
+import { ref, onMounted, watch, computed } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { storeToRefs } from "pinia";
+import { useI18n } from "vue-i18n";
+import type { AnalysisSession, MessageType } from "@/types/base";
+import type {
+  MemberActivity,
+  HourlyActivity,
+  DailyActivity,
+} from "@/types/analysis";
+import CaptureButton from "@/components/common/CaptureButton.vue";
+import TimeSelect from "@/components/common/TimeSelect.vue";
+import AITab from "@/components/analysis/AITab.vue";
+import OverviewTab from "./components/OverviewTab.vue";
+import ViewTab from "./components/ViewTab.vue";
+import QuotesTab from "./components/QuotesTab.vue";
+import MemberTab from "./components/MemberTab.vue";
+import PageHeader from "@/components/layout/PageHeader.vue";
+import SessionIndexModal from "@/components/analysis/SessionIndexModal.vue";
+import IncrementalImportModal from "@/components/analysis/IncrementalImportModal.vue";
+import LoadingState from "@/components/UI/LoadingState.vue";
+import { useSessionStore } from "@/stores/session";
+import { useLayoutStore } from "@/stores/layout";
+import { useTimeSelect } from "@/composables";
 
-const { t } = useI18n()
+const { t } = useI18n();
 
-const route = useRoute()
-const router = useRouter()
-const sessionStore = useSessionStore()
-const layoutStore = useLayoutStore()
-const { currentSessionId } = storeToRefs(sessionStore)
+const route = useRoute();
+const router = useRouter();
+const sessionStore = useSessionStore();
+const layoutStore = useLayoutStore();
+const { currentSessionId } = storeToRefs(sessionStore);
 
 // English engineering note.
-const showSessionIndexModal = ref(false)
+const showSessionIndexModal = ref(false);
 
 // English engineering note.
-const showIncrementalImportModal = ref(false)
+const showIncrementalImportModal = ref(false);
 
 // English engineering note.
 function openChatRecordViewer() {
-  layoutStore.openChatRecordDrawer({})
+  layoutStore.openChatRecordDrawer({});
 }
 
 // English engineering note.
-const isLoading = ref(true)
-const session = ref<AnalysisSession | null>(null)
-const memberActivity = ref<MemberActivity[]>([])
-const hourlyActivity = ref<HourlyActivity[]>([])
-const dailyActivity = ref<DailyActivity[]>([])
-const messageTypes = ref<Array<{ type: MessageType; count: number }>>([])
-const isInitialLoad = ref(true)
+const isLoading = ref(true);
+const session = ref<AnalysisSession | null>(null);
+const memberActivity = ref<MemberActivity[]>([]);
+const hourlyActivity = ref<HourlyActivity[]>([]);
+const dailyActivity = ref<DailyActivity[]>([]);
+const messageTypes = ref<Array<{ type: MessageType; count: number }>>([]);
+const isInitialLoad = ref(true);
 
 // English engineering note.
 const tabs = [
-  { id: 'overview', labelKey: 'analysis.tabs.overview', icon: 'i-heroicons-chart-pie' },
-  { id: 'view', labelKey: 'analysis.tabs.view', icon: 'i-heroicons-presentation-chart-bar' },
-  { id: 'quotes', labelKey: 'analysis.tabs.quotes', icon: 'i-heroicons-chat-bubble-left-right' },
-  { id: 'member', labelKey: 'analysis.tabs.member', icon: 'i-heroicons-user-group' },
-  { id: 'ai', labelKey: 'analysis.tabs.ai', icon: 'i-heroicons-sparkles' },
-]
+  {
+    id: "overview",
+    labelKey: "analysis.tabs.overview",
+    icon: "i-heroicons-chart-pie",
+  },
+  {
+    id: "view",
+    labelKey: "analysis.tabs.view",
+    icon: "i-heroicons-presentation-chart-bar",
+  },
+  {
+    id: "quotes",
+    labelKey: "analysis.tabs.quotes",
+    icon: "i-heroicons-chat-bubble-left-right",
+  },
+  {
+    id: "member",
+    labelKey: "analysis.tabs.member",
+    icon: "i-heroicons-user-group",
+  },
+  { id: "ai", labelKey: "analysis.tabs.ai", icon: "i-heroicons-sparkles" },
+];
 
-const activeTab = ref((route.query.tab as string) || 'overview')
+const activeTab = ref((route.query.tab as string) || "overview");
 
 // English engineering note.
-const { timeRangeValue, fullTimeRange, timeFilter, selectedYearForOverview, initialTimeState } = useTimeSelect(
-  route,
-  router,
-  {
-    activeTab,
-    isInitialLoad,
-    currentSessionId,
-    onTimeRangeChange: () => loadAnalysisData(),
-  }
-)
+const {
+  timeRangeValue,
+  fullTimeRange,
+  timeFilter,
+  selectedYearForOverview,
+  initialTimeState,
+} = useTimeSelect(route, router, {
+  activeTab,
+  isInitialLoad,
+  currentSessionId,
+  onTimeRangeChange: () => loadAnalysisData(),
+});
 
 // English engineering note.
 const filteredMessageCount = computed(() => {
-  return memberActivity.value.reduce((sum, m) => sum + m.messageCount, 0)
-})
+  return memberActivity.value.reduce((sum, m) => sum + m.messageCount, 0);
+});
 
 // English engineering note.
 const filteredMemberCount = computed(() => {
-  return memberActivity.value.filter((m) => m.messageCount > 0).length
-})
+  return memberActivity.value.filter((m) => m.messageCount > 0).length;
+});
 
 // Sync route param to store
 function syncSession() {
-  const id = route.params.id as string
+  const id = route.params.id as string;
   if (id) {
-    sessionStore.selectSession(id)
+    sessionStore.selectSession(id);
     // If selection failed (e.g. invalid ID), redirect to home
     if (sessionStore.currentSessionId !== id) {
-      router.replace('/')
+      router.replace("/");
     }
   }
 }
 
 // English engineering note.
 async function loadBaseData() {
-  if (!currentSessionId.value) return
+  if (!currentSessionId.value) return;
 
   try {
-    const sessionData = await window.chatApi.getSession(currentSessionId.value)
-    session.value = sessionData
+    const sessionData = await window.chatApi.getSession(currentSessionId.value);
+    session.value = sessionData;
   } catch (error) {
-    console.error('[DirectSpace] Failed to load base data:', error)
+    console.error("[DirectSpace] Failed to load base data:", error);
   }
 }
 
 // English engineering note.
 async function loadAnalysisData() {
-  if (!currentSessionId.value) return
+  if (!currentSessionId.value) return;
 
-  isLoading.value = true
+  isLoading.value = true;
 
   try {
-    const filter = timeFilter.value
+    const filter = timeFilter.value;
 
     const [members, hourly, daily, types] = await Promise.all([
       window.chatApi.getMemberActivity(currentSessionId.value, filter),
       window.chatApi.getHourlyActivity(currentSessionId.value, filter),
       window.chatApi.getDailyActivity(currentSessionId.value, filter),
       window.chatApi.getMessageTypeDistribution(currentSessionId.value, filter),
-    ])
+    ]);
 
-    memberActivity.value = members
-    hourlyActivity.value = hourly
-    dailyActivity.value = daily
-    messageTypes.value = types
+    memberActivity.value = members;
+    hourlyActivity.value = hourly;
+    dailyActivity.value = daily;
+    messageTypes.value = types;
   } catch (error) {
-    console.error('[DirectSpace] Failed to load analysis data:', error)
+    console.error("[DirectSpace] Failed to load analysis data:", error);
   } finally {
-    isLoading.value = false
+    isLoading.value = false;
   }
 }
 
 // English engineering note.
 async function loadData() {
-  if (!currentSessionId.value) return
+  if (!currentSessionId.value) return;
 
-  isInitialLoad.value = true
-  await loadBaseData()
-  isInitialLoad.value = false
+  isInitialLoad.value = true;
+  await loadBaseData();
+  isInitialLoad.value = false;
 }
 
 // English engineering note.
@@ -146,36 +168,40 @@ watch(
   () => route.params.id,
   () => {
     if (!route.query.tab) {
-      activeTab.value = 'overview'
+      activeTab.value = "overview";
     } else {
-      activeTab.value = route.query.tab as string
+      activeTab.value = route.query.tab as string;
     }
-    syncSession()
-  }
-)
+    syncSession();
+  },
+);
 
 // English engineering note.
 watch(
   currentSessionId,
   () => {
-    loadData()
+    loadData();
   },
-  { immediate: true }
-)
+  { immediate: true },
+);
 
 // English engineering note.
 const otherMemberAvatar = computed(() => {
-  if (!session.value || memberActivity.value.length === 0) return null
+  if (!session.value || memberActivity.value.length === 0) return null;
 
   // English engineering note.
   if (session.value.ownerId) {
-    const other = memberActivity.value.find((m) => m.platformId !== session.value?.ownerId)
-    if (other?.avatar) return other.avatar
+    const other = memberActivity.value.find(
+      (m) => m.platformId !== session.value?.ownerId,
+    );
+    if (other?.avatar) return other.avatar;
   }
 
   // English engineering note.
-  const sameName = memberActivity.value.find((m) => m.name === session.value?.name)
-  if (sameName?.avatar) return sameName.avatar
+  const sameName = memberActivity.value.find(
+    (m) => m.name === session.value?.name,
+  );
+  if (sameName?.avatar) return sameName.avatar;
 
   // English engineering note.
   if (memberActivity.value.length === 2) {
@@ -184,18 +210,25 @@ const otherMemberAvatar = computed(() => {
     // English engineering note.
   }
 
-  return null
-})
+  return null;
+});
 
 onMounted(() => {
-  syncSession()
-})
+  syncSession();
+});
 </script>
 
 <template>
-  <div class="xeno-analysis-shell flex h-full flex-col" style="padding-top: var(--titlebar-area-height)">
+  <div
+    class="xeno-analysis-shell flex h-full flex-col"
+    style="padding-top: var(--titlebar-area-height)"
+  >
     <!-- Loading State -->
-    <LoadingState v-if="isInitialLoad" variant="page" :text="t('analysis.privateChat.loading')" />
+    <LoadingState
+      v-if="isInitialLoad"
+      variant="page"
+      :text="t('analysis.privateChat.loading')"
+    />
 
     <!-- Content -->
     <template v-else-if="session">
@@ -205,7 +238,10 @@ onMounted(() => {
         :description="
           t('analysis.privateChat.description', {
             dateRange: timeRangeValue?.displayLabel ?? '',
-            messageCount: timeRangeValue?.isFullRange !== false ? session.messageCount : filteredMessageCount,
+            messageCount:
+              timeRangeValue?.isFullRange !== false
+                ? session.messageCount
+                : filteredMessageCount,
           })
         "
         :avatar="otherMemberAvatar"
@@ -220,7 +256,7 @@ onMounted(() => {
             icon="i-heroicons-plus-circle"
             @click="showIncrementalImportModal = true"
           >
-            {{ t('analysis.tooltip.incrementalImport') }}
+            {{ t("analysis.tooltip.incrementalImport") }}
           </UButton>
           <UButton
             color="primary"
@@ -229,7 +265,7 @@ onMounted(() => {
             icon="i-heroicons-chat-bubble-bottom-center-text"
             @click="openChatRecordViewer"
           >
-            {{ t('analysis.tooltip.chatViewer') }}
+            {{ t("analysis.tooltip.chatViewer") }}
           </UButton>
           <UTooltip :text="t('analysis.tooltip.sessionIndex')">
             <UButton
@@ -244,7 +280,9 @@ onMounted(() => {
         </template>
         <!-- Tabs -->
         <div class="mt-4 flex items-center justify-between gap-4">
-          <div class="flex shrink-0 items-center gap-1 overflow-x-auto scrollbar-hide">
+          <div
+            class="flex shrink-0 items-center gap-1 overflow-x-auto scrollbar-hide"
+          >
             <button
               v-for="tab in tabs"
               :key="tab.id"
@@ -323,11 +361,15 @@ onMounted(() => {
 
     <!-- Empty State -->
     <div v-else class="flex h-full items-center justify-center">
-      <p class="text-gray-500">{{ t('analysis.privateChat.loadError') }}</p>
+      <p class="text-gray-500">{{ t("analysis.privateChat.loadError") }}</p>
     </div>
 
     <!-- English UI note -->
-    <SessionIndexModal v-if="currentSessionId" v-model="showSessionIndexModal" :session-id="currentSessionId" />
+    <SessionIndexModal
+      v-if="currentSessionId"
+      v-model="showSessionIndexModal"
+      :session-id="currentSessionId"
+    />
 
     <!-- English UI note -->
     <IncrementalImportModal

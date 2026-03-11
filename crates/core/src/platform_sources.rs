@@ -55,10 +55,10 @@ pub fn legal_safe_runtime_platforms() -> Vec<Platform> {
         Platform::Slack,
         Platform::Teams,
         Platform::Signal,
-        Platform::Custom("skype".to_string()),
-        Platform::Custom("googlechat".to_string()),
-        Platform::Custom("zoom".to_string()),
-        Platform::Custom("viber".to_string()),
+        Platform::Skype,
+        Platform::GoogleChat,
+        Platform::Zoom,
+        Platform::Viber,
     ]
 }
 
@@ -78,10 +78,10 @@ pub fn platform_id(platform: &Platform) -> &'static str {
         Platform::Slack => "slack",
         Platform::Teams => "teams",
         Platform::Signal => "signal",
-        Platform::Custom(name) if name.eq_ignore_ascii_case("skype") => "skype",
-        Platform::Custom(name) if name.eq_ignore_ascii_case("googlechat") => "googlechat",
-        Platform::Custom(name) if name.eq_ignore_ascii_case("zoom") => "zoom",
-        Platform::Custom(name) if name.eq_ignore_ascii_case("viber") => "viber",
+        Platform::Skype => "skype",
+        Platform::GoogleChat => "googlechat",
+        Platform::Zoom => "zoom",
+        Platform::Viber => "viber",
         Platform::Custom(_) => "custom",
     }
 }
@@ -103,10 +103,10 @@ pub fn parse_runtime_platform_id(raw: &str) -> Option<Platform> {
         "slack" => Some(Platform::Slack),
         "teams" | "msteams" => Some(Platform::Teams),
         "signal" => Some(Platform::Signal),
-        "skype" => Some(Platform::Custom("skype".to_string())),
-        "googlechat" | "hangouts" => Some(Platform::Custom("googlechat".to_string())),
-        "zoom" => Some(Platform::Custom("zoom".to_string())),
-        "viber" => Some(Platform::Custom("viber".to_string())),
+        "skype" => Some(Platform::Skype),
+        "googlechat" | "hangouts" => Some(Platform::GoogleChat),
+        "zoom" => Some(Platform::Zoom),
+        "viber" => Some(Platform::Viber),
         _ => Some(Platform::Custom(normalized)),
     }
 }
@@ -342,7 +342,7 @@ fn default_source_paths(platform: &Platform, home: &Path) -> Vec<(SourceKind, St
                 downloads.join("signal-export"),
             ),
         ],
-        Platform::Custom(name) if name.eq_ignore_ascii_case("skype") => vec![
+        Platform::Skype => vec![
             (
                 SourceKind::AppContainer,
                 "Skype local app data".to_string(),
@@ -354,7 +354,7 @@ fn default_source_paths(platform: &Platform, home: &Path) -> Vec<(SourceKind, St
                 downloads.join("skype-export"),
             ),
         ],
-        Platform::Custom(name) if name.eq_ignore_ascii_case("googlechat") => vec![
+        Platform::GoogleChat => vec![
             (
                 SourceKind::ExportDirectory,
                 "Google Chat exports in Downloads".to_string(),
@@ -366,7 +366,7 @@ fn default_source_paths(platform: &Platform, home: &Path) -> Vec<(SourceKind, St
                 desktop.join("xenobot-imports").join("googlechat"),
             ),
         ],
-        Platform::Custom(name) if name.eq_ignore_ascii_case("zoom") => vec![
+        Platform::Zoom => vec![
             (
                 SourceKind::ExportDirectory,
                 "Zoom chat exports in Downloads".to_string(),
@@ -378,7 +378,7 @@ fn default_source_paths(platform: &Platform, home: &Path) -> Vec<(SourceKind, St
                 desktop.join("xenobot-imports").join("zoom"),
             ),
         ],
-        Platform::Custom(name) if name.eq_ignore_ascii_case("viber") => vec![
+        Platform::Viber => vec![
             (
                 SourceKind::ExportDirectory,
                 "Viber exports in Downloads".to_string(),
@@ -395,11 +395,7 @@ fn default_source_paths(platform: &Platform, home: &Path) -> Vec<(SourceKind, St
 }
 
 fn is_readable(path: &Path) -> bool {
-    if path.is_dir() {
-        std::fs::read_dir(path).is_ok()
-    } else {
-        std::fs::File::open(path).is_ok()
-    }
+    std::fs::metadata(path).is_ok()
 }
 
 #[cfg(test)]
@@ -435,10 +431,14 @@ mod tests {
         );
         assert_eq!(parse_runtime_platform_id("slack"), Some(Platform::Slack));
         assert_eq!(parse_runtime_platform_id("teams"), Some(Platform::Teams));
+        assert_eq!(parse_runtime_platform_id("signal"), Some(Platform::Signal));
+        assert_eq!(parse_runtime_platform_id("skype"), Some(Platform::Skype));
         assert_eq!(
-            parse_runtime_platform_id("skype"),
-            Some(Platform::Custom("skype".to_string()))
+            parse_runtime_platform_id("googlechat"),
+            Some(Platform::GoogleChat)
         );
+        assert_eq!(parse_runtime_platform_id("zoom"), Some(Platform::Zoom));
+        assert_eq!(parse_runtime_platform_id("viber"), Some(Platform::Viber));
         assert_eq!(
             parse_runtime_platform_id("unknown-platform"),
             Some(Platform::Custom("unknown-platform".to_string()))

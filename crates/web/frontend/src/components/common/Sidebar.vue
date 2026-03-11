@@ -1,198 +1,208 @@
 <script setup lang="ts">
-import { storeToRefs } from 'pinia'
-import { ref, computed, onMounted, nextTick } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import { useI18n } from 'vue-i18n'
-import type { AnalysisSession } from '@/types/base'
-import dayjs from 'dayjs'
-import relativeTime from 'dayjs/plugin/relativeTime'
-import 'dayjs/locale/zh-cn'
-import 'dayjs/locale/en'
-import SidebarButton from './sidebar/SidebarButton.vue'
-import SidebarFooter from './sidebar/SidebarFooter.vue'
-import { useSessionStore } from '@/stores/session'
-import { useLayoutStore } from '@/stores/layout'
+import { storeToRefs } from "pinia";
+import { ref, computed, onMounted, nextTick } from "vue";
+import { useRouter, useRoute } from "vue-router";
+import { useI18n } from "vue-i18n";
+import type { AnalysisSession } from "@/types/base";
+import dayjs from "dayjs";
+import relativeTime from "dayjs/plugin/relativeTime";
+import "dayjs/locale/zh-cn";
+import "dayjs/locale/en";
+import SidebarButton from "./sidebar/SidebarButton.vue";
+import SidebarFooter from "./sidebar/SidebarFooter.vue";
+import { useSessionStore } from "@/stores/session";
+import { useLayoutStore } from "@/stores/layout";
 
-dayjs.extend(relativeTime)
-const { t } = useI18n()
+dayjs.extend(relativeTime);
+const { t } = useI18n();
 
-const sessionStore = useSessionStore()
-const layoutStore = useLayoutStore()
-const { sessions, sortedSessions } = storeToRefs(sessionStore)
-const { isSidebarCollapsed: isCollapsed } = storeToRefs(layoutStore)
-const { toggleSidebar } = layoutStore
-const router = useRouter()
-const route = useRoute()
-
-// English engineering note.
-const isHomePage = computed(() => route.path === '/')
+const sessionStore = useSessionStore();
+const layoutStore = useLayoutStore();
+const { sessions, sortedSessions } = storeToRefs(sessionStore);
+const { isSidebarCollapsed: isCollapsed } = storeToRefs(layoutStore);
+const { toggleSidebar } = layoutStore;
+const router = useRouter();
+const route = useRoute();
 
 // English engineering note.
-const showRenameModal = ref(false)
-const renameTarget = ref<AnalysisSession | null>(null)
-const newName = ref('')
-const renameInputRef = ref<HTMLInputElement | null>(null)
+const isHomePage = computed(() => route.path === "/");
 
 // English engineering note.
-const showDeleteModal = ref(false)
-const deleteTarget = ref<AnalysisSession | null>(null)
+const showRenameModal = ref(false);
+const renameTarget = ref<AnalysisSession | null>(null);
+const newName = ref("");
+const renameInputRef = ref<HTMLInputElement | null>(null);
 
 // English engineering note.
-const version = ref('')
+const showDeleteModal = ref(false);
+const deleteTarget = ref<AnalysisSession | null>(null);
 
 // English engineering note.
-const showSearch = ref(false)
-const searchQuery = ref('')
+const version = ref("");
+
+// English engineering note.
+const showSearch = ref(false);
+const searchQuery = ref("");
 
 // English engineering note.
 const filteredSortedSessions = computed(() => {
   if (!searchQuery.value.trim()) {
-    return sortedSessions.value
+    return sortedSessions.value;
   }
-  const query = searchQuery.value.toLowerCase().trim()
-  return sortedSessions.value.filter((s) => s.name.toLowerCase().includes(query))
-})
+  const query = searchQuery.value.toLowerCase().trim();
+  return sortedSessions.value.filter((s) =>
+    s.name.toLowerCase().includes(query),
+  );
+});
 
 // English engineering note.
 function toggleSearch() {
-  showSearch.value = !showSearch.value
+  showSearch.value = !showSearch.value;
   if (!showSearch.value) {
-    searchQuery.value = ''
+    searchQuery.value = "";
   }
 }
 
 // English engineering note.
 onMounted(async () => {
-  sessionStore.loadSessions()
+  sessionStore.loadSessions();
   try {
-    version.value = await window.api.app.getVersion()
+    version.value = await window.api.app.getVersion();
   } catch (e) {
-    console.error('Failed to get version', e)
+    console.error("Failed to get version", e);
   }
-})
+});
 
 function handleImport() {
   // Navigate to home (Welcome Guide)
-  router.push('/')
+  router.push("/");
 }
 
 function formatTime(timestamp: number): string {
-  return dayjs.unix(timestamp).fromNow()
+  return dayjs.unix(timestamp).fromNow();
 }
 
 // English engineering note.
 function openRenameModal(session: AnalysisSession) {
-  renameTarget.value = session
-  newName.value = session.name
-  showRenameModal.value = true
+  renameTarget.value = session;
+  newName.value = session.name;
+  showRenameModal.value = true;
   // English engineering note.
   nextTick(() => {
-    renameInputRef.value?.focus()
-    renameInputRef.value?.select()
-  })
+    renameInputRef.value?.focus();
+    renameInputRef.value?.select();
+  });
 }
 
 // English engineering note.
 async function handleRename() {
-  if (!renameTarget.value || !newName.value.trim()) return
+  if (!renameTarget.value || !newName.value.trim()) return;
 
-  const success = await sessionStore.renameSession(renameTarget.value.id, newName.value.trim())
+  const success = await sessionStore.renameSession(
+    renameTarget.value.id,
+    newName.value.trim(),
+  );
   if (success) {
-    showRenameModal.value = false
-    renameTarget.value = null
-    newName.value = ''
+    showRenameModal.value = false;
+    renameTarget.value = null;
+    newName.value = "";
   }
 }
 
 // English engineering note.
 function closeRenameModal() {
-  showRenameModal.value = false
-  renameTarget.value = null
-  newName.value = ''
+  showRenameModal.value = false;
+  renameTarget.value = null;
+  newName.value = "";
 }
 
 // English engineering note.
 function openDeleteModal(session: AnalysisSession) {
-  deleteTarget.value = session
-  showDeleteModal.value = true
+  deleteTarget.value = session;
+  showDeleteModal.value = true;
 }
 
 // English engineering note.
 async function confirmDelete() {
-  if (!deleteTarget.value) return
+  if (!deleteTarget.value) return;
 
-  await sessionStore.deleteSession(deleteTarget.value.id)
-  showDeleteModal.value = false
-  deleteTarget.value = null
+  await sessionStore.deleteSession(deleteTarget.value.id);
+  showDeleteModal.value = false;
+  deleteTarget.value = null;
 }
 
 // English engineering note.
 function closeDeleteModal() {
-  showDeleteModal.value = false
-  deleteTarget.value = null
+  showDeleteModal.value = false;
+  deleteTarget.value = null;
 }
 
 // English engineering note.
 function getContextMenuItems(session: AnalysisSession) {
-  const isPinned = sessionStore.isPinned(session.id)
+  const isPinned = sessionStore.isPinned(session.id);
   return [
     [
       {
-        label: isPinned ? t('layout.contextMenu.unpin') : t('layout.contextMenu.pin'),
-        class: 'p-2',
+        label: isPinned
+          ? t("layout.contextMenu.unpin")
+          : t("layout.contextMenu.pin"),
+        class: "p-2",
         onSelect: () => sessionStore.togglePinSession(session.id),
       },
       {
-        label: t('layout.contextMenu.rename'),
-        class: 'p-2',
+        label: t("layout.contextMenu.rename"),
+        class: "p-2",
         onSelect: () => openRenameModal(session),
       },
       {
-        label: t('layout.contextMenu.delete'),
-        color: 'error' as const,
-        class: 'p-2',
+        label: t("layout.contextMenu.delete"),
+        color: "error" as const,
+        class: "p-2",
         onSelect: () => openDeleteModal(session),
       },
     ],
-  ]
+  ];
 }
 
 // English engineering note.
 function getSessionRouteName(session: AnalysisSession): string {
-  return session.type === 'private' ? 'direct-room' : 'circle-room'
+  return session.type === "private" ? "direct-room" : "circle-room";
 }
 
 // English engineering note.
 function isPrivateChat(session: AnalysisSession): boolean {
-  return session.type === 'private'
+  return session.type === "private";
 }
 
 // English engineering note.
 function getSessionAvatarText(session: AnalysisSession): string {
-  const name = session.name || ''
-  if (!name) return '?'
+  const name = session.name || "";
+  if (!name) return "?";
   if (isPrivateChat(session)) {
     // English engineering note.
-    return name.length <= 2 ? name : name.slice(-2)
+    return name.length <= 2 ? name : name.slice(-2);
   } else {
     // English engineering note.
-    return name.length <= 2 ? name : name.slice(0, 2)
+    return name.length <= 2 ? name : name.slice(0, 2);
   }
 }
 
 // English engineering note.
 function getSessionAvatar(session: AnalysisSession): string | null {
   if (isPrivateChat(session)) {
-    return session.memberAvatar || null
+    return session.memberAvatar || null;
   }
-  return session.groupAvatar || null
+  return session.groupAvatar || null;
 }
 </script>
 
 <template>
   <div
     class="xeno-sidebar-shell flex h-full flex-col transition-all duration-300 ease-in-out"
-    :class="[isCollapsed ? 'w-20' : 'w-72', isHomePage ? 'xeno-sidebar-home' : 'xeno-sidebar-default']"
+    :class="[
+      isCollapsed ? 'w-20' : 'w-72',
+      isHomePage ? 'xeno-sidebar-home' : 'xeno-sidebar-default',
+    ]"
   >
     <div class="flex flex-col p-4 pt-5">
       <!-- Header -->
@@ -204,17 +214,25 @@ function getSessionAvatar(session: AnalysisSession): string | null {
         <div v-if="!isCollapsed" class="xeno-sidebar-brand ml-2">
           <div class="xeno-sidebar-brand-mark">
             <span class="xeno-sidebar-brand-dot" />
-            <div class="text-2xl font-black tracking-tight text-cyan-600 dark:text-cyan-400">
-              {{ t('layout.brand') }}
+            <div
+              class="text-2xl font-black tracking-tight text-cyan-600 dark:text-cyan-400"
+            >
+              {{ t("layout.brand") }}
             </div>
           </div>
           <div class="xeno-sidebar-brand-meta">
             <span class="xeno-sidebar-version">v{{ version }}</span>
-            <span v-if="sessions.length > 0" class="xeno-sidebar-count">{{ sessions.length }}</span>
+            <span v-if="sessions.length > 0" class="xeno-sidebar-count">{{
+              sessions.length
+            }}</span>
           </div>
         </div>
         <UTooltip
-          :text="isCollapsed ? t('layout.tooltip.expand') : t('layout.tooltip.collapse')"
+          :text="
+            isCollapsed
+              ? t('layout.tooltip.expand')
+              : t('layout.tooltip.collapse')
+          "
           :popper="{ placement: 'right' }"
           style="-webkit-app-region: no-drag"
         >
@@ -230,23 +248,44 @@ function getSessionAvatar(session: AnalysisSession): string | null {
       </div>
 
       <!-- English UI note -->
-      <SidebarButton icon="i-heroicons-plus" :title="t('layout.newAnalysis')" @click="handleImport" />
+      <SidebarButton
+        icon="i-heroicons-plus"
+        :title="t('layout.newAnalysis')"
+        @click="handleImport"
+      />
     </div>
 
     <!-- Session List -->
     <div class="flex-1 relative min-h-0 flex flex-col">
       <!-- English UI note -->
       <div v-if="!isCollapsed && sessions.length > 0" class="px-4 mb-2">
-        <div class="xeno-sidebar-section-head flex items-center justify-between">
-          <UTooltip :text="t('layout.tooltip.hint')" :popper="{ placement: 'right' }">
+        <div
+          class="xeno-sidebar-section-head flex items-center justify-between"
+        >
+          <UTooltip
+            :text="t('layout.tooltip.hint')"
+            :popper="{ placement: 'right' }"
+          >
             <div class="flex items-center gap-1 pl-3">
-              <div class="text-sm font-medium text-gray-500">{{ t('layout.chatHistory') }}</div>
-              <UIcon name="i-heroicons-question-mark-circle" class="size-3.5 text-gray-400" />
+              <div class="text-sm font-medium text-gray-500">
+                {{ t("layout.chatHistory") }}
+              </div>
+              <UIcon
+                name="i-heroicons-question-mark-circle"
+                class="size-3.5 text-gray-400"
+              />
             </div>
           </UTooltip>
-          <UTooltip :text="t('layout.tooltip.search')" :popper="{ placement: 'right' }">
+          <UTooltip
+            :text="t('layout.tooltip.search')"
+            :popper="{ placement: 'right' }"
+          >
             <UButton
-              :icon="showSearch ? 'i-heroicons-x-mark' : 'i-heroicons-magnifying-glass'"
+              :icon="
+                showSearch
+                  ? 'i-heroicons-x-mark'
+                  : 'i-heroicons-magnifying-glass'
+              "
               color="neutral"
               variant="ghost"
               size="xs"
@@ -268,16 +307,23 @@ function getSessionAvatar(session: AnalysisSession): string | null {
 
       <!-- English UI note -->
       <div class="xeno-sidebar-scroll flex-1 overflow-y-auto">
-        <div v-if="sessions.length === 0 && !isCollapsed" class="py-8 text-center text-sm text-gray-500">
-          {{ t('layout.noRecords') }}
+        <div
+          v-if="sessions.length === 0 && !isCollapsed"
+          class="py-8 text-center text-sm text-gray-500"
+        >
+          {{ t("layout.noRecords") }}
         </div>
 
         <!-- English UI note -->
         <div
-          v-else-if="filteredSortedSessions.length === 0 && searchQuery.trim() && !isCollapsed"
+          v-else-if="
+            filteredSortedSessions.length === 0 &&
+            searchQuery.trim() &&
+            !isCollapsed
+          "
           class="py-8 text-center text-sm text-gray-500"
         >
-          {{ t('layout.noSearchResult') }}
+          {{ t("layout.noSearchResult") }}
         </div>
 
         <div class="space-y-1 pb-8" :class="[isCollapsed ? '' : 'px-4']">
@@ -287,7 +333,11 @@ function getSessionAvatar(session: AnalysisSession): string | null {
             :items="getContextMenuItems(session)"
           >
             <!-- English UI note -->
-            <UTooltip :text="session.name" :disabled="!isCollapsed || !session.name" :popper="{ placement: 'right' }">
+            <UTooltip
+              :text="session.name"
+              :disabled="!isCollapsed || !session.name"
+              :popper="{ placement: 'right' }"
+            >
               <div
                 class="xeno-session-item group relative flex items-center p-2 text-left transition-colors"
                 :class="[
@@ -298,7 +348,12 @@ function getSessionAvatar(session: AnalysisSession): string | null {
                     ? 'justify-center cursor-pointer h-13 w-13 rounded-[1.35rem] ml-3.5'
                     : 'cursor-pointer w-full rounded-2xl',
                 ]"
-                @click="router.push({ name: getSessionRouteName(session), params: { id: session.id } })"
+                @click="
+                  router.push({
+                    name: getSessionRouteName(session),
+                    params: { id: session.id },
+                  })
+                "
               >
                 <span class="xeno-session-item-rail" aria-hidden="true" />
                 <!-- English UI note -->
@@ -329,7 +384,11 @@ function getSessionAvatar(session: AnalysisSession): string | null {
                   </template>
                   <template v-else>
                     <UIcon
-                      :name="isPrivateChat(session) ? 'i-heroicons-user' : 'i-heroicons-chat-bubble-left-right'"
+                      :name="
+                        isPrivateChat(session)
+                          ? 'i-heroicons-user'
+                          : 'i-heroicons-chat-bubble-left-right'
+                      "
                       class="h-4 w-4"
                     />
                   </template>
@@ -348,7 +407,12 @@ function getSessionAvatar(session: AnalysisSession): string | null {
                     />
                   </div>
                   <p class="truncate text-xs text-gray-500 dark:text-gray-400">
-                    {{ t('layout.sessionInfo', { count: session.messageCount, time: formatTime(session.importedAt) }) }}
+                    {{
+                      t("layout.sessionInfo", {
+                        count: session.messageCount,
+                        time: formatTime(session.importedAt),
+                      })
+                    }}
                   </p>
                 </div>
               </div>
@@ -357,14 +421,18 @@ function getSessionAvatar(session: AnalysisSession): string | null {
         </div>
       </div>
       <!-- English UI note -->
-      <div class="xeno-sidebar-fade pointer-events-none absolute bottom-0 left-0 right-0 h-12" />
+      <div
+        class="xeno-sidebar-fade pointer-events-none absolute bottom-0 left-0 right-0 h-12"
+      />
     </div>
 
     <!-- Rename Modal -->
     <UModal v-model:open="showRenameModal">
       <template #content>
         <div class="p-4">
-          <h3 class="mb-3 font-semibold text-gray-900 dark:text-white">{{ t('layout.renameModal.title') }}</h3>
+          <h3 class="mb-3 font-semibold text-gray-900 dark:text-white">
+            {{ t("layout.renameModal.title") }}
+          </h3>
           <UInput
             ref="renameInputRef"
             v-model="newName"
@@ -373,9 +441,15 @@ function getSessionAvatar(session: AnalysisSession): string | null {
             @keydown.enter="handleRename"
           />
           <div class="flex justify-end gap-2">
-            <UButton variant="soft" @click="closeRenameModal">{{ t('common.cancel') }}</UButton>
-            <UButton color="primary" :disabled="!newName.trim()" @click="handleRename">
-              {{ t('common.confirm') }}
+            <UButton variant="soft" @click="closeRenameModal">{{
+              t("common.cancel")
+            }}</UButton>
+            <UButton
+              color="primary"
+              :disabled="!newName.trim()"
+              @click="handleRename"
+            >
+              {{ t("common.confirm") }}
             </UButton>
           </div>
         </div>
@@ -386,13 +460,19 @@ function getSessionAvatar(session: AnalysisSession): string | null {
     <UModal v-model:open="showDeleteModal">
       <template #content>
         <div class="p-4">
-          <h3 class="mb-3 font-semibold text-gray-900 dark:text-white">{{ t('layout.deleteModal.title') }}</h3>
+          <h3 class="mb-3 font-semibold text-gray-900 dark:text-white">
+            {{ t("layout.deleteModal.title") }}
+          </h3>
           <p class="mb-4 text-sm text-gray-600 dark:text-gray-400">
-            {{ t('layout.deleteModal.message', { name: deleteTarget?.name }) }}
+            {{ t("layout.deleteModal.message", { name: deleteTarget?.name }) }}
           </p>
           <div class="flex justify-end gap-2">
-            <UButton variant="soft" @click="closeDeleteModal">{{ t('common.cancel') }}</UButton>
-            <UButton color="error" @click="confirmDelete">{{ t('common.delete') }}</UButton>
+            <UButton variant="soft" @click="closeDeleteModal">{{
+              t("common.cancel")
+            }}</UButton>
+            <UButton color="error" @click="confirmDelete">{{
+              t("common.delete")
+            }}</UButton>
           </div>
         </div>
       </template>
@@ -416,23 +496,32 @@ function getSessionAvatar(session: AnalysisSession): string | null {
 }
 
 .xeno-sidebar-shell::before {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0 0 auto 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.34), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(56, 189, 248, 0.34),
+    transparent
+  );
   opacity: 0.78;
 }
 
 .xeno-sidebar-shell::after {
-  content: '';
+  content: "";
   position: absolute;
   top: -7rem;
   right: -7rem;
   width: 16rem;
   height: 16rem;
   border-radius: 9999px;
-  background: radial-gradient(circle, rgba(56, 189, 248, 0.12), transparent 72%);
+  background: radial-gradient(
+    circle,
+    rgba(56, 189, 248, 0.12),
+    transparent 72%
+  );
   filter: blur(16px);
   opacity: 0.8;
   pointer-events: none;
@@ -471,7 +560,11 @@ function getSessionAvatar(session: AnalysisSession): string | null {
   width: 0.5rem;
   height: 0.5rem;
   border-radius: 9999px;
-  background: linear-gradient(135deg, rgba(45, 212, 191, 0.92), rgba(14, 165, 233, 0.9));
+  background: linear-gradient(
+    135deg,
+    rgba(45, 212, 191, 0.92),
+    rgba(14, 165, 233, 0.9)
+  );
   box-shadow: 0 0 0 4px rgba(34, 211, 238, 0.1);
 }
 
@@ -512,7 +605,11 @@ function getSessionAvatar(session: AnalysisSession): string | null {
   bottom: 0.55rem;
   width: 2px;
   border-radius: 9999px;
-  background: linear-gradient(180deg, rgba(45, 212, 191, 0.88), rgba(56, 189, 248, 0.92));
+  background: linear-gradient(
+    180deg,
+    rgba(45, 212, 191, 0.88),
+    rgba(56, 189, 248, 0.92)
+  );
   opacity: 0;
   transform: translateX(-4px);
   transition:
@@ -521,12 +618,16 @@ function getSessionAvatar(session: AnalysisSession): string | null {
 }
 
 .xeno-session-item::after {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0 auto auto 0;
   width: 100%;
   height: 1px;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.12), transparent 56%);
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.12),
+    transparent 56%
+  );
   opacity: 0.5;
 }
 

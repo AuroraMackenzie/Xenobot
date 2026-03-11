@@ -64,15 +64,15 @@ pub fn decrypt_v4_database(
     output_path: &Path,
     params: &V4DecryptionParams,
 ) -> WeChatResult<()> {
-    let mut input_file = File::open(input_path).map_err(|e| WeChatError::Io(e))?;
+    let mut input_file = File::open(input_path).map_err(WeChatError::Io)?;
 
-    let mut output_file = File::create(output_path).map_err(|e| WeChatError::Io(e))?;
+    let mut output_file = File::create(output_path).map_err(WeChatError::Io)?;
 
     // Derive keys
     let enc_key = params.derive_encryption_key();
     let mac_key = params.derive_mac_key(&enc_key);
 
-    let file_size = input_file.metadata().map_err(|e| WeChatError::Io(e))?.len() as usize;
+    let file_size = input_file.metadata().map_err(WeChatError::Io)?.len() as usize;
 
     let mut page_number = 1;
     let mut position = 0;
@@ -86,7 +86,7 @@ pub fn decrypt_v4_database(
         let mut page = vec![0u8; page_len];
         input_file
             .read_exact(&mut page)
-            .map_err(|e| WeChatError::Io(e))?;
+            .map_err(WeChatError::Io)?;
 
         // Process page
         let processed_page = process_v4_page(&page, page_number, &enc_key, &mac_key, params)
@@ -95,7 +95,7 @@ pub fn decrypt_v4_database(
         // Write decrypted page
         output_file
             .write_all(&processed_page)
-            .map_err(|e| WeChatError::Io(e))?;
+            .map_err(WeChatError::Io)?;
 
         position = page_end;
         page_number += 1;
@@ -185,11 +185,11 @@ fn verify_v4_hmac(page: &[u8], mac_key: &[u8], params: &V4DecryptionParams) -> R
 
 /// Extract salt from V4 database file.
 pub fn extract_v4_salt(file_path: &Path) -> WeChatResult<Vec<u8>> {
-    let mut file = File::open(file_path).map_err(|e| WeChatError::Io(e))?;
+    let mut file = File::open(file_path).map_err(WeChatError::Io)?;
 
     let mut header = [0u8; 16];
     file.read_exact(&mut header)
-        .map_err(|e| WeChatError::Io(e))?;
+        .map_err(WeChatError::Io)?;
 
     Ok(header.to_vec())
 }
@@ -200,12 +200,12 @@ pub fn validate_v4_key(file_path: &Path, data_key: &[u8], img_key: &[u8]) -> WeC
     let params = V4DecryptionParams::new(data_key.to_vec(), img_key.to_vec(), salt);
 
     // Try to decrypt first page
-    let mut file = File::open(file_path).map_err(|e| WeChatError::Io(e))?;
+    let mut file = File::open(file_path).map_err(WeChatError::Io)?;
 
     let page_size = params.page_size;
     let mut first_page = vec![0u8; page_size];
     file.read_exact(&mut first_page)
-        .map_err(|e| WeChatError::Io(e))?;
+        .map_err(WeChatError::Io)?;
 
     let enc_key = params.derive_encryption_key();
     let mac_key = params.derive_mac_key(&enc_key);
@@ -216,5 +216,80 @@ pub fn validate_v4_key(file_path: &Path, data_key: &[u8], img_key: &[u8]) -> WeC
             tracing::debug!("Key validation failed: {}", e);
             Ok(false)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::tempdir;
+
+    fn fixture_params() -> V4DecryptionParams {
+        V4DecryptionParams::new(
+            (0u8..32).collect(),
+            (0u8..16).collect(),
+            vec![
+                0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc,
+                0xdd, 0xee, 0xff,
+            ],
+        )
+    }
+
+    #[test]
+    fn derive_keys_match_stable_reference_vectors() {
+        let params = fixture_params();
+        let enc_key = params.derive_encryption_key();
+        let mac_key = params.derive_mac_key(&enc_key);
+
+        assert_eq!(
+            hex::encode(enc_key),
+            "0ff2eb85671c24f4103c490ed634e91669cd3415a4e4af68d09dfc6f4eb4d0c1"
+        );
+        assert_eq!(
+            hex::encode(mac_key),
+            "8ef6b29237c949e169dea020b8bcbf8f61b40198eac9217e68bdae8d6e386302"
+        );
+    }
+
+    #[test]
+    fn process_page_rejects_payload_smaller_than_reserve_area() {
+        let params = fixture_params();
+        let result = process_v4_page(&[0u8; 12], 1, &[0u8; 32], &[0u8; 32], &params);
+
+        assert!(matches!(result, Err(message) if message.contains("Page too small")));
+    }
+
+    #[test]
+    fn verify_v4_hmac_rejects_mismatched_tag() {
+        let params = fixture_params();
+        let mac_key = vec![0x42; 32];
+        let page = vec![0u8; params.page_size];
+
+        let result = verify_v4_hmac(&page, &mac_key, &params);
+        assert!(matches!(result, Err(message) if message.contains("HMAC mismatch")));
+    }
+
+    #[test]
+    fn extract_v4_salt_reads_first_sixteen_bytes() {
+        let temp_dir = tempdir().expect("temp dir");
+        let path = temp_dir.path().join("mm.sqlite");
+        let expected: Vec<u8> = (0u8..16).collect();
+        let mut payload = expected.clone();
+        payload.extend_from_slice(&[0x5a; 64]);
+        fs::write(&path, payload).expect("write fixture");
+
+        let salt = extract_v4_salt(&path).expect("extract salt");
+        assert_eq!(salt, expected);
+    }
+
+    #[test]
+    fn validate_v4_key_returns_false_for_invalid_first_page() {
+        let temp_dir = tempdir().expect("temp dir");
+        let path = temp_dir.path().join("invalid-mm.sqlite");
+        fs::write(&path, vec![0u8; 4096]).expect("write invalid database");
+
+        let valid = validate_v4_key(&path, &[0x11; 32], &[0x22; 16]).expect("validation result");
+        assert!(!valid);
     }
 }

@@ -1,103 +1,117 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { useEmbeddingStore } from '@/stores/embedding'
-import EmbeddingConfigEditModal from './EmbeddingConfigEditModal.vue'
-import type { EmbeddingServiceConfigDisplay } from '@electron/preload/index'
+import { ref, onMounted, computed } from "vue";
+import { useI18n } from "vue-i18n";
+import { useEmbeddingStore } from "@/stores/embedding";
+import EmbeddingConfigEditModal from "./EmbeddingConfigEditModal.vue";
+import type { EmbeddingServiceConfigDisplay } from "@electron/preload/index";
 
-const { t } = useI18n()
+const { t } = useI18n();
 
 // Store
-const embeddingStore = useEmbeddingStore()
+const embeddingStore = useEmbeddingStore();
 
 // Emits
 const emit = defineEmits<{
-  'config-changed': []
-}>()
+  "config-changed": [];
+}>();
 
 // English engineering note.
 
-const showEditModal = ref(false)
-const editMode = ref<'add' | 'edit'>('add')
-const editingConfig = ref<EmbeddingServiceConfigDisplay | null>(null)
+const showEditModal = ref(false);
+const editMode = ref<"add" | "edit">("add");
+const editingConfig = ref<EmbeddingServiceConfigDisplay | null>(null);
 
 // English engineering note.
 
-const isLoading = computed(() => embeddingStore.isLoading)
-const configs = computed(() => embeddingStore.configs)
-const activeConfigId = computed(() => embeddingStore.activeConfigId)
-const hasConfig = computed(() => embeddingStore.hasConfig)
-const isMaxConfigs = computed(() => embeddingStore.isMaxConfigs)
-const vectorStoreStats = computed(() => embeddingStore.vectorStoreStats)
-const vectorStoreSizeFormatted = computed(() => embeddingStore.vectorStoreSizeFormatted)
+const isLoading = computed(() => embeddingStore.isLoading);
+const configs = computed(() => embeddingStore.configs);
+const activeConfigId = computed(() => embeddingStore.activeConfigId);
+const isMaxConfigs = computed(() => embeddingStore.isMaxConfigs);
+const vectorStoreStats = computed(() => embeddingStore.vectorStoreStats);
+const vectorStoreSizeFormatted = computed(
+  () => embeddingStore.vectorStoreSizeFormatted,
+);
 
 // English engineering note.
 
 function openAddModal() {
-  editMode.value = 'add'
-  editingConfig.value = null
-  showEditModal.value = true
+  editMode.value = "add";
+  editingConfig.value = null;
+  showEditModal.value = true;
 }
 
 function openEditModal(config: EmbeddingServiceConfigDisplay) {
-  editMode.value = 'edit'
-  editingConfig.value = config
-  showEditModal.value = true
+  editMode.value = "edit";
+  editingConfig.value = config;
+  showEditModal.value = true;
 }
 
 async function handleSaved() {
-  await embeddingStore.refreshConfigs()
-  emit('config-changed')
+  await embeddingStore.refreshConfigs();
+  emit("config-changed");
 }
 
 async function handleSetActive(id: string) {
-  await embeddingStore.setActiveConfig(id)
-  emit('config-changed')
+  await embeddingStore.setActiveConfig(id);
+  emit("config-changed");
 }
 
 async function handleDelete(config: EmbeddingServiceConfigDisplay) {
-  if (!confirm(t('settings.embedding.deleteConfirm', { name: config.name }))) {
-    return
+  if (!confirm(t("settings.embedding.deleteConfirm", { name: config.name }))) {
+    return;
   }
-  await embeddingStore.deleteConfig(config.id)
-  emit('config-changed')
+  await embeddingStore.deleteConfig(config.id);
+  emit("config-changed");
 }
 
 async function handleClearVectorStore() {
-  if (!confirm(t('settings.embedding.clearVectorStoreConfirm'))) {
-    return
+  if (!confirm(t("settings.embedding.clearVectorStoreConfirm"))) {
+    return;
   }
-  await embeddingStore.clearVectorStore()
+  await embeddingStore.clearVectorStore();
 }
 
 onMounted(() => {
-  embeddingStore.init()
-})
+  embeddingStore.init();
+});
 </script>
 
 <template>
   <!-- English UI note -->
-  <div v-if="isLoading && !embeddingStore.isInitialized" class="flex items-center justify-center py-12">
-    <UIcon name="i-heroicons-arrow-path" class="h-6 w-6 animate-spin text-gray-400" />
+  <div
+    v-if="isLoading && !embeddingStore.isInitialized"
+    class="flex items-center justify-center py-12"
+  >
+    <UIcon
+      name="i-heroicons-arrow-path"
+      class="h-6 w-6 animate-spin text-gray-400"
+    />
   </div>
 
   <!-- English UI note -->
   <div v-else class="space-y-6">
     <!-- English UI note -->
-    <h4 class="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
-      <UIcon name="i-heroicons-magnifying-glass-circle" class="h-4 w-4 text-emerald-500" />
-      {{ t('settings.embedding.title') }}
+    <h4
+      class="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white"
+    >
+      <UIcon
+        name="i-heroicons-magnifying-glass-circle"
+        class="h-4 w-4 text-emerald-500"
+      />
+      {{ t("settings.embedding.title") }}
     </h4>
 
     <p class="text-xs text-gray-500 dark:text-gray-400">
-      {{ t('settings.embedding.description') }}
+      {{ t("settings.embedding.description") }}
     </p>
 
     <!-- English UI note -->
-    <div class="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50">
+    <div
+      class="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50"
+    >
       <div class="flex items-center justify-between">
         <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
-          {{ t('settings.embedding.configList') }}
+          {{ t("settings.embedding.configList") }}
         </span>
         <UButton
           size="xs"
@@ -107,7 +121,7 @@ onMounted(() => {
           :disabled="isMaxConfigs"
           @click="openAddModal"
         >
-          {{ t('settings.embedding.addConfig') }}
+          {{ t("settings.embedding.addConfig") }}
         </UButton>
       </div>
 
@@ -128,7 +142,9 @@ onMounted(() => {
             <div
               :class="[
                 'h-2 w-2 rounded-full',
-                config.id === activeConfigId ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-gray-600',
+                config.id === activeConfigId
+                  ? 'bg-emerald-500'
+                  : 'bg-gray-300 dark:bg-gray-600',
               ]"
             />
             <div>
@@ -140,17 +156,19 @@ onMounted(() => {
                   v-if="config.id === activeConfigId"
                   class="rounded bg-emerald-100 px-1.5 py-0.5 text-xs text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-400"
                 >
-                  {{ t('settings.embedding.active') }}
+                  {{ t("settings.embedding.active") }}
                 </span>
               </div>
-              <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+              <div
+                class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400"
+              >
                 <span>{{ config.model }}</span>
                 <span>·</span>
                 <span>
                   {{
-                    config.apiSource === 'reuse_llm'
-                      ? t('settings.embedding.reuseLLM')
-                      : t('settings.embedding.customAPI')
+                    config.apiSource === "reuse_llm"
+                      ? t("settings.embedding.reuseLLM")
+                      : t("settings.embedding.customAPI")
                   }}
                 </span>
               </div>
@@ -191,20 +209,25 @@ onMounted(() => {
       </div>
 
       <!-- English UI note -->
-      <div v-else class="py-6 text-center text-sm text-gray-500 dark:text-gray-400">
-        {{ t('settings.embedding.noConfigs') }}
+      <div
+        v-else
+        class="py-6 text-center text-sm text-gray-500 dark:text-gray-400"
+      >
+        {{ t("settings.embedding.noConfigs") }}
       </div>
     </div>
 
     <!-- English UI note -->
-    <div class="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50">
+    <div
+      class="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50"
+    >
       <div class="flex items-center justify-between">
         <div>
           <p class="text-sm font-medium text-gray-900 dark:text-white">
-            {{ t('settings.embedding.vectorStore') }}
+            {{ t("settings.embedding.vectorStore") }}
           </p>
           <p class="text-xs text-gray-500 dark:text-gray-400">
-            {{ t('settings.embedding.vectorStoreDesc') }}
+            {{ t("settings.embedding.vectorStoreDesc") }}
           </p>
         </div>
       </div>
@@ -214,9 +237,17 @@ onMounted(() => {
         v-if="vectorStoreStats.enabled"
         class="flex items-center justify-between border-t border-gray-200 pt-4 dark:border-gray-700"
       >
-        <div class="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
-          <span>{{ t('settings.embedding.cached') }}: {{ vectorStoreStats.count ?? 0 }}</span>
-          <span>{{ t('settings.embedding.size') }}: {{ vectorStoreSizeFormatted }}</span>
+        <div
+          class="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400"
+        >
+          <span
+            >{{ t("settings.embedding.cached") }}:
+            {{ vectorStoreStats.count ?? 0 }}</span
+          >
+          <span
+            >{{ t("settings.embedding.size") }}:
+            {{ vectorStoreSizeFormatted }}</span
+          >
         </div>
         <UButton
           v-if="(vectorStoreStats.count ?? 0) > 0"
@@ -225,7 +256,7 @@ onMounted(() => {
           variant="soft"
           @click="handleClearVectorStore"
         >
-          {{ t('settings.embedding.clear') }}
+          {{ t("settings.embedding.clear") }}
         </UButton>
       </div>
     </div>

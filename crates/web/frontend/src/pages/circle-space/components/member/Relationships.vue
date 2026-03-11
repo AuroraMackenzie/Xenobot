@@ -1,83 +1,91 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
-import type { MentionAnalysis, MemberMentionDetail } from '@/types/analysis'
-import { RankListPro } from '@/components/charts'
-import type { RankItem } from '@/components/charts'
-import { SectionCard, EmptyState, LoadingState } from '@/components/UI'
+import { computed, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
+import type { MentionAnalysis, MemberMentionDetail } from "@/types/analysis";
+import { RankListPro } from "@/components/charts";
+import type { RankItem } from "@/components/charts";
+import { SectionCard, EmptyState, LoadingState } from "@/components/UI";
 
-const { t } = useI18n()
+const { t } = useI18n();
 
 interface TimeFilter {
-  startTs?: number
-  endTs?: number
+  startTs?: number;
+  endTs?: number;
 }
 
 const props = defineProps<{
-  sessionId: string
-  timeFilter?: TimeFilter
-}>()
+  sessionId: string;
+  timeFilter?: TimeFilter;
+}>();
 
 // English engineering note.
-const mentionAnalysis = ref<MentionAnalysis | null>(null)
-const isLoadingMention = ref(false)
-const selectedMemberDetail = ref<MemberMentionDetail | null>(null)
-const showMemberDetailModal = ref(false)
+const mentionAnalysis = ref<MentionAnalysis | null>(null);
+const isLoadingMention = ref(false);
+const selectedMemberDetail = ref<MemberMentionDetail | null>(null);
+const showMemberDetailModal = ref(false);
 
 async function loadMentionAnalysis() {
-  if (!props.sessionId) return
-  isLoadingMention.value = true
+  if (!props.sessionId) return;
+  isLoadingMention.value = true;
   try {
-    mentionAnalysis.value = await window.chatApi.getMentionAnalysis(props.sessionId, props.timeFilter)
+    mentionAnalysis.value = await window.chatApi.getMentionAnalysis(
+      props.sessionId,
+      props.timeFilter,
+    );
   } catch (error) {
-    console.error('[Relationships] Failed to load mention analysis:', error)
+    console.error("[Relationships] Failed to load mention analysis:", error);
   } finally {
-    isLoadingMention.value = false
+    isLoadingMention.value = false;
   }
 }
 
 const mentionerRankData = computed<RankItem[]>(() => {
-  if (!mentionAnalysis.value) return []
+  if (!mentionAnalysis.value) return [];
   return mentionAnalysis.value.topMentioners.map((m) => ({
     id: m.memberId.toString(),
     name: m.name,
     value: m.count,
     percentage: m.percentage,
-  }))
-})
+  }));
+});
 
 const mentionedRankData = computed<RankItem[]>(() => {
-  if (!mentionAnalysis.value) return []
+  if (!mentionAnalysis.value) return [];
   return mentionAnalysis.value.topMentioned.map((m) => ({
     id: m.memberId.toString(),
     name: m.name,
     value: m.count,
     percentage: m.percentage,
-  }))
-})
+  }));
+});
 
 function openMemberDetail(memberId: number) {
-  if (!mentionAnalysis.value) return
-  const detail = mentionAnalysis.value.memberDetails.find((d) => d.memberId === memberId)
+  if (!mentionAnalysis.value) return;
+  const detail = mentionAnalysis.value.memberDetails.find(
+    (d) => d.memberId === memberId,
+  );
   if (detail) {
-    selectedMemberDetail.value = detail
-    showMemberDetailModal.value = true
+    selectedMemberDetail.value = detail;
+    showMemberDetailModal.value = true;
   }
 }
 
 watch(
   () => [props.sessionId, props.timeFilter],
   () => {
-    loadMentionAnalysis()
+    loadMentionAnalysis();
   },
-  { immediate: true, deep: true }
-)
+  { immediate: true, deep: true },
+);
 </script>
 
 <template>
   <div class="xeno-relationship-shell main-content space-y-6 p-6">
     <!-- English UI note -->
-    <LoadingState v-if="isLoadingMention" :text="t('members.relationships.loading')" />
+    <LoadingState
+      v-if="isLoadingMention"
+      :text="t('members.relationships.loading')"
+    />
 
     <template v-else-if="mentionAnalysis && mentionAnalysis.totalMentions > 0">
       <!-- English UI note -->
@@ -86,7 +94,11 @@ watch(
           v-if="mentionerRankData.length > 0"
           :members="mentionerRankData"
           :title="t('members.relationships.topMentioners')"
-          :description="t('members.relationships.totalMentions', { count: mentionAnalysis.totalMentions })"
+          :description="
+            t('members.relationships.totalMentions', {
+              count: mentionAnalysis.totalMentions,
+            })
+          "
           :unit="t('members.relationships.times')"
         />
 
@@ -106,7 +118,11 @@ watch(
           v-if="mentionAnalysis.oneWay.length > 0"
           class="hidden"
           :title="t('members.relationships.oneWay.title')"
-          :description="t('members.relationships.oneWay.description', { count: mentionAnalysis.oneWay.length })"
+          :description="
+            t('members.relationships.oneWay.description', {
+              count: mentionAnalysis.oneWay.length,
+            })
+          "
         >
           <div class="divide-y divide-gray-100 dark:divide-gray-800">
             <div
@@ -136,7 +152,11 @@ watch(
                 </button>
                 <div class="flex items-center gap-1 text-pink-500">
                   <span class="text-lg">→</span>
-                  <span class="text-xs">{{ t('members.relationships.times', { count: pair.fromToCount }) }}</span>
+                  <span class="text-xs">{{
+                    t("members.relationships.times", {
+                      count: pair.fromToCount,
+                    })
+                  }}</span>
                 </div>
                 <button
                   class="font-medium text-gray-900 hover:text-pink-600 dark:text-white dark:hover:text-pink-600"
@@ -149,14 +169,22 @@ watch(
               <!-- English UI note -->
               <div class="shrink-0 text-right text-sm text-gray-500">
                 <span v-if="pair.toFromCount === 0" class="text-red-500">
-                  {{ t('members.relationships.oneWay.neverRespond') }}
+                  {{ t("members.relationships.oneWay.neverRespond") }}
                 </span>
-                <span v-else>{{ t('members.relationships.oneWay.reverse', { count: pair.toFromCount }) }}</span>
+                <span v-else>{{
+                  t("members.relationships.oneWay.reverse", {
+                    count: pair.toFromCount,
+                  })
+                }}</span>
               </div>
 
               <!-- English UI note -->
               <UBadge color="pink" variant="soft" size="xs">
-                {{ t('members.relationships.oneWay.ratio', { value: Math.round(pair.ratio * 100) }) }}
+                {{
+                  t("members.relationships.oneWay.ratio", {
+                    value: Math.round(pair.ratio * 100),
+                  })
+                }}
               </UBadge>
             </div>
           </div>
@@ -166,7 +194,11 @@ watch(
         <SectionCard
           v-if="mentionAnalysis.twoWay.length > 0"
           :title="t('members.relationships.twoWay.title')"
-          :description="t('members.relationships.twoWay.description', { count: mentionAnalysis.twoWay.length })"
+          :description="
+            t('members.relationships.twoWay.description', {
+              count: mentionAnalysis.twoWay.length,
+            })
+          "
         >
           <div class="divide-y divide-gray-100 dark:divide-gray-800">
             <div
@@ -199,9 +231,13 @@ watch(
                   {{ pair.member1Name }}
                 </button>
                 <div class="flex items-center gap-1">
-                  <span class="text-xs text-gray-400">{{ pair.member1To2 }}</span>
+                  <span class="text-xs text-gray-400">{{
+                    pair.member1To2
+                  }}</span>
                   <span class="text-lg text-pink-500">⇄</span>
-                  <span class="text-xs text-gray-400">{{ pair.member2To1 }}</span>
+                  <span class="text-xs text-gray-400">{{
+                    pair.member2To1
+                  }}</span>
                 </div>
                 <button
                   class="font-medium text-gray-900 hover:text-pink-600 dark:text-white dark:hover:text-pink-600"
@@ -213,17 +249,31 @@ watch(
 
               <!-- English UI note -->
               <div class="shrink-0 text-right">
-                <span class="text-lg font-bold text-pink-600">{{ pair.total }}</span>
-                <span class="ml-1 text-sm text-gray-500">{{ t('members.relationships.twoWay.interactions') }}</span>
+                <span class="text-lg font-bold text-pink-600">{{
+                  pair.total
+                }}</span>
+                <span class="ml-1 text-sm text-gray-500">{{
+                  t("members.relationships.twoWay.interactions")
+                }}</span>
               </div>
 
               <!-- English UI note -->
               <UBadge
-                :color="pair.balance >= 0.7 ? 'green' : pair.balance >= 0.5 ? 'blue' : 'gray'"
+                :color="
+                  pair.balance >= 0.7
+                    ? 'green'
+                    : pair.balance >= 0.5
+                      ? 'blue'
+                      : 'gray'
+                "
                 variant="soft"
                 size="xs"
               >
-                {{ t('members.relationships.twoWay.balance', { value: Math.round(pair.balance * 100) }) }}
+                {{
+                  t("members.relationships.twoWay.balance", {
+                    value: Math.round(pair.balance * 100),
+                  })
+                }}
               </UBadge>
             </div>
           </div>
@@ -231,7 +281,10 @@ watch(
       </div>
     </template>
 
-    <SectionCard v-else-if="!isLoadingMention" :title="t('members.relationships.emptyTitle')">
+    <SectionCard
+      v-else-if="!isLoadingMention"
+      :title="t('members.relationships.emptyTitle')"
+    >
       <EmptyState :text="t('members.relationships.empty')" />
     </SectionCard>
 
@@ -240,13 +293,19 @@ watch(
       <template #content>
         <div v-if="selectedMemberDetail" class="p-5">
           <h3 class="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
-            {{ t('members.relationships.modal.title', { name: selectedMemberDetail.name }) }}
+            {{
+              t("members.relationships.modal.title", {
+                name: selectedMemberDetail.name,
+              })
+            }}
           </h3>
 
           <!-- English UI note -->
           <div v-if="selectedMemberDetail.topMentioned.length > 0" class="mb-4">
-            <h4 class="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-              {{ t('members.relationships.modal.topMentioned') }}
+            <h4
+              class="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
+              {{ t("members.relationships.modal.topMentioned") }}
             </h4>
             <div class="space-y-2">
               <div
@@ -258,7 +317,11 @@ watch(
                   {{ item.toName }}
                 </span>
                 <span class="text-xs text-gray-500">
-                  {{ t('members.relationships.modal.timesCount', { count: item.count }) }}
+                  {{
+                    t("members.relationships.modal.timesCount", {
+                      count: item.count,
+                    })
+                  }}
                 </span>
               </div>
             </div>
@@ -266,8 +329,10 @@ watch(
 
           <!-- English UI note -->
           <div v-if="selectedMemberDetail.topMentioners.length > 0">
-            <h4 class="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-              {{ t('members.relationships.modal.topMentioners') }}
+            <h4
+              class="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
+              {{ t("members.relationships.modal.topMentioners") }}
             </h4>
             <div class="space-y-2">
               <div
@@ -279,7 +344,11 @@ watch(
                   {{ item.fromName }}
                 </span>
                 <span class="text-xs text-gray-500">
-                  {{ t('members.relationships.modal.timesCount', { count: item.count }) }}
+                  {{
+                    t("members.relationships.modal.timesCount", {
+                      count: item.count,
+                    })
+                  }}
                 </span>
               </div>
             </div>
@@ -287,7 +356,7 @@ watch(
 
           <div class="mt-4 flex justify-end">
             <UButton variant="soft" @click="showMemberDetailModal = false">
-              {{ t('members.relationships.modal.close') }}
+              {{ t("members.relationships.modal.close") }}
             </UButton>
           </div>
         </div>
@@ -299,14 +368,25 @@ watch(
 <style scoped>
 .xeno-relationship-shell {
   background:
-    radial-gradient(circle at top right, rgba(236, 72, 153, 0.08), transparent 24%),
-    radial-gradient(circle at left center, rgba(59, 130, 246, 0.06), transparent 22%);
+    radial-gradient(
+      circle at top right,
+      rgba(236, 72, 153, 0.08),
+      transparent 24%
+    ),
+    radial-gradient(
+      circle at left center,
+      rgba(59, 130, 246, 0.06),
+      transparent 22%
+    );
 }
 
 .xeno-relationship-chip {
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background:
-    linear-gradient(180deg, rgba(15, 23, 42, 0.72), rgba(15, 23, 42, 0.58));
+  background: linear-gradient(
+    180deg,
+    rgba(15, 23, 42, 0.72),
+    rgba(15, 23, 42, 0.58)
+  );
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 </style>

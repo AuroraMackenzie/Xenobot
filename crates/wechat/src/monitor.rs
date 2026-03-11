@@ -67,7 +67,7 @@ impl FileMonitor {
                 Self::handle_event(&event, &config_clone, &event_tx_clone);
             }
         })
-        .map_err(|e| WeChatError::FileMonitor(e.into()))?;
+        .map_err(WeChatError::FileMonitor)?;
 
         Ok(Self {
             config,
@@ -86,7 +86,7 @@ impl FileMonitor {
         };
         self.watcher
             .watch(&self.config.watch_dir, mode)
-            .map_err(|e| WeChatError::FileMonitor(e.into()))?;
+            .map_err(WeChatError::FileMonitor)?;
 
         Ok(())
     }
@@ -95,7 +95,7 @@ impl FileMonitor {
     pub fn stop(&mut self) -> WeChatResult<()> {
         self.watcher
             .unwatch(&self.config.watch_dir)
-            .map_err(|e| WeChatError::FileMonitor(e.into()))
+            .map_err(WeChatError::FileMonitor)
     }
 
     /// Get next file event with debouncing.

@@ -2,140 +2,147 @@
 /**
  * Session timeline rail used to jump between segmented chat windows.
  */
-import { ref, computed, watch, nextTick } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { useVirtualizer } from '@tanstack/vue-virtual'
-import BatchSummaryModal from './BatchSummaryModal.vue'
+import { ref, computed, watch, nextTick } from "vue";
+import { useI18n } from "vue-i18n";
+import { useVirtualizer } from "@tanstack/vue-virtual";
+import BatchSummaryModal from "./BatchSummaryModal.vue";
 
 interface ChatSessionItem {
-  id: number
-  startTs: number
-  endTs: number
-  messageCount: number
-  firstMessageId: number
+  id: number;
+  startTs: number;
+  endTs: number;
+  messageCount: number;
+  firstMessageId: number;
   /** Optional AI-generated summary for the session window. */
-  summary?: string | null
+  summary?: string | null;
 }
 
 // English engineering note.
 type FlatListItem =
-  | { type: 'date'; date: string; label: string; count: number }
-  | { type: 'session'; session: ChatSessionItem }
+  | { type: "date"; date: string; label: string; count: number }
+  | { type: "session"; session: ChatSessionItem };
 
 const props = defineProps<{
-  sessionId: string
+  sessionId: string;
   /** Currently focused session id. */
-  activeSessionId?: number
+  activeSessionId?: number;
   /** Whether the rail is collapsed into the slim indicator mode. */
-  collapsed?: boolean
+  collapsed?: boolean;
   /** Visible filter lower bound. */
-  filterStartTs?: number
+  filterStartTs?: number;
   /** Visible filter upper bound. */
-  filterEndTs?: number
+  filterEndTs?: number;
   /** Session ids matched by the active content query. */
-  filterMatchedSessionIds?: Set<number>
-}>()
+  filterMatchedSessionIds?: Set<number>;
+}>();
 
 const emit = defineEmits<{
   /** Select a session and jump the message list to its first message. */
-  (e: 'select', sessionId: number, firstMessageId: number): void
+  (e: "select", sessionId: number, firstMessageId: number): void;
   /** Collapse/expand the rail. */
-  (e: 'update:collapsed', value: boolean): void
-}>()
+  (e: "update:collapsed", value: boolean): void;
+}>();
 
-const { t, locale } = useI18n()
-
-// English engineering note.
-const allSessions = ref<ChatSessionItem[]>([])
-const isLoading = ref(true)
-const scrollContainerRef = ref<HTMLElement | null>(null)
+const { t, locale } = useI18n();
 
 // English engineering note.
-const generatingSummaryIds = ref<Set<number>>(new Set())
+const allSessions = ref<ChatSessionItem[]>([]);
+const isLoading = ref(true);
+const scrollContainerRef = ref<HTMLElement | null>(null);
 
 // English engineering note.
-const showBatchSummaryModal = ref(false)
+const generatingSummaryIds = ref<Set<number>>(new Set());
+
+// English engineering note.
+const showBatchSummaryModal = ref(false);
 
 // English engineering note.
 const isCollapsed = computed({
   get: () => props.collapsed ?? false,
-  set: (v) => emit('update:collapsed', v),
-})
+  set: (v) => emit("update:collapsed", v),
+});
 
 // English engineering note.
 const filteredSessions = computed(() => {
-  let sessions = allSessions.value
-  if (sessions.length === 0) return []
+  let sessions = allSessions.value;
+  if (sessions.length === 0) return [];
 
   // English engineering note.
   if (props.filterMatchedSessionIds && props.filterMatchedSessionIds.size > 0) {
-    sessions = sessions.filter((session) => props.filterMatchedSessionIds!.has(session.id))
+    sessions = sessions.filter((session) =>
+      props.filterMatchedSessionIds!.has(session.id),
+    );
   }
   // English engineering note.
   else if (props.filterStartTs || props.filterEndTs) {
     sessions = sessions.filter((session) => {
       // English engineering note.
-      const sessionStart = session.startTs
-      const sessionEnd = session.endTs
+      const sessionStart = session.startTs;
+      const sessionEnd = session.endTs;
 
-      if (props.filterStartTs && sessionEnd < props.filterStartTs) return false
-      if (props.filterEndTs && sessionStart > props.filterEndTs) return false
+      if (props.filterStartTs && sessionEnd < props.filterStartTs) return false;
+      if (props.filterEndTs && sessionStart > props.filterEndTs) return false;
 
-      return true
-    })
+      return true;
+    });
   }
 
-  return sessions
-})
+  return sessions;
+});
 
 // English engineering note.
 const flatList = computed<FlatListItem[]>(() => {
-  const sessions = filteredSessions.value
-  if (sessions.length === 0) return []
+  const sessions = filteredSessions.value;
+  if (sessions.length === 0) return [];
 
-  const result: FlatListItem[] = []
-  const dateGroups = new Map<string, { label: string; sessions: ChatSessionItem[] }>()
+  const result: FlatListItem[] = [];
+  const dateGroups = new Map<
+    string,
+    { label: string; sessions: ChatSessionItem[] }
+  >();
 
   // English engineering note.
   for (const session of sessions) {
-    const dateKey = getDateKey(session.startTs)
-    let group = dateGroups.get(dateKey)
+    const dateKey = getDateKey(session.startTs);
+    let group = dateGroups.get(dateKey);
     if (!group) {
       group = {
         label: formatDate(session.startTs),
         sessions: [],
-      }
-      dateGroups.set(dateKey, group)
+      };
+      dateGroups.set(dateKey, group);
     }
-    group.sessions.push(session)
+    group.sessions.push(session);
   }
 
   // English engineering note.
-  const sortedDates = Array.from(dateGroups.entries()).sort((a, b) => a[0].localeCompare(b[0]))
+  const sortedDates = Array.from(dateGroups.entries()).sort((a, b) =>
+    a[0].localeCompare(b[0]),
+  );
 
   // English engineering note.
   for (const [dateKey, group] of sortedDates) {
     // English engineering note.
     result.push({
-      type: 'date',
+      type: "date",
       date: dateKey,
       label: group.label,
       count: group.sessions.length,
-    })
+    });
 
     // English engineering note.
-    const sortedSessions = group.sessions.sort((a, b) => a.startTs - b.startTs)
+    const sortedSessions = group.sessions.sort((a, b) => a.startTs - b.startTs);
     for (const session of sortedSessions) {
-      result.push({ type: 'session', session })
+      result.push({ type: "session", session });
     }
   }
 
-  return result
-})
+  return result;
+});
 
 // English engineering note.
-const ESTIMATED_DATE_HEIGHT = 28 // Date separators are compact.
-const ESTIMATED_SESSION_HEIGHT = 60 // Session rows include summary affordances.
+const ESTIMATED_DATE_HEIGHT = 28; // Date separators are compact.
+const ESTIMATED_SESSION_HEIGHT = 60; // Session rows include summary affordances.
 
 // English engineering note.
 const virtualizer = useVirtualizer(
@@ -143,118 +150,151 @@ const virtualizer = useVirtualizer(
     count: flatList.value.length,
     getScrollElement: () => scrollContainerRef.value,
     estimateSize: (index: number) => {
-      const item = flatList.value[index]
-      return item?.type === 'date' ? ESTIMATED_DATE_HEIGHT : ESTIMATED_SESSION_HEIGHT
+      const item = flatList.value[index];
+      return item?.type === "date"
+        ? ESTIMATED_DATE_HEIGHT
+        : ESTIMATED_SESSION_HEIGHT;
     },
     overscan: 10,
     getItemKey: (index: number) => {
-      const item = flatList.value[index]
-      if (!item) return index
-      if (item.type === 'date') return `date-${item.date}`
-      return `session-${item.session.id}`
+      const item = flatList.value[index];
+      if (!item) return index;
+      if (item.type === "date") return `date-${item.date}`;
+      return `session-${item.session.id}`;
     },
-  }))
-)
+  })),
+);
 
 // English engineering note.
-const virtualItems = computed(() => virtualizer.value.getVirtualItems())
+const virtualItems = computed(() => virtualizer.value.getVirtualItems());
 
 // English engineering note.
-const totalSize = computed(() => virtualizer.value.getTotalSize())
+const totalSize = computed(() => virtualizer.value.getTotalSize());
+
+// English engineering note.
+function getDateItem(
+  index: number,
+): Extract<FlatListItem, { type: "date" }> | null {
+  const item = flatList.value[index];
+  return item?.type === "date" ? item : null;
+}
+
+// English engineering note.
+function getSessionItem(index: number): ChatSessionItem | null {
+  const item = flatList.value[index];
+  return item?.type === "session" ? item.session : null;
+}
 
 // English engineering note.
 function formatDate(ts: number): string {
-  const date = new Date(ts * 1000)
-  return date.toLocaleDateString(locale.value === 'zh-CN' ? 'zh-CN' : 'en-US', { month: '2-digit', day: '2-digit' })
+  const date = new Date(ts * 1000);
+  return date.toLocaleDateString(locale.value === "zh-CN" ? "zh-CN" : "en-US", {
+    month: "2-digit",
+    day: "2-digit",
+  });
 }
 
 // English engineering note.
 function formatTime(ts: number): string {
-  const date = new Date(ts * 1000)
-  return date.toLocaleTimeString(locale.value === 'zh-CN' ? 'zh-CN' : 'en-US', { hour: '2-digit', minute: '2-digit' })
+  const date = new Date(ts * 1000);
+  return date.toLocaleTimeString(locale.value === "zh-CN" ? "zh-CN" : "en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 // English engineering note.
 function getDateKey(ts: number): string {
-  const date = new Date(ts * 1000)
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+  const date = new Date(ts * 1000);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 // English engineering note.
 async function loadSessions() {
-  if (!props.sessionId) return
+  if (!props.sessionId) return;
 
-  isLoading.value = true
+  isLoading.value = true;
   try {
-    const data = await window.sessionApi.getSessions(props.sessionId)
-    allSessions.value = data
+    const data = await window.sessionApi.getSessions(props.sessionId);
+    allSessions.value = data;
     // English engineering note.
-    await nextTick()
-    scrollToBottom()
+    await nextTick();
+    scrollToBottom();
   } catch (error) {
-    console.error('[SessionTimeline] Failed to load session list:', error)
+    console.error("[SessionTimeline] Failed to load session list:", error);
   } finally {
-    isLoading.value = false
+    isLoading.value = false;
   }
 }
 
 // English engineering note.
 function scrollToBottom() {
   if (flatList.value.length > 0) {
-    virtualizer.value.scrollToIndex(flatList.value.length - 1, { align: 'end' })
+    virtualizer.value.scrollToIndex(flatList.value.length - 1, {
+      align: "end",
+    });
   }
 }
 
 // English engineering note.
 function scrollToSession(sessionId: number) {
-  const index = flatList.value.findIndex((item) => item.type === 'session' && item.session.id === sessionId)
+  const index = flatList.value.findIndex(
+    (item) => item.type === "session" && item.session.id === sessionId,
+  );
   if (index !== -1) {
-    virtualizer.value.scrollToIndex(index, { align: 'center' })
+    virtualizer.value.scrollToIndex(index, { align: "center" });
   }
 }
 
 // English engineering note.
 function handleSelectSession(session: ChatSessionItem) {
-  emit('select', session.id, session.firstMessageId)
+  emit("select", session.id, session.firstMessageId);
 }
 
 // English engineering note.
 async function generateSummary(session: ChatSessionItem, event: Event) {
-  event.stopPropagation() // Keep row selection from firing while generating summary.
-  event.preventDefault()
+  event.stopPropagation(); // Keep row selection from firing while generating summary.
+  event.preventDefault();
 
   if (generatingSummaryIds.value.has(session.id)) {
-    return
+    return;
   }
 
-  generatingSummaryIds.value.add(session.id)
+  generatingSummaryIds.value.add(session.id);
 
   try {
-    const result = await window.sessionApi.generateSummary(props.sessionId, session.id, locale.value)
+    const result = await window.sessionApi.generateSummary(
+      props.sessionId,
+      session.id,
+      locale.value,
+    );
 
     if (result.success && result.summary) {
       // English engineering note.
-      const index = allSessions.value.findIndex((s) => s.id === session.id)
+      const index = allSessions.value.findIndex((s) => s.id === session.id);
       if (index !== -1) {
-        allSessions.value[index] = { ...allSessions.value[index], summary: result.summary }
+        allSessions.value[index] = {
+          ...allSessions.value[index],
+          summary: result.summary,
+        };
       }
     }
   } catch (error) {
-    console.error('[SessionTimeline] Failed to generate summary:', error)
+    console.error("[SessionTimeline] Failed to generate summary:", error);
   } finally {
-    generatingSummaryIds.value.delete(session.id)
+    generatingSummaryIds.value.delete(session.id);
   }
 }
 
 // English engineering note.
 function isGenerating(sessionId: number): boolean {
-  return generatingSummaryIds.value.has(sessionId)
+  return generatingSummaryIds.value.has(sessionId);
 }
 
 // English engineering note.
 function measureElement(el: Element | null) {
   if (el) {
-    virtualizer.value.measureElement(el)
+    virtualizer.value.measureElement(el);
   }
 }
 
@@ -263,19 +303,19 @@ watch(
   () => props.activeSessionId,
   (newId) => {
     if (newId) {
-      scrollToSession(newId)
+      scrollToSession(newId);
     }
-  }
-)
+  },
+);
 
 // English engineering note.
 watch(
   () => props.sessionId,
   () => {
-    loadSessions()
+    loadSessions();
   },
-  { immediate: true }
-)
+  { immediate: true },
+);
 </script>
 
 <template>
@@ -284,40 +324,70 @@ watch(
     v-if="isCollapsed"
     class="xeno-timeline-collapsed flex h-full w-10 flex-col items-center py-2"
   >
-    <UButton icon="i-heroicons-chevron-right" variant="ghost" size="xs" @click="isCollapsed = false" />
+    <UButton
+      icon="i-heroicons-chevron-right"
+      variant="ghost"
+      size="xs"
+      @click="isCollapsed = false"
+    />
     <div class="mt-2 flex flex-1 items-center">
-      <span class="vertical-text text-xs text-gray-400">{{ t('records.timeline.timeline') }}</span>
+      <span class="vertical-text text-xs text-gray-400">{{
+        t("records.timeline.timeline")
+      }}</span>
     </div>
   </div>
 
   <!-- English UI note -->
-  <div
-    v-else
-    class="xeno-timeline-shell flex h-full w-44 flex-col"
-  >
+  <div v-else class="xeno-timeline-shell flex h-full w-44 flex-col">
     <!-- English UI note -->
-    <div class="xeno-timeline-header flex items-center justify-between px-2 py-1.5">
-      <span class="text-xs font-medium text-gray-600 dark:text-gray-300">{{ t('records.timeline.timeline') }}</span>
+    <div
+      class="xeno-timeline-header flex items-center justify-between px-2 py-1.5"
+    >
+      <span class="text-xs font-medium text-gray-600 dark:text-gray-300">{{
+        t("records.timeline.timeline")
+      }}</span>
       <div class="flex items-center gap-0.5">
         <UTooltip :text="t('records.batchSummary.title')">
-          <UButton icon="i-heroicons-sparkles" variant="ghost" size="xs" @click="showBatchSummaryModal = true" />
+          <UButton
+            icon="i-heroicons-sparkles"
+            variant="ghost"
+            size="xs"
+            @click="showBatchSummaryModal = true"
+          />
         </UTooltip>
-        <UButton icon="i-heroicons-chevron-left" variant="ghost" size="xs" @click="isCollapsed = true" />
+        <UButton
+          icon="i-heroicons-chevron-left"
+          variant="ghost"
+          size="xs"
+          @click="isCollapsed = true"
+        />
       </div>
     </div>
 
     <!-- English UI note -->
     <div v-if="isLoading" class="flex flex-1 items-center justify-center">
-      <UIcon name="i-heroicons-arrow-path" class="h-4 w-4 animate-spin text-gray-400" />
+      <UIcon
+        name="i-heroicons-arrow-path"
+        class="h-4 w-4 animate-spin text-gray-400"
+      />
     </div>
 
     <!-- English UI note -->
-    <div v-else-if="allSessions.length === 0" class="flex flex-1 items-center justify-center p-2">
-      <span class="xeno-timeline-empty text-center text-xs text-gray-400">{{ t('records.timeline.noSessions') }}</span>
+    <div
+      v-else-if="allSessions.length === 0"
+      class="flex flex-1 items-center justify-center p-2"
+    >
+      <span class="xeno-timeline-empty text-center text-xs text-gray-400">{{
+        t("records.timeline.noSessions")
+      }}</span>
     </div>
 
     <!-- English UI note -->
-    <div v-else ref="scrollContainerRef" class="xeno-timeline-scroll flex-1 overflow-y-auto py-1">
+    <div
+      v-else
+      ref="scrollContainerRef"
+      class="xeno-timeline-scroll flex-1 overflow-y-auto py-1"
+    >
       <div class="relative w-full" :style="{ height: `${totalSize}px` }">
         <div
           v-for="virtualItem in virtualItems"
@@ -329,11 +399,13 @@ watch(
           <!-- English UI note -->
           <template v-if="flatList[virtualItem.index]?.type === 'date'">
             <div class="flex w-full items-center gap-1 px-2 py-1">
-              <span class="text-xs font-medium text-gray-700 dark:text-gray-200">
-                {{ (flatList[virtualItem.index] as { label: string }).label }}
+              <span
+                class="text-xs font-medium text-gray-700 dark:text-gray-200"
+              >
+                {{ getDateItem(virtualItem.index)?.label }}
               </span>
               <span class="text-xs text-gray-400">
-                ({{ (flatList[virtualItem.index] as { count: number }).count }})
+                ({{ getDateItem(virtualItem.index)?.count }})
               </span>
             </div>
           </template>
@@ -343,19 +415,24 @@ watch(
             <button
               class="xeno-timeline-session flex w-full flex-col rounded px-2 py-1 pl-4 text-left transition-colors"
               :class="[
-                activeSessionId === (flatList[virtualItem.index] as { session: ChatSessionItem }).session.id
+                activeSessionId === getSessionItem(virtualItem.index)?.id
                   ? 'xeno-timeline-session-active text-blue-700 dark:text-blue-300'
                   : 'hover:bg-gray-100/70 dark:hover:bg-gray-700/50',
               ]"
-              @click="handleSelectSession((flatList[virtualItem.index] as { session: ChatSessionItem }).session)"
+              @click="
+                getSessionItem(virtualItem.index) &&
+                handleSelectSession(getSessionItem(virtualItem.index)!)
+              "
             >
               <!-- English UI note -->
               <div class="flex w-full items-center justify-between">
                 <span class="text-xs text-gray-600 dark:text-gray-300">
-                  {{ formatTime((flatList[virtualItem.index] as { session: ChatSessionItem }).session.startTs) }}
+                  {{
+                    formatTime(getSessionItem(virtualItem.index)?.startTs || 0)
+                  }}
                 </span>
                 <span class="text-xs text-gray-400">
-                  ({{ (flatList[virtualItem.index] as { session: ChatSessionItem }).session.messageCount }})
+                  ({{ getSessionItem(virtualItem.index)?.messageCount }})
                 </span>
               </div>
 
@@ -363,40 +440,52 @@ watch(
               <div class="mt-0.5 flex w-full items-center">
                 <!-- English UI note -->
                 <UTooltip
-                  v-if="(flatList[virtualItem.index] as { session: ChatSessionItem }).session.summary"
+                  v-if="getSessionItem(virtualItem.index)?.summary"
                   :popper="{ placement: 'right' }"
                   :ui="{ content: 'z-[10001] h-auto max-h-80 overflow-y-auto' }"
                 >
-                  <span class="line-clamp-2 text-xs leading-tight text-gray-400 dark:text-gray-500">
-                    {{ (flatList[virtualItem.index] as { session: ChatSessionItem }).session.summary }}
+                  <span
+                    class="line-clamp-2 text-xs leading-tight text-gray-400 dark:text-gray-500"
+                  >
+                    {{ getSessionItem(virtualItem.index)?.summary }}
                   </span>
                   <template #content>
-                    <div class="max-w-sm whitespace-pre-wrap break-words text-sm leading-relaxed">
-                      {{ (flatList[virtualItem.index] as { session: ChatSessionItem }).session.summary }}
+                    <div
+                      class="max-w-sm whitespace-pre-wrap break-words text-sm leading-relaxed"
+                    >
+                      {{ getSessionItem(virtualItem.index)?.summary }}
                     </div>
                   </template>
                 </UTooltip>
 
                 <!-- English UI note -->
                 <span
-                  v-else-if="(flatList[virtualItem.index] as { session: ChatSessionItem }).session.messageCount >= 3"
+                  v-else-if="
+                    (getSessionItem(virtualItem.index)?.messageCount || 0) >= 3
+                  "
                   class="flex items-center gap-1 text-xs text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400"
                   @click="
-                    generateSummary((flatList[virtualItem.index] as { session: ChatSessionItem }).session, $event)
+                    getSessionItem(virtualItem.index) &&
+                    generateSummary(getSessionItem(virtualItem.index)!, $event)
                   "
                 >
                   <UIcon
-                    v-if="isGenerating((flatList[virtualItem.index] as { session: ChatSessionItem }).session.id)"
+                    v-if="
+                      isGenerating(getSessionItem(virtualItem.index)?.id || 0)
+                    "
                     name="i-heroicons-arrow-path"
                     class="h-3 w-3 animate-spin"
                   />
                   <UIcon v-else name="i-heroicons-sparkles" class="h-3 w-3" />
-                  <span>{{ t('records.timeline.generateSummary') }}</span>
+                  <span>{{ t("records.timeline.generateSummary") }}</span>
                 </span>
 
                 <!-- English UI note -->
-                <span v-else class="text-xs italic text-gray-300 dark:text-gray-600">
-                  {{ t('records.timeline.tooFewMessages') }}
+                <span
+                  v-else
+                  class="text-xs italic text-gray-300 dark:text-gray-600"
+                >
+                  {{ t("records.timeline.tooFewMessages") }}
                 </span>
               </div>
             </button>
@@ -407,7 +496,11 @@ watch(
   </div>
 
   <!-- English UI note -->
-  <BatchSummaryModal v-model:open="showBatchSummaryModal" :session-id="sessionId" @completed="loadSessions" />
+  <BatchSummaryModal
+    v-model:open="showBatchSummaryModal"
+    :session-id="sessionId"
+    @completed="loadSessions"
+  />
 </template>
 
 <style scoped>

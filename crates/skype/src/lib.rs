@@ -6,12 +6,24 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
-use std::path::Path;
+pub mod account;
+pub mod audio;
+pub mod config;
+pub mod media;
+pub mod monitor;
+pub mod service;
+
+use std::path::{Path, PathBuf};
 
 use thiserror::Error;
 use xenobot_analysis::parsers::{ParseError, ParsedChat, ParserRegistry};
 use xenobot_core::platform_sources::{discover_sources_for_platform, SourceCandidate};
 use xenobot_core::types::Platform;
+
+pub use config::SkypeConfig;
+pub use service::{AuthorizedSkypeWorkspace, SkypeService, StagedSkypeExport};
+/// Common result type used by Skype crate operations.
+pub type SkypeResult<T> = Result<T, SkypeError>;
 
 /// Stable platform identifier.
 pub const PLATFORM_ID: &str = "skype";
@@ -40,7 +52,6 @@ impl SkypeAdapter {
     pub fn parse_authorized_export(&self, path: &Path) -> Result<ParsedChat, SkypeError> {
         let registry = ParserRegistry::new();
         let parsed = registry.detect_and_parse(path).map_err(SkypeError::Parse)?;
-
         if parsed.platform.eq_ignore_ascii_case(PLATFORM_ID) {
             Ok(parsed)
         } else {
@@ -53,7 +64,7 @@ impl SkypeAdapter {
 
     /// Return the core platform enum used by source discovery.
     pub fn platform(&self) -> Platform {
-        Platform::Custom("skype".to_string())
+        Platform::Skype
     }
 }
 
@@ -63,6 +74,25 @@ pub enum SkypeError {
     /// Parse error returned by analysis parser registry.
     #[error("parse error: {0}")]
     Parse(#[from] ParseError),
+
+    /// Path is outside the configured authorized roots.
+    #[error("path is outside authorized roots: {path}")]
+    UnauthorizedPath {
+        /// Rejected source path.
+        path: PathBuf,
+    },
+
+    /// I/O error while reading export assets.
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+
+    /// File monitoring error.
+    #[error("file monitoring error: {0}")]
+    FileMonitor(#[from] notify::Error),
+
+    /// Internal orchestration or external tool failure.
+    #[error("internal error: {0}")]
+    Internal(#[from] anyhow::Error),
 
     /// Parsed export did not match the expected platform.
     #[error("parsed platform mismatch: expected {expected}, got {actual}")]
@@ -89,8 +119,6 @@ mod tests {
         let adapter = SkypeAdapter::new();
         let sources = adapter.discover_sources();
         assert!(!sources.is_empty());
-        assert!(sources
-            .iter()
-            .all(|candidate| candidate.platform_id == PLATFORM_ID));
+        assert!(sources.iter().all(|candidate| candidate.platform_id == PLATFORM_ID));
     }
 }

@@ -1,57 +1,72 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { storeToRefs } from 'pinia'
-import { useI18n } from 'vue-i18n'
-import { useSessionStore } from '@/stores/session'
+import { ref, onMounted, computed } from "vue";
+import { storeToRefs } from "pinia";
+import { useI18n } from "vue-i18n";
+import { useSessionStore } from "@/stores/session";
 
-const { t } = useI18n()
-const sessionStore = useSessionStore()
-const { migrationCount, pendingMigrations, isMigrating } = storeToRefs(sessionStore)
-
-// English engineering note.
-const showModal = ref(false)
-const migrationError = ref<string | null>(null)
-const migrationPartialSuccess = ref(false) // English engineering note.
+const { t } = useI18n();
+const sessionStore = useSessionStore();
+const { migrationCount, pendingMigrations, isMigrating } =
+  storeToRefs(sessionStore);
 
 // English engineering note.
-const canClose = computed(() => migrationError.value !== null)
+const showModal = ref(false);
+const migrationError = ref<string | null>(null);
+const migrationPartialSuccess = ref(false); // English engineering note.
+
+// English engineering note.
+const canClose = computed(() => migrationError.value !== null);
 
 // English engineering note.
 async function handleMigration() {
-  migrationError.value = null
-  migrationPartialSuccess.value = false
-  const result = await sessionStore.runMigration()
+  migrationError.value = null;
+  migrationPartialSuccess.value = false;
+  const result = await sessionStore.runMigration();
   if (result.success) {
-    showModal.value = false
+    showModal.value = false;
     // English engineering note.
-    await sessionStore.loadSessions()
+    await sessionStore.loadSessions();
   } else {
-    migrationError.value = result.error || t('home.migration.failed')
+    migrationError.value = result.error || t("home.migration.failed");
     // English engineering note.
-    migrationPartialSuccess.value = true
+    migrationPartialSuccess.value = true;
     // English engineering note.
-    await sessionStore.loadSessions()
+    await sessionStore.loadSessions();
   }
 }
 
 // English engineering note.
 function handleClose() {
   if (canClose.value) {
-    showModal.value = false
+    showModal.value = false;
   }
 }
 
 // English engineering note.
 onMounted(async () => {
-  const result = await sessionStore.checkMigration()
+  const result = await sessionStore.checkMigration();
   if (result.needsMigration) {
-    showModal.value = true
+    showModal.value = true;
   }
-})
+});
 </script>
 
 <template>
-  <UModal :open="showModal" :ui="{ content: 'max-w-2xl' }" :prevent-close="!canClose">
+  <UModal
+    :open="showModal"
+    :title="
+      migrationError
+        ? t('home.migration.partialFailed')
+        : t('home.migration.title')
+    "
+    :description="
+      migrationError
+        ? t('home.migration.errorHint')
+        : t('home.migration.description', { count: migrationCount })
+    "
+    :ui="{ content: 'max-w-2xl' }"
+    :prevent-close="!canClose"
+  >
     <template #content>
       <div class="xeno-migration-shell p-6 text-center">
         <div
@@ -63,17 +78,34 @@ onMounted(async () => {
           "
         >
           <UIcon
-            :name="migrationError ? 'i-heroicons-exclamation-triangle' : 'i-heroicons-arrow-up-circle'"
-            :class="migrationError ? 'h-7 w-7 text-amber-500' : 'h-7 w-7 text-blue-500'"
+            :name="
+              migrationError
+                ? 'i-heroicons-exclamation-triangle'
+                : 'i-heroicons-arrow-up-circle'
+            "
+            :class="
+              migrationError
+                ? 'h-7 w-7 text-amber-500'
+                : 'h-7 w-7 text-blue-500'
+            "
           />
         </div>
-        <h3 class="mb-2 break-words text-lg font-semibold text-gray-900 dark:text-white">
-          {{ migrationError ? t('home.migration.partialFailed') : t('home.migration.title') }}
+        <h3
+          class="mb-2 break-words text-lg font-semibold text-gray-900 dark:text-white"
+        >
+          {{
+            migrationError
+              ? t("home.migration.partialFailed")
+              : t("home.migration.title")
+          }}
         </h3>
-        <p v-if="!migrationError" class="mb-3 break-words text-sm text-gray-500 dark:text-gray-400">
-          {{ t('home.migration.description', { count: migrationCount }) }}
+        <p
+          v-if="!migrationError"
+          class="mb-3 break-words text-sm text-gray-500 dark:text-gray-400"
+        >
+          {{ t("home.migration.description", { count: migrationCount }) }}
           <br />
-          {{ t('home.migration.note') }}
+          {{ t("home.migration.note") }}
         </p>
 
         <!-- English UI note -->
@@ -82,14 +114,25 @@ onMounted(async () => {
           class="xeno-migration-panel mb-4 rounded-lg p-3 text-left"
         >
           <p class="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">
-            {{ t('home.migration.upgradeContent') }}
+            {{ t("home.migration.upgradeContent") }}
           </p>
           <ul class="space-y-2">
-            <li v-for="migration in pendingMigrations" :key="migration.version" class="flex items-start gap-2">
-              <UIcon name="i-heroicons-check-circle" class="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
+            <li
+              v-for="migration in pendingMigrations"
+              :key="migration.version"
+              class="flex items-start gap-2"
+            >
+              <UIcon
+                name="i-heroicons-check-circle"
+                class="mt-0.5 h-4 w-4 shrink-0 text-green-500"
+              />
               <div class="min-w-0">
-                <p class="break-words text-sm text-gray-700 dark:text-gray-300">{{ migration.userMessage }}</p>
-                <p class="break-words text-xs text-gray-400 dark:text-gray-500">{{ migration.description }}</p>
+                <p class="break-words text-sm text-gray-700 dark:text-gray-300">
+                  {{ migration.userMessage }}
+                </p>
+                <p class="break-words text-xs text-gray-400 dark:text-gray-500">
+                  {{ migration.description }}
+                </p>
               </div>
             </li>
           </ul>
@@ -102,11 +145,14 @@ onMounted(async () => {
         >
           <div class="flex flex-col gap-2">
             <div class="flex items-start gap-2">
-              <UIcon name="i-heroicons-exclamation-circle" class="mt-0.5 h-4 w-4 shrink-0" />
+              <UIcon
+                name="i-heroicons-exclamation-circle"
+                class="mt-0.5 h-4 w-4 shrink-0"
+              />
               <span class="break-words">{{ migrationError }}</span>
             </div>
             <p class="text-xs text-red-500 dark:text-red-400">
-              {{ t('home.migration.errorHint') }}
+              {{ t("home.migration.errorHint") }}
             </p>
           </div>
         </div>
@@ -114,8 +160,15 @@ onMounted(async () => {
         <!-- English UI note -->
         <div class="flex gap-3">
           <!-- English UI note -->
-          <UButton v-if="canClose" color="neutral" variant="outline" size="lg" class="flex-1" @click="handleClose">
-            {{ t('home.migration.close') }}
+          <UButton
+            v-if="canClose"
+            color="neutral"
+            variant="outline"
+            size="lg"
+            class="flex-1"
+            @click="handleClose"
+          >
+            {{ t("home.migration.close") }}
           </UButton>
 
           <!-- English UI note -->
@@ -128,10 +181,10 @@ onMounted(async () => {
           >
             {{
               isMigrating
-                ? t('home.migration.upgrading')
+                ? t("home.migration.upgrading")
                 : migrationError
-                  ? t('home.migration.retry')
-                  : t('home.migration.upgradeNow')
+                  ? t("home.migration.retry")
+                  : t("home.migration.upgradeNow")
             }}
           </UButton>
         </div>
@@ -145,7 +198,11 @@ onMounted(async () => {
   border: 1px solid var(--xeno-border-soft);
   border-radius: 1.6rem;
   background:
-    radial-gradient(circle at top center, rgba(110, 186, 255, 0.14), transparent 30%),
+    radial-gradient(
+      circle at top center,
+      rgba(110, 186, 255, 0.14),
+      transparent 30%
+    ),
     linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 26%),
     rgba(7, 18, 29, 0.94);
   box-shadow:

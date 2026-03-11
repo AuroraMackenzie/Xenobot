@@ -1,15 +1,19 @@
 <script setup lang="ts">
-import { FileDropZone } from '@/components/UI'
-import FileListItem from './FileListItem.vue'
-import ChatSelector, { type ChatInfo } from './ChatSelector.vue'
-import { storeToRefs } from 'pinia'
-import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
-import { useI18n } from 'vue-i18n'
-import { useSessionStore, type BatchFileInfo, type MergeFileInfo } from '@/stores/session'
+import { FileDropZone } from "@/components/UI";
+import FileListItem from "./FileListItem.vue";
+import ChatSelector, { type ChatInfo } from "./ChatSelector.vue";
+import { storeToRefs } from "pinia";
+import { ref, computed } from "vue";
+import { useRouter } from "vue-router";
+import { useI18n } from "vue-i18n";
+import {
+  useSessionStore,
+  type BatchFileInfo,
+  type MergeFileInfo,
+} from "@/stores/session";
 
-const { t } = useI18n()
-const sessionStore = useSessionStore()
+const { t } = useI18n();
+const sessionStore = useSessionStore();
 const {
   isImporting,
   importProgress,
@@ -22,59 +26,64 @@ const {
   mergeStage,
   mergeError,
   mergeResult,
-} = storeToRefs(sessionStore)
+} = storeToRefs(sessionStore);
 
 // English engineering note.
-const showChatSelector = ref(false)
-const chatSelectorFilePath = ref('')
+const showChatSelector = ref(false);
+const chatSelectorFilePath = ref("");
 
 // English engineering note.
 async function autoGenerateSessionIndex(sessionId: string) {
   try {
-    const savedThreshold = localStorage.getItem('sessionGapThreshold')
-    const gapThreshold = savedThreshold ? parseInt(savedThreshold, 10) : 1800
-    await window.sessionApi.generate(sessionId, gapThreshold)
+    const savedThreshold = localStorage.getItem("sessionGapThreshold");
+    const gapThreshold = savedThreshold ? parseInt(savedThreshold, 10) : 1800;
+    await window.sessionApi.generate(sessionId, gapThreshold);
   } catch (error) {
-    console.error('自动生成会话索引失败:', error)
+    console.error("自动生成会话索引失败:", error);
   }
 }
 
-const importError = ref<string | null>(null)
-const diagnosisSuggestion = ref<string | null>(null)
-const hasImportLog = ref(false)
+const importError = ref<string | null>(null);
+const diagnosisSuggestion = ref<string | null>(null);
+const hasImportLog = ref(false);
 const importDiagnostics = ref<{
-  logFile: string | null
-  detectedFormat: string | null
-  messagesReceived: number
-  messagesWritten: number
-  messagesSkipped: number
-} | null>(null)
+  logFile: string | null;
+  detectedFormat: string | null;
+  messagesReceived: number;
+  messagesWritten: number;
+  messagesSkipped: number;
+} | null>(null);
 
-const router = useRouter()
-
-// English engineering note.
+const router = useRouter();
 
 // English engineering note.
-const mergeImportEnabled = ref(false)
 
 // English engineering note.
-const isAnyImporting = computed(() => isImporting.value || isBatchImporting.value || isMergeImporting.value)
+const mergeImportEnabled = ref(false);
+
+// English engineering note.
+const isAnyImporting = computed(
+  () => isImporting.value || isBatchImporting.value || isMergeImporting.value,
+);
 
 // English engineering note.
 const batchProgress = computed(() => {
-  if (!isBatchImporting.value || batchFiles.value.length === 0) return null
+  if (!isBatchImporting.value || batchFiles.value.length === 0) return null;
 
   const completed = batchFiles.value.filter(
-    (f) => f.status === 'success' || f.status === 'failed' || f.status === 'cancelled'
-  ).length
-  const current = batchFiles.value.findIndex((f) => f.status === 'importing')
+    (f) =>
+      f.status === "success" ||
+      f.status === "failed" ||
+      f.status === "cancelled",
+  ).length;
+  const current = batchFiles.value.findIndex((f) => f.status === "importing");
 
   return {
     completed,
     total: batchFiles.value.length,
     currentIndex: current,
-  }
-})
+  };
+});
 
 /**
  * Translate error key to localized message
@@ -82,67 +91,71 @@ const batchProgress = computed(() => {
  * Example: 'error.unrecognized_format' -> t('home.import.errors.unrecognized_format')
  */
 function translateError(error: string): string {
-  if (error.startsWith('error.')) {
-    const key = `home.import.errors.${error.slice(6)}` // Remove 'error.' prefix
-    const translated = t(key)
-    return translated !== key ? translated : error
+  if (error.startsWith("error.")) {
+    const key = `home.import.errors.${error.slice(6)}`; // Remove 'error.' prefix
+    const translated = t(key);
+    return translated !== key ? translated : error;
   }
   // Unknown error format, return as-is
-  return error
+  return error;
 }
 
 // English engineering note.
 async function navigateToSession(sessionId: string) {
-  const session = await window.chatApi.getSession(sessionId)
+  const session = await window.chatApi.getSession(sessionId);
   if (session) {
-    const routeName = session.type === 'private' ? 'direct-room' : 'circle-room'
-    router.push({ name: routeName, params: { id: sessionId } })
+    const routeName =
+      session.type === "private" ? "direct-room" : "circle-room";
+    router.push({ name: routeName, params: { id: sessionId } });
   }
 }
 
 // English engineering note.
 async function checkImportLog() {
-  const result = await window.cacheApi.getLatestImportLog()
-  hasImportLog.value = result.success && !!result.path
+  const result = await window.cacheApi.getLatestImportLog();
+  hasImportLog.value = result.success && !!result.path;
 }
 
 // English engineering note.
 async function handleClickImport() {
-  importError.value = null
-  diagnosisSuggestion.value = null
-  hasImportLog.value = false
-  importDiagnostics.value = null
+  importError.value = null;
+  diagnosisSuggestion.value = null;
+  hasImportLog.value = false;
+  importDiagnostics.value = null;
 
   // English engineering note.
   const result = await window.api.dialog.showOpenDialog({
-    title: t('home.import.selectFiles'),
-    properties: ['openFile', 'multiSelections'],
+    title: t("home.import.selectFiles"),
+    properties: ["openFile", "multiSelections"],
     filters: [
-      { name: t('home.import.chatRecords'), extensions: ['json', 'jsonl', 'txt'] },
-      { name: t('home.import.allFiles'), extensions: ['*'] },
+      {
+        name: t("home.import.chatRecords"),
+        extensions: ["json", "jsonl", "txt"],
+      },
+      { name: t("home.import.allFiles"), extensions: ["*"] },
     ],
-  })
+  });
 
   if (result.canceled || result.filePaths.length === 0) {
-    return
+    return;
   }
 
-  await processFilePaths(result.filePaths)
+  await processFilePaths(result.filePaths);
 }
 
 // English engineering note.
 async function handleFileDrop({ paths }: { files: File[]; paths: string[] }) {
   if (paths.length === 0) {
-    importError.value = t('home.import.cannotReadPath')
-    return
+    importError.value = t("home.import.cannotReadPath");
+    return;
   }
 
-  importError.value = null
-  diagnosisSuggestion.value = null
-  hasImportLog.value = false
-  importDiagnostics.value = null
+  importError.value = null;
+  diagnosisSuggestion.value = null;
+  hasImportLog.value = false;
+  importDiagnostics.value = null;
 
-  await processFilePaths(paths)
+  await processFilePaths(paths);
 }
 
 // English engineering note.
@@ -151,19 +164,19 @@ async function processFilePaths(paths: string[]) {
   if (paths.length === 1 || !mergeImportEnabled.value) {
     if (paths.length === 1) {
       // English engineering note.
-      const format = await window.chatApi.detectFormat(paths[0])
+      const format = await window.chatApi.detectFormat(paths[0]);
       if (format?.multiChat) {
-        chatSelectorFilePath.value = paths[0]
-        showChatSelector.value = true
-        return
+        chatSelectorFilePath.value = paths[0];
+        showChatSelector.value = true;
+        return;
       }
 
       // English engineering note.
-      const result = await sessionStore.importFileFromPath(paths[0])
+      const result = await sessionStore.importFileFromPath(paths[0]);
       if (!result.success && result.error) {
-        importError.value = translateError(result.error)
+        importError.value = translateError(result.error);
         if (result.diagnosisSuggestion) {
-          diagnosisSuggestion.value = result.diagnosisSuggestion
+          diagnosisSuggestion.value = result.diagnosisSuggestion;
         }
         // English engineering note.
         if (result.diagnostics) {
@@ -173,117 +186,123 @@ async function processFilePaths(paths: string[]) {
             messagesReceived: result.diagnostics.messagesReceived,
             messagesWritten: result.diagnostics.messagesWritten,
             messagesSkipped: result.diagnostics.messagesSkipped,
-          }
+          };
           // English engineering note.
-          hasImportLog.value = !!result.diagnostics.logFile
+          hasImportLog.value = !!result.diagnostics.logFile;
         } else {
-          await checkImportLog()
+          await checkImportLog();
         }
       } else if (result.success && sessionStore.currentSessionId) {
-        await navigateToSession(sessionStore.currentSessionId)
+        await navigateToSession(sessionStore.currentSessionId);
       }
     } else {
       // English engineering note.
-      await sessionStore.importFilesFromPaths(paths)
+      await sessionStore.importFilesFromPaths(paths);
     }
-    return
+    return;
   }
 
   // English engineering note.
-  await sessionStore.mergeImportFiles(paths)
+  await sessionStore.mergeImportFiles(paths);
 }
 
 // English engineering note.
 async function handleChatSelect(selectedChats: ChatInfo[]) {
-  if (selectedChats.length === 0) return
+  if (selectedChats.length === 0) return;
 
-  const filePath = chatSelectorFilePath.value
+  const filePath = chatSelectorFilePath.value;
 
   if (selectedChats.length === 1) {
     // English engineering note.
-    isImporting.value = true
-    importProgress.value = { stage: 'detecting', progress: 0, message: '' }
+    isImporting.value = true;
+    importProgress.value = { stage: "detecting", progress: 0, message: "" };
 
     const unsubscribe = window.chatApi.onImportProgress((progress) => {
-      if (progress.stage === 'done') return
-      importProgress.value = progress
-    })
+      if (progress.stage === "done") return;
+      importProgress.value = progress;
+    });
 
     try {
-      const result = await window.chatApi.importWithOptions(filePath, { chatIndex: selectedChats[0].index })
-      unsubscribe()
+      const result = await window.chatApi.importWithOptions(filePath, {
+        chatIndex: selectedChats[0].index,
+      });
+      unsubscribe();
 
       if (importProgress.value) {
-        importProgress.value.progress = 100
+        importProgress.value.progress = 100;
       }
-      await new Promise((resolve) => setTimeout(resolve, 300))
+      await new Promise((resolve) => setTimeout(resolve, 300));
 
       if (result.success && result.sessionId) {
-        await sessionStore.loadSessions()
-        sessionStore.selectSession(result.sessionId)
+        await sessionStore.loadSessions();
+        sessionStore.selectSession(result.sessionId);
         // English engineering note.
-        await autoGenerateSessionIndex(result.sessionId)
-        await navigateToSession(result.sessionId)
+        await autoGenerateSessionIndex(result.sessionId);
+        await navigateToSession(result.sessionId);
       } else {
-        importError.value = translateError(result.error || 'error.import_failed')
+        importError.value = translateError(
+          result.error || "error.import_failed",
+        );
       }
     } catch (error) {
-      importError.value = String(error)
+      importError.value = String(error);
     } finally {
-      isImporting.value = false
+      isImporting.value = false;
       setTimeout(() => {
-        importProgress.value = null
-      }, 500)
+        importProgress.value = null;
+      }, 500);
     }
   } else {
     // English engineering note.
-    isBatchImporting.value = true
+    isBatchImporting.value = true;
     batchFiles.value = selectedChats.map((chat) => ({
       path: `${filePath}#${chat.index}`,
       name: chat.name || `Chat ${chat.id}`,
-      status: 'pending' as const,
-    }))
+      status: "pending" as const,
+    }));
 
-    let successCount = 0
-    let failedCount = 0
+    let successCount = 0;
+    let failedCount = 0;
 
     for (let i = 0; i < selectedChats.length; i++) {
-      const chat = selectedChats[i]
-      batchFiles.value[i].status = 'importing'
+      const chat = selectedChats[i];
+      batchFiles.value[i].status = "importing";
 
       const unsubscribe = window.chatApi.onImportProgress((progress) => {
-        if (progress.stage === 'done') return
-        batchFiles.value[i].progress = progress
-      })
+        if (progress.stage === "done") return;
+        batchFiles.value[i].progress = progress;
+      });
 
       try {
-        const result = await window.chatApi.importWithOptions(filePath, { chatIndex: chat.index })
-        unsubscribe()
+        const result = await window.chatApi.importWithOptions(filePath, {
+          chatIndex: chat.index,
+        });
+        unsubscribe();
 
         if (result.success && result.sessionId) {
-          batchFiles.value[i].status = 'success'
-          batchFiles.value[i].sessionId = result.sessionId
-          successCount++
+          batchFiles.value[i].status = "success";
+          batchFiles.value[i].sessionId = result.sessionId;
+          successCount++;
           // English engineering note.
-          await autoGenerateSessionIndex(result.sessionId)
+          await autoGenerateSessionIndex(result.sessionId);
         } else {
-          batchFiles.value[i].status = 'failed'
-          batchFiles.value[i].error = result.error
-          failedCount++
+          batchFiles.value[i].status = "failed";
+          batchFiles.value[i].error = result.error;
+          failedCount++;
         }
       } catch (error) {
-        unsubscribe()
-        batchFiles.value[i].status = 'failed'
-        batchFiles.value[i].error = String(error)
-        failedCount++
+        unsubscribe();
+        batchFiles.value[i].status = "failed";
+        batchFiles.value[i].error = String(error);
+        failedCount++;
       }
     }
 
     // English engineering note.
-    await sessionStore.loadSessions()
+    await sessionStore.loadSessions();
 
     // English engineering note.
-    isBatchImporting.value = false
+    isBatchImporting.value = false;
     batchImportResult.value = {
       total: selectedChats.length,
       success: successCount,
@@ -296,130 +315,147 @@ async function handleChatSelect(selectedChats: ChatInfo[]) {
         sessionId: f.sessionId,
         error: f.error,
       })),
-    }
+    };
   }
 }
 
 // English engineering note.
 async function handleMergeGoToSession() {
   if (mergeResult.value?.sessionId) {
-    const sessionId = mergeResult.value.sessionId
-    sessionStore.clearMergeImportResult()
-    await navigateToSession(sessionId)
+    const sessionId = mergeResult.value.sessionId;
+    sessionStore.clearMergeImportResult();
+    await navigateToSession(sessionId);
   }
 }
 
 // English engineering note.
 function closeMergeResult() {
-  sessionStore.clearMergeImportResult()
+  sessionStore.clearMergeImportResult();
 }
 
 // English engineering note.
 function handleCancelBatchImport() {
-  sessionStore.cancelBatchImport()
+  sessionStore.cancelBatchImport();
 }
 
 // English engineering note.
 function handleCloseResult() {
-  sessionStore.clearBatchImportResult()
+  sessionStore.clearBatchImportResult();
 }
 
 // English engineering note.
 async function handleGoToSession(sessionId: string) {
-  sessionStore.clearBatchImportResult()
-  await navigateToSession(sessionId)
+  sessionStore.clearBatchImportResult();
+  await navigateToSession(sessionId);
 }
 
 // English engineering note.
 const tutorialUrl = computed(() => {
-  const { locale } = useI18n()
-  const langPath = locale.value === 'zh-CN' ? '/cn' : ''
-  return `https://xenobot.app${langPath}/usage/how-to-export.html?utm_source=app`
-})
+  const { locale } = useI18n();
+  const langPath = locale.value === "zh-CN" ? "/cn" : "";
+  return `https://xenobot.app${langPath}/usage/how-to-export.html?utm_source=app`;
+});
 
 // English engineering note.
 async function openLatestImportLog() {
-  const result = await window.cacheApi.getLatestImportLog()
+  const result = await window.cacheApi.getLatestImportLog();
   if (result.success && result.path) {
-    await window.cacheApi.showInFolder(result.path)
+    await window.cacheApi.showInFolder(result.path);
   } else {
     // English engineering note.
-    await window.cacheApi.openDir('logs')
+    await window.cacheApi.openDir("logs");
   }
 }
 
 function getProgressText(): string {
-  if (!importProgress.value) return ''
+  if (!importProgress.value) return "";
   switch (importProgress.value.stage) {
-    case 'detecting':
-      return t('home.import.progress.detecting')
-    case 'reading':
-      return t('home.import.progress.reading')
-    case 'parsing':
-      return t('home.import.progress.parsing')
-    case 'saving':
-      return t('home.import.progress.saving')
-    case 'done':
-      return t('home.import.progress.done')
-    case 'error':
-      return t('home.import.progress.error')
+    case "detecting":
+      return t("home.import.progress.detecting");
+    case "reading":
+      return t("home.import.progress.reading");
+    case "parsing":
+      return t("home.import.progress.parsing");
+    case "saving":
+      return t("home.import.progress.saving");
+    case "done":
+      return t("home.import.progress.done");
+    case "error":
+      return t("home.import.progress.error");
     default:
-      return ''
+      return "";
   }
 }
 
 function getProgressDetail(): string {
-  if (!importProgress.value) return ''
-  const { messagesProcessed, totalBytes, bytesRead } = importProgress.value
+  if (!importProgress.value) return "";
+  const { messagesProcessed, totalBytes, bytesRead } = importProgress.value;
 
   if (messagesProcessed && messagesProcessed > 0) {
-    return t('home.import.processed', { count: messagesProcessed.toLocaleString() })
+    return t("home.import.processed", {
+      count: messagesProcessed.toLocaleString(),
+    });
   }
 
   if (totalBytes && bytesRead) {
-    const percent = Math.round((bytesRead / totalBytes) * 100)
-    const mbRead = (bytesRead / 1024 / 1024).toFixed(1)
-    const mbTotal = (totalBytes / 1024 / 1024).toFixed(1)
-    return `${mbRead} MB / ${mbTotal} MB (${percent}%)`
+    const percent = Math.round((bytesRead / totalBytes) * 100);
+    const mbRead = (bytesRead / 1024 / 1024).toFixed(1);
+    const mbTotal = (totalBytes / 1024 / 1024).toFixed(1);
+    return `${mbRead} MB / ${mbTotal} MB (${percent}%)`;
   }
 
-  return importProgress.value.message || ''
+  return importProgress.value.message || "";
 }
 
 // English engineering note.
 const STATUS_CONFIG: Record<string, { icon: string; class: string }> = {
-  pending: { icon: 'i-heroicons-clock', class: 'text-gray-400' },
-  importing: { icon: 'i-heroicons-arrow-path', class: 'text-pink-500 animate-spin' },
-  parsing: { icon: 'i-heroicons-arrow-path', class: 'text-pink-500 animate-spin' },
-  success: { icon: 'i-heroicons-check-circle', class: 'text-green-500' },
-  done: { icon: 'i-heroicons-check-circle', class: 'text-green-500' },
-  failed: { icon: 'i-heroicons-x-circle', class: 'text-red-500' },
-  cancelled: { icon: 'i-heroicons-minus-circle', class: 'text-gray-400' },
-}
+  pending: { icon: "i-heroicons-clock", class: "text-gray-400" },
+  importing: {
+    icon: "i-heroicons-arrow-path",
+    class: "text-pink-500 animate-spin",
+  },
+  parsing: {
+    icon: "i-heroicons-arrow-path",
+    class: "text-pink-500 animate-spin",
+  },
+  success: { icon: "i-heroicons-check-circle", class: "text-green-500" },
+  done: { icon: "i-heroicons-check-circle", class: "text-green-500" },
+  failed: { icon: "i-heroicons-x-circle", class: "text-red-500" },
+  cancelled: { icon: "i-heroicons-minus-circle", class: "text-gray-400" },
+};
 
-const getStatusIcon = (status: string) => STATUS_CONFIG[status]?.icon ?? 'i-heroicons-question-mark-circle'
-const getStatusClass = (status: string) => STATUS_CONFIG[status]?.class ?? 'text-gray-400'
+const getStatusIcon = (status: string) =>
+  STATUS_CONFIG[status]?.icon ?? "i-heroicons-question-mark-circle";
+const getStatusClass = (status: string) =>
+  STATUS_CONFIG[status]?.class ?? "text-gray-400";
 
 // English engineering note.
 function getBatchFileProgressText(file: BatchFileInfo): string {
-  if (file.status === 'pending') return t('home.import.batch.waiting')
-  if (file.status === 'cancelled') return t('home.import.batch.skipped')
-  if (file.status === 'success') return t('home.import.batch.success')
-  if (file.status === 'failed') return translateError(file.error || 'error.import_failed')
+  if (file.status === "pending") return t("home.import.batch.waiting");
+  if (file.status === "cancelled") return t("home.import.batch.skipped");
+  if (file.status === "success") return t("home.import.batch.success");
+  if (file.status === "failed")
+    return translateError(file.error || "error.import_failed");
   // English engineering note.
   if (file.progress) {
-    const { stage, messagesProcessed } = file.progress
-    if (stage === 'parsing' && messagesProcessed) {
-      return t('home.import.processed', { count: messagesProcessed.toLocaleString() })
+    const { stage, messagesProcessed } = file.progress;
+    if (stage === "parsing" && messagesProcessed) {
+      return t("home.import.processed", {
+        count: messagesProcessed.toLocaleString(),
+      });
     }
-    return t(`home.import.progress.${stage}`)
+    return t(`home.import.progress.${stage}`);
   }
-  return ''
+  return "";
 }
 
 // English engineering note.
 const getMergeFileProgressText = (file: MergeFileInfo) =>
-  file.info ? t('home.import.merge.messageCount', { count: file.info.messageCount.toLocaleString() }) : ''
+  file.info
+    ? t("home.import.merge.messageCount", {
+        count: file.info.messageCount.toLocaleString(),
+      })
+    : "";
 </script>
 
 <template>
@@ -432,16 +468,21 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
       <!-- English UI note -->
       <div class="mb-4 flex items-center justify-between">
         <div class="flex items-center gap-3">
-          <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-pink-50 dark:bg-pink-500/10">
-            <UIcon name="i-heroicons-arrow-path" class="h-5 w-5 animate-spin text-pink-600 dark:text-pink-400" />
+          <div
+            class="flex h-10 w-10 items-center justify-center rounded-xl bg-pink-50 dark:bg-pink-500/10"
+          >
+            <UIcon
+              name="i-heroicons-arrow-path"
+              class="h-5 w-5 animate-spin text-pink-600 dark:text-pink-400"
+            />
           </div>
           <div>
             <p class="text-lg font-semibold text-gray-900 dark:text-white">
-              {{ t('home.import.batch.importing') }}
+              {{ t("home.import.batch.importing") }}
             </p>
             <p class="text-sm text-gray-500 dark:text-gray-400">
               {{
-                t('home.import.batch.progressCount', {
+                t("home.import.batch.progressCount", {
                   current: (batchProgress?.completed || 0) + 1,
                   total: batchProgress?.total || 0,
                 })
@@ -449,8 +490,14 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
             </p>
           </div>
         </div>
-        <UButton color="error" variant="soft" size="sm" icon="i-heroicons-stop-circle" @click="handleCancelBatchImport">
-          {{ t('home.import.batch.cancel') }}
+        <UButton
+          color="error"
+          variant="soft"
+          size="sm"
+          icon="i-heroicons-stop-circle"
+          @click="handleCancelBatchImport"
+        >
+          {{ t("home.import.batch.cancel") }}
         </UButton>
       </div>
 
@@ -478,22 +525,36 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
       <!-- English UI note -->
       <div class="mb-4 flex items-center justify-between">
         <div class="flex items-center gap-3">
-          <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-pink-50 dark:bg-pink-500/10">
+          <div
+            class="flex h-10 w-10 items-center justify-center rounded-xl bg-pink-50 dark:bg-pink-500/10"
+          >
             <UIcon
               v-if="mergeStage !== 'error'"
               name="i-heroicons-arrow-path"
               class="h-5 w-5 animate-spin text-pink-600 dark:text-pink-400"
             />
-            <UIcon v-else name="i-heroicons-x-circle" class="h-5 w-5 text-red-600 dark:text-red-400" />
+            <UIcon
+              v-else
+              name="i-heroicons-x-circle"
+              class="h-5 w-5 text-red-600 dark:text-red-400"
+            />
           </div>
           <div>
             <p class="text-lg font-semibold text-gray-900 dark:text-white">
-              {{ mergeStage === 'error' ? t('home.import.merge.failed') : t('home.import.merge.importing') }}
+              {{
+                mergeStage === "error"
+                  ? t("home.import.merge.failed")
+                  : t("home.import.merge.importing")
+              }}
             </p>
             <p class="text-sm text-gray-500 dark:text-gray-400">
-              {{ mergeStage === 'parsing' ? t('home.import.merge.parsing') : '' }}
-              {{ mergeStage === 'merging' ? t('home.import.merge.merging') : '' }}
-              {{ mergeStage === 'error' ? mergeError : '' }}
+              {{
+                mergeStage === "parsing" ? t("home.import.merge.parsing") : ""
+              }}
+              {{
+                mergeStage === "merging" ? t("home.import.merge.merging") : ""
+              }}
+              {{ mergeStage === "error" ? mergeError : "" }}
             </p>
           </div>
         </div>
@@ -530,22 +591,37 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
     >
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">
-          <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-green-50 dark:bg-green-500/10">
-            <UIcon name="i-heroicons-check-circle" class="h-5 w-5 text-green-600 dark:text-green-400" />
+          <div
+            class="flex h-10 w-10 items-center justify-center rounded-xl bg-green-50 dark:bg-green-500/10"
+          >
+            <UIcon
+              name="i-heroicons-check-circle"
+              class="h-5 w-5 text-green-600 dark:text-green-400"
+            />
           </div>
           <div>
             <p class="text-lg font-semibold text-gray-900 dark:text-white">
-              {{ t('home.import.merge.completed') }}
+              {{ t("home.import.merge.completed") }}
             </p>
             <p class="text-sm text-gray-500 dark:text-gray-400">
-              {{ t('home.import.merge.completedHint', { count: mergeFiles.length }) }}
+              {{
+                t("home.import.merge.completedHint", {
+                  count: mergeFiles.length,
+                })
+              }}
             </p>
           </div>
         </div>
         <div class="flex items-center gap-2">
-          <UButton color="neutral" variant="ghost" size="sm" icon="i-heroicons-x-mark" @click="closeMergeResult" />
+          <UButton
+            color="neutral"
+            variant="ghost"
+            size="sm"
+            icon="i-heroicons-x-mark"
+            @click="closeMergeResult"
+          />
           <UButton size="sm" @click="handleMergeGoToSession">
-            {{ t('home.import.batch.view') }}
+            {{ t("home.import.batch.view") }}
           </UButton>
         </div>
       </div>
@@ -562,11 +638,17 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
           <div
             class="flex h-10 w-10 items-center justify-center rounded-xl"
             :class="
-              batchImportResult.failed === 0 ? 'bg-green-50 dark:bg-green-500/10' : 'bg-amber-50 dark:bg-amber-500/10'
+              batchImportResult.failed === 0
+                ? 'bg-green-50 dark:bg-green-500/10'
+                : 'bg-amber-50 dark:bg-amber-500/10'
             "
           >
             <UIcon
-              :name="batchImportResult.failed === 0 ? 'i-heroicons-check-circle' : 'i-heroicons-exclamation-triangle'"
+              :name="
+                batchImportResult.failed === 0
+                  ? 'i-heroicons-check-circle'
+                  : 'i-heroicons-exclamation-triangle'
+              "
               class="h-5 w-5"
               :class="
                 batchImportResult.failed === 0
@@ -577,11 +659,11 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
           </div>
           <div>
             <p class="text-lg font-semibold text-gray-900 dark:text-white">
-              {{ t('home.import.batch.completed') }}
+              {{ t("home.import.batch.completed") }}
             </p>
             <p class="text-sm text-gray-500 dark:text-gray-400">
               {{
-                t('home.import.batch.summary', {
+                t("home.import.batch.summary", {
                   success: batchImportResult.success,
                   failed: batchImportResult.failed,
                   cancelled: batchImportResult.cancelled,
@@ -590,7 +672,13 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
             </p>
           </div>
         </div>
-        <UButton color="neutral" variant="ghost" size="sm" icon="i-heroicons-x-mark" @click="handleCloseResult" />
+        <UButton
+          color="neutral"
+          variant="ghost"
+          size="sm"
+          icon="i-heroicons-x-mark"
+          @click="handleCloseResult"
+        />
       </div>
 
       <!-- English UI note -->
@@ -606,15 +694,22 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
         >
           <template #extra>
             <p v-if="file.status === 'failed'" class="text-xs text-red-500">
-              {{ translateError(file.error || 'error.import_failed') }}
+              {{ translateError(file.error || "error.import_failed") }}
             </p>
-            <p v-else-if="file.status === 'cancelled'" class="text-xs text-gray-500">
-              {{ t('home.import.batch.skipped') }}
+            <p
+              v-else-if="file.status === 'cancelled'"
+              class="text-xs text-gray-500"
+            >
+              {{ t("home.import.batch.skipped") }}
             </p>
           </template>
           <template v-if="file.status === 'success' && file.sessionId" #action>
-            <UButton size="xs" variant="soft" @click="handleGoToSession(file.sessionId!)">
-              {{ t('home.import.batch.view') }}
+            <UButton
+              size="xs"
+              variant="soft"
+              @click="handleGoToSession(file.sessionId!)"
+            >
+              {{ t("home.import.batch.view") }}
             </UButton>
           </template>
         </FileListItem>
@@ -643,21 +738,32 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
           <!-- English UI note -->
           <div
             class="xeno-import-dropzone-icon mb-4 flex h-16 w-16 items-center justify-center rounded-2xl transition-transform duration-300 group-hover:scale-105"
-            :class="{ 'scale-105': isDragOver && !isAnyImporting, 'animate-pulse': isImporting }"
+            :class="{
+              'scale-105': isDragOver && !isAnyImporting,
+              'animate-pulse': isImporting,
+            }"
           >
             <UIcon
               v-if="!isImporting"
               name="i-heroicons-arrow-up-tray"
               class="h-8 w-8 text-pink-600 transition-transform duration-200 group-hover:-translate-y-1 dark:text-pink-400"
             />
-            <UIcon v-else name="i-heroicons-arrow-path" class="h-8 w-8 animate-spin text-pink-600 dark:text-pink-400" />
+            <UIcon
+              v-else
+              name="i-heroicons-arrow-path"
+              class="h-8 w-8 animate-spin text-pink-600 dark:text-pink-400"
+            />
           </div>
 
           <!-- Text -->
           <div class="w-full min-w-80 text-center">
             <template v-if="isImporting && importProgress">
               <!-- English UI note -->
-              <p class="mb-4 text-lg font-semibold text-gray-900 dark:text-white">{{ getProgressText() }}</p>
+              <p
+                class="mb-4 text-lg font-semibold text-gray-900 dark:text-white"
+              >
+                {{ getProgressText() }}
+              </p>
               <div class="mx-auto w-full max-w-md">
                 <UProgress v-model="importProgress.progress" size="md" />
               </div>
@@ -668,10 +774,14 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
             <template v-else>
               <!-- English UI note -->
               <p class="text-lg font-semibold text-gray-900 dark:text-white">
-                {{ isDragOver ? t('home.import.dropHint') : t('home.import.clickHint') }}
+                {{
+                  isDragOver
+                    ? t("home.import.dropHint")
+                    : t("home.import.clickHint")
+                }}
               </p>
               <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                {{ t('home.import.multipleHint') }}
+                {{ t("home.import.multipleHint") }}
               </p>
             </template>
           </div>
@@ -680,7 +790,10 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
     </FileDropZone>
 
     <!-- English UI note -->
-    <div v-if="!isAnyImporting && !batchImportResult" class="xeno-import-toggle-row flex items-center justify-center">
+    <div
+      v-if="!isAnyImporting && !batchImportResult"
+      class="xeno-import-toggle-row flex items-center justify-center"
+    >
       <div class="xeno-import-toggle-inner flex items-center gap-2">
         <UCheckbox
           v-model="mergeImportEnabled"
@@ -695,8 +808,10 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
             class="h-4 w-4 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
           />
           <template #content>
-            <div class="max-w-xs px-3 py-2 text-xs text-gray-600 dark:text-gray-300">
-              {{ t('home.import.options.mergeImportHint') }}
+            <div
+              class="max-w-xs px-3 py-2 text-xs text-gray-600 dark:text-gray-300"
+            >
+              {{ t("home.import.options.mergeImportHint") }}
             </div>
           </template>
         </UPopover>
@@ -708,7 +823,9 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
       v-if="importError"
       class="xeno-import-error-card flex max-w-lg flex-col items-center gap-3 rounded-lg bg-red-50 px-4 py-4 dark:bg-red-900/20"
     >
-      <div class="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
+      <div
+        class="flex items-center gap-2 text-sm text-red-600 dark:text-red-400"
+      >
         <UIcon name="i-heroicons-exclamation-circle" class="h-5 w-5 shrink-0" />
         <span>{{ importError }}</span>
       </div>
@@ -721,12 +838,16 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
           <UIcon name="i-heroicons-chart-bar" class="mt-0.5 h-4 w-4 shrink-0" />
           <div class="space-y-1">
             <div v-if="importDiagnostics.detectedFormat">
-              {{ t('home.import.diagnostics.format') }}{{ importDiagnostics.detectedFormat }}
+              {{ t("home.import.diagnostics.format")
+              }}{{ importDiagnostics.detectedFormat }}
             </div>
             <div>
-              {{ t('home.import.diagnostics.received') }}{{ importDiagnostics.messagesReceived }}
-              {{ t('home.import.diagnostics.written') }}{{ importDiagnostics.messagesWritten }}
-              {{ t('home.import.diagnostics.skipped') }}{{ importDiagnostics.messagesSkipped }}
+              {{ t("home.import.diagnostics.received")
+              }}{{ importDiagnostics.messagesReceived }}
+              {{ t("home.import.diagnostics.written")
+              }}{{ importDiagnostics.messagesWritten }}
+              {{ t("home.import.diagnostics.skipped")
+              }}{{ importDiagnostics.messagesSkipped }}
             </div>
           </div>
         </div>
@@ -737,19 +858,32 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
         class="w-full rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-200"
       >
         <div class="flex items-start gap-2">
-          <UIcon name="i-heroicons-light-bulb" class="mt-0.5 h-4 w-4 shrink-0" />
+          <UIcon
+            name="i-heroicons-light-bulb"
+            class="mt-0.5 h-4 w-4 shrink-0"
+          />
           <span>{{ diagnosisSuggestion }}</span>
         </div>
       </div>
-      <UButton v-if="hasImportLog" size="xs" @click="openLatestImportLog">{{ t('home.import.viewLog') }}</UButton>
+      <UButton v-if="hasImportLog" size="xs" @click="openLatestImportLog">{{
+        t("home.import.viewLog")
+      }}</UButton>
     </div>
 
-    <UButton :to="tutorialUrl" target="_blank" trailing-icon="i-heroicons-chevron-right-20-solid">
-      {{ t('home.import.tutorial') }}
+    <UButton
+      :to="tutorialUrl"
+      target="_blank"
+      trailing-icon="i-heroicons-chevron-right-20-solid"
+    >
+      {{ t("home.import.tutorial") }}
     </UButton>
 
     <!-- English UI note -->
-    <ChatSelector v-model:open="showChatSelector" :file-path="chatSelectorFilePath" @select="handleChatSelect" />
+    <ChatSelector
+      v-model:open="showChatSelector"
+      :file-path="chatSelectorFilePath"
+      @select="handleChatSelect"
+    />
   </div>
 </template>
 
@@ -779,23 +913,32 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
 
 .xeno-import-state-card::before,
 .xeno-import-dropzone::before {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0 auto auto 0;
   width: 100%;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(96, 223, 255, 0.34), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(96, 223, 255, 0.34),
+    transparent
+  );
   opacity: 0.8;
   pointer-events: none;
 }
 
 .xeno-import-dropzone::after {
-  content: '';
+  content: "";
   position: absolute;
   inset: 14% 18% auto;
   height: 140px;
   border-radius: 9999px;
-  background: radial-gradient(circle, rgba(87, 214, 255, 0.16), transparent 72%);
+  background: radial-gradient(
+    circle,
+    rgba(87, 214, 255, 0.16),
+    transparent 72%
+  );
   filter: blur(34px);
   opacity: 0.72;
   pointer-events: none;
@@ -804,7 +947,11 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
 .xeno-import-dropzone-icon {
   border: 1px solid rgba(106, 220, 255, 0.18);
   background:
-    radial-gradient(circle at 30% 30%, rgba(112, 227, 255, 0.18), transparent 58%),
+    radial-gradient(
+      circle at 30% 30%,
+      rgba(112, 227, 255, 0.18),
+      transparent 58%
+    ),
     rgba(7, 20, 32, 0.76);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.06),

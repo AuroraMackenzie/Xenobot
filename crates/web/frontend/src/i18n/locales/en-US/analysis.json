@@ -184,5 +184,14 @@
     ,
     "unknownSession": "Unknown session",
     "selectExportDirectory": "Select export directory"
+  },
+  "sqlLab": {
+    "summary": {
+      "previewRows": "(Showing the first {maxRows} rows out of {totalRows} total)",
+      "queryIntent": "User query intent: {prompt}",
+      "executedSql": "Executed SQL statement:",
+      "systemPrompt": "You are a data analyst. Extract the most important findings from the SQL result and answer in concise, clear English.",
+      "userPrompt": "Analyze the SQL query result below and summarize the most important findings in concise English.\n\n{contextInfo}Query result ({rowCount} rows total):\n\n{resultSummary}\n\nPlease provide:\n1. A one-sentence overview\n2. Two to four key findings\n3. Any obvious trend or anomaly, if present"
+    }
   }
 }

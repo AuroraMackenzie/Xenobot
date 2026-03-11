@@ -1,304 +1,320 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
-import { useI18n } from 'vue-i18n'
-import dayjs from 'dayjs'
-import { formatDateRange } from '@/utils'
-import UITabs from '@/components/UI/Tabs.vue'
-import DatePicker from '@/components/UI/DatePicker.vue'
+import { ref, computed, watch, onMounted } from "vue";
+import { useI18n } from "vue-i18n";
+import dayjs from "dayjs";
+import { formatDateRange } from "@/utils";
+import UITabs from "@/components/UI/Tabs.vue";
+import DatePicker from "@/components/UI/DatePicker.vue";
 
-export type TimeSelectMode = 'recent' | 'quarter' | 'year' | 'custom'
+export type TimeSelectMode = "recent" | "quarter" | "year" | "custom";
 
 export interface TimeSelectState {
-  mode: TimeSelectMode
-  recentDays?: number
-  year?: number
-  quarterYear?: number
-  quarter?: number
-  customStart?: string
-  customEnd?: string
+  mode: TimeSelectMode;
+  recentDays?: number;
+  year?: number;
+  quarterYear?: number;
+  quarter?: number;
+  customStart?: string;
+  customEnd?: string;
 }
 
 export interface TimeRangeValue {
-  startTs: number
-  endTs: number
-  displayLabel: string
-  isFullRange: boolean
-  state: TimeSelectState
+  startTs: number;
+  endTs: number;
+  displayLabel: string;
+  isFullRange: boolean;
+  state: TimeSelectState;
 }
 
 // ==================== Props & Emits ====================
 
 interface Props {
-  sessionId: string | undefined
-  modelValue: TimeRangeValue | null
-  visible?: boolean
-  initialState?: Partial<TimeSelectState>
+  sessionId: string | undefined;
+  modelValue: TimeRangeValue | null;
+  visible?: boolean;
+  initialState?: Partial<TimeSelectState>;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   visible: true,
-})
+});
 
 const emit = defineEmits<{
-  (e: 'update:modelValue', value: TimeRangeValue): void
-  (e: 'update:fullRange', value: { start: number; end: number } | null): void
-  (e: 'update:availableYears', value: number[]): void
-}>()
+  (e: "update:modelValue", value: TimeRangeValue): void;
+  (e: "update:fullRange", value: { start: number; end: number } | null): void;
+  (e: "update:availableYears", value: number[]): void;
+}>();
 
-const { t } = useI18n()
+const { t } = useI18n();
 
-const isLoaded = ref(false)
-const availableYears = ref<number[]>([])
-const fullTimeRange = ref<{ start: number; end: number } | null>(null)
+const isLoaded = ref(false);
+const availableYears = ref<number[]>([]);
+const fullTimeRange = ref<{ start: number; end: number } | null>(null);
 
-const mode = ref<TimeSelectMode>('recent')
-const recentPeriod = ref<number>(365)
-const selectedYear = ref<number>(0)
-const selectedQuarterYear = ref<number>(0)
-const selectedQuarter = ref<number>(1)
-const customStartDate = ref<string>('')
-const customEndDate = ref<string>('')
+const mode = ref<TimeSelectMode>("recent");
+const recentPeriod = ref<number>(365);
+const selectedYear = ref<number>(0);
+const selectedQuarterYear = ref<number>(0);
+const selectedQuarter = ref<number>(1);
+const customStartDate = ref<string>("");
+const customEndDate = ref<string>("");
 
-const isInitializing = ref(false)
+const isInitializing = ref(false);
 
 function getQuarterFromTs(ts: number): { year: number; quarter: number } {
-  const date = new Date(ts * 1000)
+  const date = new Date(ts * 1000);
   return {
     year: date.getFullYear(),
     quarter: Math.floor(date.getMonth() / 3) + 1,
-  }
+  };
 }
 
-function getQuarterRange(year: number, quarter: number): { startTs: number; endTs: number } {
-  const startMonth = (quarter - 1) * 3
-  const startDate = new Date(year, startMonth, 1, 0, 0, 0)
-  const endDate = new Date(year, startMonth + 3, 0, 23, 59, 59) // English engineering note.
+function getQuarterRange(
+  year: number,
+  quarter: number,
+): { startTs: number; endTs: number } {
+  const startMonth = (quarter - 1) * 3;
+  const startDate = new Date(year, startMonth, 1, 0, 0, 0);
+  const endDate = new Date(year, startMonth + 3, 0, 23, 59, 59); // English engineering note.
   return {
     startTs: Math.floor(startDate.getTime() / 1000),
     endTs: Math.floor(endDate.getTime() / 1000),
-  }
+  };
 }
 
 function getYearRange(year: number): { startTs: number; endTs: number } {
-  const startDate = new Date(year, 0, 1, 0, 0, 0)
-  const endDate = new Date(year, 11, 31, 23, 59, 59)
+  const startDate = new Date(year, 0, 1, 0, 0, 0);
+  const endDate = new Date(year, 11, 31, 23, 59, 59);
   return {
     startTs: Math.floor(startDate.getTime() / 1000),
     endTs: Math.floor(endDate.getTime() / 1000),
-  }
+  };
 }
 
 // English engineering note.
 
 const modeOptions = computed(() => [
-  { label: t('common.timeSelect.mode.recent'), value: 'recent' as const },
-  { label: t('common.timeSelect.mode.quarter'), value: 'quarter' as const },
-  { label: t('common.timeSelect.mode.year'), value: 'year' as const },
-  { label: t('common.timeSelect.mode.custom'), value: 'custom' as const },
-])
+  { label: t("common.timeSelect.mode.recent"), value: "recent" as const },
+  { label: t("common.timeSelect.mode.quarter"), value: "quarter" as const },
+  { label: t("common.timeSelect.mode.year"), value: "year" as const },
+  { label: t("common.timeSelect.mode.custom"), value: "custom" as const },
+]);
 
 const recentOptions = computed(() => [
-  { label: t('common.timeSelect.recent.halfYear'), value: 180 },
-  { label: t('common.timeSelect.recent.oneYear'), value: 365 },
-  { label: t('common.timeSelect.recent.twoYears'), value: 730 },
-  { label: t('common.timeSelect.recent.fiveYears'), value: 1825 },
-  { label: t('common.timeSelect.recent.all'), value: 0 },
-])
+  { label: t("common.timeSelect.recent.halfYear"), value: 180 },
+  { label: t("common.timeSelect.recent.oneYear"), value: 365 },
+  { label: t("common.timeSelect.recent.twoYears"), value: 730 },
+  { label: t("common.timeSelect.recent.fiveYears"), value: 1825 },
+  { label: t("common.timeSelect.recent.all"), value: 0 },
+]);
 
 // English engineering note.
 
 const minQuarter = computed(() => {
-  if (!fullTimeRange.value) return { year: 0, quarter: 1 }
-  return getQuarterFromTs(fullTimeRange.value.start)
-})
+  if (!fullTimeRange.value) return { year: 0, quarter: 1 };
+  return getQuarterFromTs(fullTimeRange.value.start);
+});
 
 const maxQuarter = computed(() => {
-  if (!fullTimeRange.value) return { year: 0, quarter: 1 }
-  return getQuarterFromTs(fullTimeRange.value.end)
-})
+  if (!fullTimeRange.value) return { year: 0, quarter: 1 };
+  return getQuarterFromTs(fullTimeRange.value.end);
+});
 
 const canPrevQuarter = computed(() => {
-  const min = minQuarter.value
+  const min = minQuarter.value;
   return (
     selectedQuarterYear.value > min.year ||
-    (selectedQuarterYear.value === min.year && selectedQuarter.value > min.quarter)
-  )
-})
+    (selectedQuarterYear.value === min.year &&
+      selectedQuarter.value > min.quarter)
+  );
+});
 
 const canNextQuarter = computed(() => {
-  const max = maxQuarter.value
+  const max = maxQuarter.value;
   return (
     selectedQuarterYear.value < max.year ||
-    (selectedQuarterYear.value === max.year && selectedQuarter.value < max.quarter)
-  )
-})
+    (selectedQuarterYear.value === max.year &&
+      selectedQuarter.value < max.quarter)
+  );
+});
 
 const canPrevYear = computed(() => {
-  if (availableYears.value.length === 0) return false
-  const currentIdx = availableYears.value.indexOf(selectedYear.value)
-  return currentIdx < availableYears.value.length - 1 // English engineering note.
-})
+  if (availableYears.value.length === 0) return false;
+  const currentIdx = availableYears.value.indexOf(selectedYear.value);
+  return currentIdx < availableYears.value.length - 1; // English engineering note.
+});
 
 const canNextYear = computed(() => {
-  if (availableYears.value.length === 0) return false
-  const currentIdx = availableYears.value.indexOf(selectedYear.value)
-  return currentIdx > 0 // English engineering note.
-})
+  if (availableYears.value.length === 0) return false;
+  const currentIdx = availableYears.value.indexOf(selectedYear.value);
+  return currentIdx > 0; // English engineering note.
+});
 
 // English engineering note.
 
 const quarterDisplayLabel = computed(() => {
-  return t('common.timeSelect.quarter.label', {
+  return t("common.timeSelect.quarter.label", {
     year: selectedQuarterYear.value,
     quarter: selectedQuarter.value,
-  })
-})
+  });
+});
 
 const yearDisplayLabel = computed(() => {
-  return t('common.timeSelect.year.label', { year: selectedYear.value })
-})
+  return t("common.timeSelect.year.label", { year: selectedYear.value });
+});
 
 function getRecentDisplayLabel(days: number): string {
   const map: Record<number, string> = {
-    180: t('common.timeSelect.display.recent180'),
-    365: t('common.timeSelect.display.recent365'),
-    730: t('common.timeSelect.display.recent730'),
-    1825: t('common.timeSelect.display.recent1825'),
-  }
-  return map[days] || ''
+    180: t("common.timeSelect.display.recent180"),
+    365: t("common.timeSelect.display.recent365"),
+    730: t("common.timeSelect.display.recent730"),
+    1825: t("common.timeSelect.display.recent1825"),
+  };
+  return map[days] || "";
 }
 
 function buildValue(): TimeRangeValue | null {
-  if (!fullTimeRange.value) return null
-  const stateBase: TimeSelectState = { mode: mode.value }
+  if (!fullTimeRange.value) return null;
+  const stateBase: TimeSelectState = { mode: mode.value };
 
   switch (mode.value) {
-    case 'recent': {
-      stateBase.recentDays = recentPeriod.value
+    case "recent": {
+      stateBase.recentDays = recentPeriod.value;
       if (recentPeriod.value === 0) {
         // English engineering note.
         return {
           startTs: fullTimeRange.value.start,
           endTs: fullTimeRange.value.end,
-          displayLabel: formatDateRange(fullTimeRange.value.start, fullTimeRange.value.end),
+          displayLabel: formatDateRange(
+            fullTimeRange.value.start,
+            fullTimeRange.value.end,
+          ),
           isFullRange: true,
           state: stateBase,
-        }
+        };
       }
-      const endTs = fullTimeRange.value.end
-      const startTs = Math.max(endTs - recentPeriod.value * 86400, fullTimeRange.value.start)
+      const endTs = fullTimeRange.value.end;
+      const startTs = Math.max(
+        endTs - recentPeriod.value * 86400,
+        fullTimeRange.value.start,
+      );
       return {
         startTs,
         endTs,
         displayLabel: getRecentDisplayLabel(recentPeriod.value),
         isFullRange: false,
         state: stateBase,
-      }
+      };
     }
-    case 'quarter': {
-      stateBase.quarterYear = selectedQuarterYear.value
-      stateBase.quarter = selectedQuarter.value
-      const range = getQuarterRange(selectedQuarterYear.value, selectedQuarter.value)
+    case "quarter": {
+      stateBase.quarterYear = selectedQuarterYear.value;
+      stateBase.quarter = selectedQuarter.value;
+      const range = getQuarterRange(
+        selectedQuarterYear.value,
+        selectedQuarter.value,
+      );
       return {
         ...range,
         displayLabel: quarterDisplayLabel.value,
         isFullRange: false,
         state: stateBase,
-      }
+      };
     }
-    case 'year': {
-      stateBase.year = selectedYear.value
-      const range = getYearRange(selectedYear.value)
+    case "year": {
+      stateBase.year = selectedYear.value;
+      const range = getYearRange(selectedYear.value);
       return {
         ...range,
         displayLabel: yearDisplayLabel.value,
         isFullRange: false,
         state: stateBase,
-      }
+      };
     }
-    case 'custom': {
-      stateBase.customStart = customStartDate.value
-      stateBase.customEnd = customEndDate.value
-      if (!customStartDate.value || !customEndDate.value) return null
-      let startTs = dayjs(customStartDate.value).startOf('day').unix()
-      let endTs = dayjs(customEndDate.value).endOf('day').unix()
+    case "custom": {
+      stateBase.customStart = customStartDate.value;
+      stateBase.customEnd = customEndDate.value;
+      if (!customStartDate.value || !customEndDate.value) return null;
+      let startTs = dayjs(customStartDate.value).startOf("day").unix();
+      let endTs = dayjs(customEndDate.value).endOf("day").unix();
       // English engineering note.
-      if (startTs > endTs) [startTs, endTs] = [endTs, startTs]
+      if (startTs > endTs) [startTs, endTs] = [endTs, startTs];
       return {
         startTs,
         endTs,
         displayLabel: formatDateRange(startTs, endTs),
         isFullRange: false,
         state: stateBase,
-      }
+      };
     }
   }
 }
 
 function emitCurrentValue() {
-  const value = buildValue()
-  if (value) emit('update:modelValue', value)
+  const value = buildValue();
+  if (value) emit("update:modelValue", value);
 }
 
 // English engineering note.
 
 function navigateQuarter(direction: number) {
-  let y = selectedQuarterYear.value
-  let q = selectedQuarter.value + direction
+  let y = selectedQuarterYear.value;
+  let q = selectedQuarter.value + direction;
   if (q > 4) {
-    y++
-    q = 1
+    y++;
+    q = 1;
   }
   if (q < 1) {
-    y--
-    q = 4
+    y--;
+    q = 4;
   }
-  const min = minQuarter.value
-  const max = maxQuarter.value
-  if (y < min.year || (y === min.year && q < min.quarter)) return
-  if (y > max.year || (y === max.year && q > max.quarter)) return
-  selectedQuarterYear.value = y
-  selectedQuarter.value = q
-  emitCurrentValue()
+  const min = minQuarter.value;
+  const max = maxQuarter.value;
+  if (y < min.year || (y === min.year && q < min.quarter)) return;
+  if (y > max.year || (y === max.year && q > max.quarter)) return;
+  selectedQuarterYear.value = y;
+  selectedQuarter.value = q;
+  emitCurrentValue();
 }
 
 function navigateYear(direction: number) {
-  const years = availableYears.value // English engineering note.
-  const currentIdx = years.indexOf(selectedYear.value)
+  const years = availableYears.value; // English engineering note.
+  const currentIdx = years.indexOf(selectedYear.value);
   // English engineering note.
-  const newIdx = currentIdx - direction
+  const newIdx = currentIdx - direction;
   if (newIdx >= 0 && newIdx < years.length) {
-    selectedYear.value = years[newIdx]
-    emitCurrentValue()
+    selectedYear.value = years[newIdx];
+    emitCurrentValue();
   }
 }
 
 // English engineering note.
 
 function initModeDefaults(newMode: TimeSelectMode) {
-  if (!fullTimeRange.value) return
+  if (!fullTimeRange.value) return;
   switch (newMode) {
-    case 'recent':
+    case "recent":
       if (![180, 365, 730, 1825, 0].includes(recentPeriod.value)) {
-        recentPeriod.value = 365
+        recentPeriod.value = 365;
       }
-      break
-    case 'quarter': {
-      const { year, quarter } = getQuarterFromTs(fullTimeRange.value.end)
-      selectedQuarterYear.value = year
-      selectedQuarter.value = quarter
-      break
+      break;
+    case "quarter": {
+      const { year, quarter } = getQuarterFromTs(fullTimeRange.value.end);
+      selectedQuarterYear.value = year;
+      selectedQuarter.value = quarter;
+      break;
     }
-    case 'year': {
-      selectedYear.value = availableYears.value[0] || new Date(fullTimeRange.value.end * 1000).getFullYear()
-      break
+    case "year": {
+      selectedYear.value =
+        availableYears.value[0] ||
+        new Date(fullTimeRange.value.end * 1000).getFullYear();
+      break;
     }
-    case 'custom': {
-      const endTs = fullTimeRange.value.end
-      const startTs = Math.max(endTs - 30 * 86400, fullTimeRange.value.start)
-      customStartDate.value = dayjs.unix(startTs).format('YYYY-MM-DD')
-      customEndDate.value = dayjs.unix(endTs).format('YYYY-MM-DD')
-      break
+    case "custom": {
+      const endTs = fullTimeRange.value.end;
+      const startTs = Math.max(endTs - 30 * 86400, fullTimeRange.value.start);
+      customStartDate.value = dayjs.unix(startTs).format("YYYY-MM-DD");
+      customEndDate.value = dayjs.unix(endTs).format("YYYY-MM-DD");
+      break;
     }
   }
 }
@@ -306,127 +322,132 @@ function initModeDefaults(newMode: TimeSelectMode) {
 const modeModel = computed({
   get: () => mode.value,
   set: (val: TimeSelectMode) => {
-    mode.value = val
-    isInitializing.value = true
-    initModeDefaults(val)
-    isInitializing.value = false
-    emitCurrentValue()
+    mode.value = val;
+    isInitializing.value = true;
+    initModeDefaults(val);
+    isInitializing.value = false;
+    emitCurrentValue();
   },
-})
+});
 
 const recentPeriodModel = computed({
   get: () => recentPeriod.value,
   set: (val: number) => {
-    recentPeriod.value = val
-    emitCurrentValue()
+    recentPeriod.value = val;
+    emitCurrentValue();
   },
-})
+});
 
 const customStartModel = computed({
   get: () => customStartDate.value,
   set: (val: string) => {
-    customStartDate.value = val
-    if (customEndDate.value) emitCurrentValue()
+    customStartDate.value = val;
+    if (customEndDate.value) emitCurrentValue();
   },
-})
+});
 
 const customEndModel = computed({
   get: () => customEndDate.value,
   set: (val: string) => {
-    customEndDate.value = val
-    if (customStartDate.value) emitCurrentValue()
+    customEndDate.value = val;
+    if (customStartDate.value) emitCurrentValue();
   },
-})
+});
 
 async function loadData() {
   if (!props.sessionId) {
-    availableYears.value = []
-    fullTimeRange.value = null
-    emit('update:fullRange', null)
-    emit('update:availableYears', [])
-    isLoaded.value = true
-    return
+    availableYears.value = [];
+    fullTimeRange.value = null;
+    emit("update:fullRange", null);
+    emit("update:availableYears", []);
+    isLoaded.value = true;
+    return;
   }
 
   try {
     const [years, range] = await Promise.all([
       window.chatApi.getAvailableYears(props.sessionId),
       window.chatApi.getTimeRange(props.sessionId),
-    ])
-    availableYears.value = years
-    fullTimeRange.value = range
-    emit('update:fullRange', range)
-    emit('update:availableYears', years)
+    ]);
+    availableYears.value = years;
+    fullTimeRange.value = range;
+    emit("update:fullRange", range);
+    emit("update:availableYears", years);
 
     // English engineering note.
-    const init = props.initialState
-    const initMode = init?.mode ?? 'recent'
-    mode.value = initMode
+    const init = props.initialState;
+    const initMode = init?.mode ?? "recent";
+    mode.value = initMode;
 
-    isInitializing.value = true
+    isInitializing.value = true;
     switch (initMode) {
-      case 'recent':
-        recentPeriod.value = init?.recentDays ?? 365
-        break
-      case 'quarter': {
+      case "recent":
+        recentPeriod.value = init?.recentDays ?? 365;
+        break;
+      case "quarter": {
         if (init?.quarterYear && init?.quarter) {
-          selectedQuarterYear.value = init.quarterYear
-          selectedQuarter.value = init.quarter
+          selectedQuarterYear.value = init.quarterYear;
+          selectedQuarter.value = init.quarter;
         } else if (range) {
-          const { year, quarter } = getQuarterFromTs(range.end)
-          selectedQuarterYear.value = year
-          selectedQuarter.value = quarter
+          const { year, quarter } = getQuarterFromTs(range.end);
+          selectedQuarterYear.value = year;
+          selectedQuarter.value = quarter;
         }
-        break
+        break;
       }
-      case 'year': {
+      case "year": {
         if (init?.year && years.includes(init.year)) {
-          selectedYear.value = init.year
+          selectedYear.value = init.year;
         } else {
-          selectedYear.value = years[0] || 0
+          selectedYear.value = years[0] || 0;
         }
-        break
+        break;
       }
-      case 'custom': {
+      case "custom": {
         if (init?.customStart && init?.customEnd) {
-          customStartDate.value = init.customStart
-          customEndDate.value = init.customEnd
+          customStartDate.value = init.customStart;
+          customEndDate.value = init.customEnd;
         } else if (range) {
-          const endTs = range.end
-          const startTs = Math.max(endTs - 30 * 86400, range.start)
-          customStartDate.value = dayjs.unix(startTs).format('YYYY-MM-DD')
-          customEndDate.value = dayjs.unix(endTs).format('YYYY-MM-DD')
+          const endTs = range.end;
+          const startTs = Math.max(endTs - 30 * 86400, range.start);
+          customStartDate.value = dayjs.unix(startTs).format("YYYY-MM-DD");
+          customEndDate.value = dayjs.unix(endTs).format("YYYY-MM-DD");
         }
-        break
+        break;
       }
     }
-    isInitializing.value = false
+    isInitializing.value = false;
 
-    emitCurrentValue()
+    emitCurrentValue();
   } catch (error) {
-    console.error('[TimeSelect] Failed to load time range data:', error)
-    availableYears.value = []
-    fullTimeRange.value = null
-    emit('update:fullRange', null)
-    emit('update:availableYears', [])
+    console.error("[TimeSelect] Failed to load time range data:", error);
+    availableYears.value = [];
+    fullTimeRange.value = null;
+    emit("update:fullRange", null);
+    emit("update:availableYears", []);
   } finally {
-    isLoaded.value = true
+    isLoaded.value = true;
   }
 }
 
-onMounted(() => loadData())
+onMounted(() => loadData());
 watch(
   () => props.sessionId,
   () => {
-    isLoaded.value = false
-    loadData()
-  }
-)
+    isLoaded.value = false;
+    loadData();
+  },
+);
 </script>
 
 <template>
   <div v-if="visible && isLoaded" class="flex items-center gap-2">
-    <USelect v-model="modeModel" :items="modeOptions" size="md" class="w-28 shrink-0" />
+    <USelect
+      v-model="modeModel"
+      :items="modeOptions"
+      size="md"
+      class="w-28 shrink-0"
+    />
 
     <UITabs
       v-if="mode === 'recent'"
@@ -445,7 +466,9 @@ watch(
         :disabled="!canPrevQuarter"
         @click="navigateQuarter(-1)"
       />
-      <span class="whitespace-nowrap px-0.5 text-sm font-medium text-gray-700 dark:text-gray-300">
+      <span
+        class="whitespace-nowrap px-0.5 text-sm font-medium text-gray-700 dark:text-gray-300"
+      >
         {{ quarterDisplayLabel }}
       </span>
       <UButton
@@ -467,7 +490,9 @@ watch(
         :disabled="!canPrevYear"
         @click="navigateYear(-1)"
       />
-      <span class="whitespace-nowrap px-0.5 text-sm font-medium text-gray-700 dark:text-gray-300">
+      <span
+        class="whitespace-nowrap px-0.5 text-sm font-medium text-gray-700 dark:text-gray-300"
+      >
         {{ yearDisplayLabel }}
       </span>
       <UButton
@@ -481,9 +506,17 @@ watch(
     </div>
 
     <div v-else-if="mode === 'custom'" class="flex items-center gap-1">
-      <DatePicker v-model="customStartModel" width-class="w-28" :clearable="false" />
+      <DatePicker
+        v-model="customStartModel"
+        width-class="w-28"
+        :clearable="false"
+      />
       <span class="text-xs text-gray-400">-</span>
-      <DatePicker v-model="customEndModel" width-class="w-28" :clearable="false" />
+      <DatePicker
+        v-model="customEndModel"
+        width-class="w-28"
+        :clearable="false"
+      />
     </div>
   </div>
 </template>

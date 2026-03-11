@@ -11,15 +11,20 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "better-sqlite3",
-      "electron"
+      "electron",
+      "esbuild",
+      "vue-demi"
+    ],
+    "ignoredBuiltDependencies": [
+      "electron-winstaller"
     ]
   },
   "scripts": {
-    "dev": "electron-vite dev",
-    "preview": "electron-vite preview",
+    "dev": "vite --config vite.config.mts",
+    "preview": "vite preview --config vite.config.mts",
     "format": "prettier --write .",
     "lint": "eslint . --ext .js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix",
-    "build": "electron-vite build",
+    "build": "vite build --config vite.config.mts",
     "build:mac": "pnpm run build && electron-builder --mac --config electron-builder.yml -p never",
     "build:win": "pnpm run build && electron-builder --win --config electron-builder.yml -p never",
     "type-check:web": "vue-tsc --noEmit -p tsconfig.web.json",
@@ -34,6 +39,7 @@
     "@aptabase/electron": "^0.3.1",
     "@electron-toolkit/preload": "^3.0.1",
     "@electron-toolkit/utils": "^4.0.0",
+    "@internationalized/date": "^3.10.0",
     "@node-rs/jieba": "^2.0.1",
     "@tanstack/vue-virtual": "^3.13.18",
     "@types/markdown-it": "^14.1.2",
@@ -41,7 +47,6 @@
     "ai": "^6.0.41",
     "better-sqlite3": "^12.4.6",
     "echarts": "^6.0.0",
-    "echarts-wordcloud": "^2.1.0",
     "electron-updater": "^6.6.2",
     "i18next": "^25.8.5",
     "markdown-it": "^14.1.0",
@@ -56,6 +61,7 @@
     "@electron/rebuild": "^4.0.1",
     "@nuxt/ui": "^4.2.1",
     "@tailwindcss/vite": "^4.0.0",
+    "@types/node": "^24.6.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/stream-json": "^1.7.8",
     "@vitejs/plugin-vue": "^5.2.3",
@@ -75,8 +81,10 @@
     "pinia-plugin-persistedstate": "^4.7.1",
     "prettier": "^3.5.3",
     "tailwindcss": "^4.0.0",
+    "typescript": "^5.9.3",
     "vite": "^6.3.5",
     "vue": "^3.5.25",
-    "vue-router": "^4.6.3"
+    "vue-router": "^4.6.3",
+    "vue-tsc": "^2.1.10"
   }
 }

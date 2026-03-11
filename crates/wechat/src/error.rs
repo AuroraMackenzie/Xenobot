@@ -1,6 +1,7 @@
 //! Error types for WeChat data extraction and decryption.
 
 use thiserror::Error;
+use xenobot_analysis::parsers::ParseError;
 
 /// Main error type for WeChat operations.
 #[derive(Error, Debug)]
@@ -32,6 +33,26 @@ pub enum WeChatError {
     /// File monitoring error
     #[error("File monitoring error: {0}")]
     FileMonitor(#[from] notify::Error),
+
+    /// Parse error returned by analysis parser registry.
+    #[error("parse error: {0}")]
+    Parse(#[from] ParseError),
+
+    /// Path is outside the configured authorized roots.
+    #[error("path is outside authorized roots: {path}")]
+    UnauthorizedPath {
+        /// Rejected source path.
+        path: std::path::PathBuf,
+    },
+
+    /// Parsed export did not match the expected platform.
+    #[error("parsed platform mismatch: expected {expected}, got {actual}")]
+    PlatformMismatch {
+        /// Expected stable platform identifier.
+        expected: String,
+        /// Actual parsed platform identifier.
+        actual: String,
+    },
 
     /// SQLite database error
     #[error("Database error: {0}")]

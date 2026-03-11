@@ -1,123 +1,151 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { storeToRefs } from 'pinia'
-import { useI18n } from 'vue-i18n'
-import { usePromptStore } from '@/stores/prompt'
+import { computed } from "vue";
+import { storeToRefs } from "pinia";
+import { useI18n } from "vue-i18n";
+import { usePromptStore } from "@/stores/prompt";
 
-const { t } = useI18n()
+const { t } = useI18n();
 
 // Store
-const promptStore = usePromptStore()
-const { aiGlobalSettings } = storeToRefs(promptStore)
+const promptStore = usePromptStore();
+const { aiGlobalSettings } = storeToRefs(promptStore);
 
 // Emits
 const emit = defineEmits<{
-  'config-changed': []
-}>()
+  "config-changed": [];
+}>();
 
 // English engineering note.
 const globalMaxMessages = computed({
   get: () => aiGlobalSettings.value.maxMessagesPerRequest,
   set: (val: number) => {
-    const clampedVal = Math.max(0, Math.min(50000, val || 1000))
-    promptStore.updateAIGlobalSettings({ maxMessagesPerRequest: clampedVal })
-    emit('config-changed')
+    const clampedVal = Math.max(0, Math.min(50000, val || 1000));
+    promptStore.updateAIGlobalSettings({ maxMessagesPerRequest: clampedVal });
+    emit("config-changed");
   },
-})
+});
 
 // English engineering note.
 const globalMaxHistoryRounds = computed({
   get: () => aiGlobalSettings.value.maxHistoryRounds ?? 10,
   set: (val: number) => {
-    const clampedVal = Math.max(1, Math.min(50, val || 10))
-    promptStore.updateAIGlobalSettings({ maxHistoryRounds: clampedVal })
-    emit('config-changed')
+    const clampedVal = Math.max(1, Math.min(50, val || 10));
+    promptStore.updateAIGlobalSettings({ maxHistoryRounds: clampedVal });
+    emit("config-changed");
   },
-})
+});
 
 // English engineering note.
 const exportFormatTabs = computed(() => [
-  { label: 'Markdown', value: 'markdown' },
-  { label: t('settings.aiPrompt.exportFormat.txtLabel'), value: 'txt' },
-])
+  { label: "Markdown", value: "markdown" },
+  { label: t("settings.aiPrompt.exportFormat.txtLabel"), value: "txt" },
+]);
 
 // English engineering note.
 const exportFormat = computed({
-  get: () => aiGlobalSettings.value.exportFormat ?? 'markdown',
+  get: () => aiGlobalSettings.value.exportFormat ?? "markdown",
   set: (val: string) => {
-    promptStore.updateAIGlobalSettings({ exportFormat: val as 'markdown' | 'txt' })
-    emit('config-changed')
+    promptStore.updateAIGlobalSettings({
+      exportFormat: val as "markdown" | "txt",
+    });
+    emit("config-changed");
   },
-})
+});
 
 // English engineering note.
 const sqlExportFormatTabs = computed(() => [
-  { label: 'CSV', value: 'csv' },
-  { label: 'JSON', value: 'json' },
-])
+  { label: "CSV", value: "csv" },
+  { label: "JSON", value: "json" },
+]);
 
 // English engineering note.
 const sqlExportFormat = computed({
-  get: () => aiGlobalSettings.value.sqlExportFormat ?? 'csv',
+  get: () => aiGlobalSettings.value.sqlExportFormat ?? "csv",
   set: (val: string) => {
-    promptStore.updateAIGlobalSettings({ sqlExportFormat: val as 'csv' | 'json' })
-    emit('config-changed')
+    promptStore.updateAIGlobalSettings({
+      sqlExportFormat: val as "csv" | "json",
+    });
+    emit("config-changed");
   },
-})
+});
 </script>
 
 <template>
   <div class="space-y-6">
     <!-- English UI note -->
     <div>
-      <h4 class="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
-        <UIcon name="i-heroicons-chat-bubble-left-right" class="h-4 w-4 text-green-500" />
-        {{ t('settings.aiPrompt.chatSettings.title') }}
+      <h4
+        class="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white"
+      >
+        <UIcon
+          name="i-heroicons-chat-bubble-left-right"
+          class="h-4 w-4 text-green-500"
+        />
+        {{ t("settings.aiPrompt.chatSettings.title") }}
       </h4>
-      <div class="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50">
+      <div
+        class="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50"
+      >
         <!-- English UI note -->
         <div class="flex items-center justify-between">
           <div class="flex-1 pr-4">
             <p class="text-sm font-medium text-gray-900 dark:text-white">
-              {{ t('settings.aiPrompt.maxMessages.title') }}
+              {{ t("settings.aiPrompt.maxMessages.title") }}
             </p>
             <p class="text-xs text-gray-500 dark:text-gray-400">
-              {{ t('settings.aiPrompt.maxMessages.description') }}
+              {{ t("settings.aiPrompt.maxMessages.description") }}
             </p>
           </div>
-          <UInputNumber v-model="globalMaxMessages" :min="0" :max="50000" class="w-30" />
+          <UInputNumber
+            v-model="globalMaxMessages"
+            :min="0"
+            :max="50000"
+            class="w-30"
+          />
         </div>
 
         <!-- English UI note -->
         <div class="flex items-center justify-between">
           <div class="flex-1 pr-4">
             <p class="text-sm font-medium text-gray-900 dark:text-white">
-              {{ t('settings.aiPrompt.maxHistory.title') }}
+              {{ t("settings.aiPrompt.maxHistory.title") }}
             </p>
             <p class="text-xs text-gray-500 dark:text-gray-400">
-              {{ t('settings.aiPrompt.maxHistory.description') }}
+              {{ t("settings.aiPrompt.maxHistory.description") }}
             </p>
           </div>
-          <UInputNumber v-model="globalMaxHistoryRounds" :min="1" :max="50" class="w-30" />
+          <UInputNumber
+            v-model="globalMaxHistoryRounds"
+            :min="1"
+            :max="50"
+            class="w-30"
+          />
         </div>
       </div>
     </div>
 
     <!-- English UI note -->
     <div>
-      <h4 class="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
-        <UIcon name="i-heroicons-arrow-down-tray" class="h-4 w-4 text-blue-500" />
-        {{ t('settings.aiPrompt.exportSettings.title') }}
+      <h4
+        class="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white"
+      >
+        <UIcon
+          name="i-heroicons-arrow-down-tray"
+          class="h-4 w-4 text-blue-500"
+        />
+        {{ t("settings.aiPrompt.exportSettings.title") }}
       </h4>
-      <div class="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50">
+      <div
+        class="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50"
+      >
         <!-- English UI note -->
         <div class="flex items-center justify-between">
           <div class="flex-1 pr-4">
             <p class="text-sm font-medium text-gray-900 dark:text-white">
-              {{ t('settings.aiPrompt.exportFormat.title') }}
+              {{ t("settings.aiPrompt.exportFormat.title") }}
             </p>
             <p class="text-xs text-gray-500 dark:text-gray-400">
-              {{ t('settings.aiPrompt.exportFormat.description') }}
+              {{ t("settings.aiPrompt.exportFormat.description") }}
             </p>
           </div>
           <UTabs v-model="exportFormat" :items="exportFormatTabs" size="xs" />
@@ -127,13 +155,17 @@ const sqlExportFormat = computed({
         <div class="flex items-center justify-between">
           <div class="flex-1 pr-4">
             <p class="text-sm font-medium text-gray-900 dark:text-white">
-              {{ t('settings.aiPrompt.sqlExportFormat.title') }}
+              {{ t("settings.aiPrompt.sqlExportFormat.title") }}
             </p>
             <p class="text-xs text-gray-500 dark:text-gray-400">
-              {{ t('settings.aiPrompt.sqlExportFormat.description') }}
+              {{ t("settings.aiPrompt.sqlExportFormat.description") }}
             </p>
           </div>
-          <UTabs v-model="sqlExportFormat" :items="sqlExportFormatTabs" size="xs" />
+          <UTabs
+            v-model="sqlExportFormat"
+            :items="sqlExportFormatTabs"
+            size="xs"
+          />
         </div>
       </div>
     </div>

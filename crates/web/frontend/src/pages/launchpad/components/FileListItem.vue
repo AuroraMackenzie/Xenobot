@@ -1,13 +1,13 @@
 <script setup lang="ts">
 defineProps<{
-  name: string
-  statusIcon: string
-  statusClass: string
-  progressText?: string
-  index: number
-  total: number
-  highlight?: boolean
-}>()
+  name: string;
+  statusIcon: string;
+  statusClass: string;
+  progressText?: string;
+  index: number;
+  total: number;
+  highlight?: boolean;
+}>();
 </script>
 
 <template>

@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n'
-import BatchManageTab from './components/BatchManageTab.vue'
-import PageHeader from '@/components/layout/PageHeader.vue'
+import { useI18n } from "vue-i18n";
+import BatchManageTab from "./components/BatchManageTab.vue";
+import PageHeader from "@/components/layout/PageHeader.vue";
 
-const { t } = useI18n()
+const { t } = useI18n();
 </script>
 
 <template>
@@ -24,12 +24,13 @@ const { t } = useI18n()
         <div class="xeno-workbench-bar">
           <div class="xeno-workbench-kicker">OPERATIONAL SURFACE</div>
           <div class="xeno-workbench-copy">
-            Manage imported sessions, review merge readiness, and enforce cleanup from one controlled workspace.
+            Manage imported sessions, review merge readiness, and enforce
+            cleanup from one controlled workspace.
           </div>
         </div>
 
         <div class="xeno-panel xeno-workbench-panel rounded-2xl p-4 sm:p-5">
-        <BatchManageTab />
+          <BatchManageTab />
         </div>
       </div>
     </div>
@@ -66,7 +67,7 @@ const { t } = useI18n()
   border: 1px solid var(--xeno-border-soft);
   border-radius: 9999px;
   padding: 0.2rem 0.55rem;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: "JetBrains Mono", monospace;
   font-size: 0.68rem;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -88,13 +89,18 @@ const { t } = useI18n()
 }
 
 .xeno-workbench-panel::before {
-  content: '';
+  content: "";
   position: absolute;
   left: 0;
   right: 0;
   top: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.22), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(56, 189, 248, 0.22),
+    transparent
+  );
   opacity: 0.78;
   pointer-events: none;
 }

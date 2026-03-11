@@ -10,3 +10,9 @@ repository = "https://github.com/AuroraMackenzie/Xenobot.git"
 thiserror = { workspace = true }
 xenobot-core = { path = "../core", version = "0.1.0" }
 xenobot-analysis = { path = "../analysis", version = "0.1.0" }
+notify = "6.1"
+anyhow = { workspace = true }
+regex = "1.10"
+
+[dev-dependencies]
+tempfile = "3.10"

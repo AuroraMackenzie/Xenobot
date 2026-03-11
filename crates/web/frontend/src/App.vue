@@ -1,109 +1,114 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
-import { storeToRefs } from 'pinia'
-import { useRoute } from 'vue-router'
-import { useI18n } from 'vue-i18n'
-import TitleBar from '@/components/common/TitleBar.vue'
-import Sidebar from '@/components/common/Sidebar.vue'
-import XenoSingularityBackdrop from '@/components/common/XenoSingularityBackdrop.vue'
-import SettingModal from '@/components/common/SettingModal.vue'
-import ScreenCaptureModal from '@/components/common/ScreenCaptureModal.vue'
-import { ChatRecordDrawer } from '@/components/common/ChatRecord'
-import { useSessionStore } from '@/stores/session'
-import { useLayoutStore } from '@/stores/layout'
-import { usePromptStore } from '@/stores/prompt'
-import { useSettingsStore } from '@/stores/settings'
-import { useLLMStore } from '@/stores/llm'
+import { onMounted, ref, watch } from "vue";
+import { storeToRefs } from "pinia";
+import { useRoute } from "vue-router";
+import { useI18n } from "vue-i18n";
+import TitleBar from "@/components/common/TitleBar.vue";
+import Sidebar from "@/components/common/Sidebar.vue";
+import XenoSingularityBackdrop from "@/components/common/XenoSingularityBackdrop.vue";
+import SettingModal from "@/components/common/SettingModal.vue";
+import ScreenCaptureModal from "@/components/common/ScreenCaptureModal.vue";
+import { ChatRecordDrawer } from "@/components/common/ChatRecord";
+import { useSessionStore } from "@/stores/session";
+import { useLayoutStore } from "@/stores/layout";
+import { usePromptStore } from "@/stores/prompt";
+import { useSettingsStore } from "@/stores/settings";
+import { useLLMStore } from "@/stores/llm";
 
-const { t } = useI18n()
+const { t } = useI18n();
 
-const sessionStore = useSessionStore()
-const layoutStore = useLayoutStore()
-const promptStore = usePromptStore()
-const settingsStore = useSettingsStore()
-const llmStore = useLLMStore()
-const { isInitialized } = storeToRefs(sessionStore)
-const route = useRoute()
-const isBooting = ref(true)
-const isRouteTransitioning = ref(false)
-const routeTransitionName = ref<'xeno-route-forward' | 'xeno-route-back'>('xeno-route-forward')
-const previousRouteRank = ref(0)
+const sessionStore = useSessionStore();
+const layoutStore = useLayoutStore();
+const promptStore = usePromptStore();
+const settingsStore = useSettingsStore();
+const llmStore = useLLMStore();
+const { isInitialized } = storeToRefs(sessionStore);
+const route = useRoute();
+const isBooting = ref(true);
+const isRouteTransitioning = ref(false);
+const routeTransitionName = ref<"xeno-route-forward" | "xeno-route-back">(
+  "xeno-route-forward",
+);
+const previousRouteRank = ref(0);
 
 const tooltip = {
   delayDuration: 100,
-}
+};
 
 // English engineering note.
 onMounted(async () => {
   // English engineering note.
-  const platform = navigator.platform.toLowerCase()
-  if (platform.includes('win')) {
-    document.documentElement.classList.add('platform-windows')
-  } else if (platform.includes('linux')) {
-    document.documentElement.classList.add('platform-linux')
+  const platform = navigator.platform.toLowerCase();
+  if (platform.includes("win")) {
+    document.documentElement.classList.add("platform-windows");
+  } else if (platform.includes("linux")) {
+    document.documentElement.classList.add("platform-linux");
   }
 
   // English engineering note.
-  settingsStore.initLocale()
+  settingsStore.initLocale();
   // English engineering note.
-  llmStore.init()
+  llmStore.init();
   // English engineering note.
-  await sessionStore.loadSessions()
+  await sessionStore.loadSessions();
 
   // English engineering note.
   window.setTimeout(() => {
-    isBooting.value = false
-  }, 680)
-})
+    isBooting.value = false;
+  }, 680);
+});
 
 function resolveRouteRank(name: string | symbol | null | undefined): number {
-  if (typeof name !== 'string') {
-    return 0
+  if (typeof name !== "string") {
+    return 0;
   }
 
   switch (name) {
-    case 'launchpad':
-      return 0
-    case 'workbench':
-      return 1
-    case 'circle-room':
-    case 'direct-room':
-      return 2
+    case "launchpad":
+      return 0;
+    case "workbench":
+      return 1;
+    case "circle-room":
+    case "direct-room":
+      return 2;
     default:
-      return 1
+      return 1;
   }
 }
 
 watch(
   () => route.name,
   (nextName) => {
-    const nextRank = resolveRouteRank(nextName)
-    routeTransitionName.value = nextRank >= previousRouteRank.value ? 'xeno-route-forward' : 'xeno-route-back'
-    previousRouteRank.value = nextRank
+    const nextRank = resolveRouteRank(nextName);
+    routeTransitionName.value =
+      nextRank >= previousRouteRank.value
+        ? "xeno-route-forward"
+        : "xeno-route-back";
+    previousRouteRank.value = nextRank;
   },
   { immediate: true },
-)
+);
 
 // English engineering note.
 function onRouteBeforeEnter() {
-  isRouteTransitioning.value = true
+  isRouteTransitioning.value = true;
 }
 
 // English engineering note.
 function onRouteBeforeLeave() {
-  isRouteTransitioning.value = true
+  isRouteTransitioning.value = true;
 }
 
 // English engineering note.
 function onRouteAfterEnter() {
   window.setTimeout(() => {
-    isRouteTransitioning.value = false
-  }, 80)
+    isRouteTransitioning.value = false;
+  }, 80);
 }
 
 // English engineering note.
 function onRouteTransitionCancelled() {
-  isRouteTransitioning.value = false
+  isRouteTransitioning.value = false;
 }
 </script>
 
@@ -111,8 +116,14 @@ function onRouteTransitionCancelled() {
   <UApp :tooltip="tooltip">
     <!-- English UI note -->
     <TitleBar />
-    <div class="xeno-app-shell relative flex h-screen w-full overflow-hidden" :class="{ 'xeno-app-booting': isBooting }">
-      <div class="xeno-shell-atmosphere pointer-events-none absolute inset-0 z-0" aria-hidden="true">
+    <div
+      class="xeno-app-shell relative flex h-screen w-full overflow-hidden"
+      :class="{ 'xeno-app-booting': isBooting }"
+    >
+      <div
+        class="xeno-shell-atmosphere pointer-events-none absolute inset-0 z-0"
+        aria-hidden="true"
+      >
         <XenoSingularityBackdrop />
         <div class="xeno-shell-orbit xeno-shell-orbit-a" />
         <div class="xeno-shell-orbit xeno-shell-orbit-b" />
@@ -123,15 +134,23 @@ function onRouteTransitionCancelled() {
       <template v-if="!isInitialized">
         <div class="flex h-full w-full items-center justify-center">
           <div class="flex flex-col items-center justify-center text-center">
-            <UIcon name="i-heroicons-arrow-path" class="h-8 w-8 animate-spin text-cyan-500" />
-            <p class="mt-2 text-sm text-gray-500">{{ t('common.initializing') }}</p>
+            <UIcon
+              name="i-heroicons-arrow-path"
+              class="h-8 w-8 animate-spin text-cyan-500"
+            />
+            <p class="mt-2 text-sm text-gray-500">
+              {{ t("common.initializing") }}
+            </p>
           </div>
         </div>
       </template>
       <template v-else>
         <Sidebar />
         <main class="xeno-page-content relative flex-1 overflow-hidden">
-          <div class="xeno-page-atmosphere pointer-events-none absolute inset-0 z-0" aria-hidden="true">
+          <div
+            class="xeno-page-atmosphere pointer-events-none absolute inset-0 z-0"
+            aria-hidden="true"
+          >
             <div class="xeno-page-scanline" />
             <div class="xeno-page-pulse" />
           </div>
@@ -161,7 +180,10 @@ function onRouteTransitionCancelled() {
         </main>
       </template>
     </div>
-    <SettingModal v-model:open="layoutStore.showSettingModal" @ai-config-saved="promptStore.notifyAIConfigChanged" />
+    <SettingModal
+      v-model:open="layoutStore.showSettingModal"
+      @ai-config-saved="promptStore.notifyAIConfigChanged"
+    />
     <ScreenCaptureModal
       :open="layoutStore.showScreenCaptureModal"
       :image-data="layoutStore.screenCaptureImage"
@@ -183,17 +205,21 @@ function onRouteTransitionCancelled() {
 }
 
 .xeno-app-shell::before {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
   z-index: 0;
   pointer-events: none;
   opacity: 0;
-  background: radial-gradient(circle at 18% 8%, rgba(14, 165, 233, 0.24), transparent 42%);
+  background: radial-gradient(
+    circle at 18% 8%,
+    rgba(14, 165, 233, 0.24),
+    transparent 42%
+  );
 }
 
 .xeno-app-shell::after {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
   z-index: 0;
@@ -226,7 +252,11 @@ function onRouteTransitionCancelled() {
   width: 28rem;
   height: 28rem;
   border: 1px solid rgba(56, 189, 248, 0.14);
-  background: radial-gradient(circle, rgba(56, 189, 248, 0.14), transparent 68%);
+  background: radial-gradient(
+    circle,
+    rgba(56, 189, 248, 0.14),
+    transparent 68%
+  );
 }
 
 .xeno-shell-orbit-b {
@@ -235,7 +265,11 @@ function onRouteTransitionCancelled() {
   width: 20rem;
   height: 20rem;
   border: 1px solid rgba(45, 212, 191, 0.12);
-  background: radial-gradient(circle, rgba(45, 212, 191, 0.12), transparent 72%);
+  background: radial-gradient(
+    circle,
+    rgba(45, 212, 191, 0.12),
+    transparent 72%
+  );
 }
 
 .xeno-shell-beam {
@@ -243,7 +277,12 @@ function onRouteTransitionCancelled() {
   inset: 0 auto 0 22%;
   width: 36rem;
   transform: skewX(-14deg);
-  background: linear-gradient(180deg, rgba(56, 189, 248, 0.08), transparent 42%, rgba(14, 165, 233, 0.05) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(56, 189, 248, 0.08),
+    transparent 42%,
+    rgba(14, 165, 233, 0.05) 100%
+  );
   filter: blur(18px);
   opacity: 0.55;
 }
@@ -254,14 +293,24 @@ function onRouteTransitionCancelled() {
   right: 0;
   top: 4.2rem;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.18), rgba(255, 255, 255, 0.12), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(56, 189, 248, 0.18),
+    rgba(255, 255, 255, 0.12),
+    transparent
+  );
   opacity: 0.7;
 }
 
 .xeno-page-content {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 10%),
-    radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.08), transparent 26%);
+    radial-gradient(
+      circle at 100% 0%,
+      rgba(56, 189, 248, 0.08),
+      transparent 26%
+    );
 }
 
 .xeno-page-atmosphere {
@@ -274,7 +323,12 @@ function onRouteTransitionCancelled() {
   right: 0;
   top: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.4), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(56, 189, 248, 0.4),
+    transparent
+  );
   box-shadow: 0 0 22px rgba(14, 165, 233, 0.3);
   opacity: 0.55;
 }
@@ -286,7 +340,11 @@ function onRouteTransitionCancelled() {
   width: 18rem;
   height: 18rem;
   border-radius: 9999px;
-  background: radial-gradient(circle, rgba(14, 165, 233, 0.12), transparent 70%);
+  background: radial-gradient(
+    circle,
+    rgba(14, 165, 233, 0.12),
+    transparent 70%
+  );
   filter: blur(22px);
   opacity: 0.55;
 }
@@ -295,13 +353,27 @@ function onRouteTransitionCancelled() {
   opacity: 0;
   transform: scale(1.02);
   background:
-    radial-gradient(circle at 70% 22%, rgba(14, 165, 233, 0.14), transparent 40%),
-    radial-gradient(circle at 16% 84%, rgba(45, 212, 191, 0.12), transparent 36%),
-    linear-gradient(120deg, transparent 32%, rgba(255, 255, 255, 0.09) 48%, transparent 62%);
+    radial-gradient(
+      circle at 70% 22%,
+      rgba(14, 165, 233, 0.14),
+      transparent 40%
+    ),
+    radial-gradient(
+      circle at 16% 84%,
+      rgba(45, 212, 191, 0.12),
+      transparent 36%
+    ),
+    linear-gradient(
+      120deg,
+      transparent 32%,
+      rgba(255, 255, 255, 0.09) 48%,
+      transparent 62%
+    );
 }
 
 .xeno-route-curtain-active {
-  animation: xeno-route-curtain-pulse 420ms cubic-bezier(0.22, 0.92, 0.3, 1) both;
+  animation: xeno-route-curtain-pulse 420ms cubic-bezier(0.22, 0.92, 0.3, 1)
+    both;
 }
 
 .xeno-route-progress {
@@ -309,8 +381,12 @@ function onRouteTransitionCancelled() {
   opacity: 0;
   transform: scaleX(0.1);
   transform-origin: left center;
-  background:
-    linear-gradient(90deg, rgba(45, 212, 191, 0.2) 0%, rgba(14, 165, 233, 0.7) 45%, rgba(148, 163, 184, 0.2) 100%);
+  background: linear-gradient(
+    90deg,
+    rgba(45, 212, 191, 0.2) 0%,
+    rgba(14, 165, 233, 0.7) 45%,
+    rgba(148, 163, 184, 0.2) 100%
+  );
   box-shadow: 0 0 18px rgba(14, 165, 233, 0.38);
 }
 

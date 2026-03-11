@@ -1,29 +1,20 @@
 /**
- * English note.
+ * Built-in AI prompt presets used by the desktop frontend.
  *
- * English note.
- * English note.
- * English note.
- * English note.
- *
- * English note.
+ * This module keeps locale-specific prompt fragments separate from the UI so
+ * the settings pages can render previews, restore defaults, and generate
+ * immutable guidance blocks for the agent runtime.
  */
 
-import type { PromptPreset } from '@/types/ai'
+import type { PromptPreset } from "@/types/ai";
 
-// English engineering note.
-
-export type LocaleType = 'zh-CN' | 'en-US'
-
-// English engineering note.
+export type LocaleType = "zh-CN" | "en-US";
 
 const i18nContent = {
-  'zh-CN': {
-    presetName: '默认分析助手',
-    // English engineering note.
+  "zh-CN": {
+    presetName: "默认分析助手",
     roleDefinition: `你是一个专业但风格轻松的聊天记录分析助手。
 你的任务是帮助用户理解和分析他们的聊天记录数据，同时可以适度使用 B 站/网络热梗和表情/颜文字活跃气氛，但不影响结论的准确性。`,
-    // English engineering note.
     responseRules: `1. 基于工具返回的数据回答，不要编造信息
 2. 如果数据不足以回答问题，请说明
 3. 回答要简洁明了，使用 Markdown 格式
@@ -33,8 +24,8 @@ const i18nContent = {
 7. 玩梗不得影响事实准确与结论清晰，避免低俗或冒犯性表达`,
     lockedSection: {
       chatContext: {
-        group: '群聊',
-        private: '对话',
+        group: "群聊",
+        private: "对话",
       },
       ownerNoteTemplate: (displayName: string, chatContext: string) =>
         `当前用户身份：
@@ -52,19 +43,20 @@ const i18nContent = {
 - 私聊只有两个人，可以直接获取成员列表
 - 当用户提到"对方"、"他/她"时，通过 member_list 获取另一方信息`,
       },
-      currentDatePrefix: '当前日期是',
+      currentDatePrefix: "当前日期是",
       timeParamsTemplate: (year: number, prevYear: number) =>
         `时间参数：按用户提到的精度组合 year/month/day/hour
 - "10月" → year: ${year}, month: 10
 - "10月1号" → year: ${year}, month: 10, day: 1
 - "10月1号下午3点" → year: ${year}, month: 10, day: 1, hour: 15
 未指定年份默认${year}年，若该月份未到则用${prevYear}年`,
-      conclusion: '根据用户的问题，选择合适的工具获取数据，然后基于数据给出回答。',
-      responseRulesLabel: '回答要求：',
+      conclusion:
+        "根据用户的问题，选择合适的工具获取数据，然后基于数据给出回答。",
+      responseRulesLabel: "回答要求：",
     },
   },
-  'en-US': {
-    presetName: 'Default Analysis Assistant',
+  "en-US": {
+    presetName: "Default Analysis Assistant",
     roleDefinition: `You are a professional chat analysis assistant.
 Your task is to help users understand and analyze their chat records.`,
     responseRules: `1. Answer based on data returned by tools, do not fabricate information
@@ -74,8 +66,8 @@ Your task is to help users understand and analyze their chat records.`,
 5. For statistics, summarize trends and characteristics appropriately`,
     lockedSection: {
       chatContext: {
-        group: 'group chat',
-        private: 'conversation',
+        group: "group chat",
+        private: "conversation",
       },
       ownerNoteTemplate: (displayName: string, chatContext: string) =>
         `Current user identity:
@@ -93,7 +85,7 @@ Your task is to help users understand and analyze their chat records.`,
 - Private chats have only two people, you can directly get the member list
 - When the user mentions "the other person" or "he/she", use member_list to identify the other party`,
       },
-      currentDatePrefix: 'The current date is',
+      currentDatePrefix: "The current date is",
       timeParamsTemplate: (year: number, prevYear: number) =>
         `Time parameters: Combine year/month/day/hour based on user's specified precision
 - "October" → year: ${year}, month: 10
@@ -102,58 +94,50 @@ Your task is to help users understand and analyze their chat records.`,
 Default to ${year} if year not specified, use ${prevYear} if the month hasn't arrived yet`,
       conclusion:
         "Based on the user's question, select appropriate tools to retrieve data, then provide an answer based on the data.",
-      responseRulesLabel: 'Response requirements:',
+      responseRulesLabel: "Response requirements:",
     },
   },
-}
+};
 
-// English engineering note.
+/** Canonical built-in preset identifier shared by group and private modes. */
+export const DEFAULT_PRESET_ID = "builtin-default";
 
-/** English note.
-export const DEFAULT_PRESET_ID = 'builtin-default'
-
-/** English note.
-export const DEFAULT_GROUP_PRESET_ID = DEFAULT_PRESET_ID
-/** English note.
-export const DEFAULT_PRIVATE_PRESET_ID = DEFAULT_PRESET_ID
-
-// English engineering note.
+/** Default preset used in group-chat analysis. */
+export const DEFAULT_GROUP_PRESET_ID = DEFAULT_PRESET_ID;
+/** Default preset used in private-chat analysis. */
+export const DEFAULT_PRIVATE_PRESET_ID = DEFAULT_PRESET_ID;
 
 /**
- * English note.
- * English note.
+ * Returns the locale-specific built-in role definition.
  */
-export function getDefaultRoleDefinition(locale: LocaleType = 'zh-CN'): string {
-  const content = i18nContent[locale] || i18nContent['zh-CN']
-  return content.roleDefinition
+export function getDefaultRoleDefinition(locale: LocaleType = "zh-CN"): string {
+  const content = i18nContent[locale] || i18nContent["zh-CN"];
+  return content.roleDefinition;
 }
 
 /**
- * English note.
- * English note.
+ * Returns the locale-specific response rules for the built-in preset.
  */
-export function getDefaultResponseRules(locale: LocaleType = 'zh-CN'): string {
-  const content = i18nContent[locale] || i18nContent['zh-CN']
-  return content.responseRules
+export function getDefaultResponseRules(locale: LocaleType = "zh-CN"): string {
+  const content = i18nContent[locale] || i18nContent["zh-CN"];
+  return content.responseRules;
 }
 
 /**
- * English note.
- * English note.
+ * Returns the localized display name of the built-in preset.
  */
-export function getBuiltinPresetName(locale: LocaleType = 'zh-CN'): string {
-  const content = i18nContent[locale] || i18nContent['zh-CN']
-  return content.presetName
+export function getBuiltinPresetName(locale: LocaleType = "zh-CN"): string {
+  const content = i18nContent[locale] || i18nContent["zh-CN"];
+  return content.presetName;
 }
 
-// English engineering note.
-
 /**
- * English note.
- * English note.
+ * Materializes the locale-specific built-in preset list.
  */
-export function getBuiltinPresets(locale: LocaleType = 'zh-CN'): PromptPreset[] {
-  const now = Date.now()
+export function getBuiltinPresets(
+  locale: LocaleType = "zh-CN",
+): PromptPreset[] {
+  const now = Date.now();
 
   const BUILTIN_DEFAULT: PromptPreset = {
     id: DEFAULT_PRESET_ID,
@@ -163,64 +147,62 @@ export function getBuiltinPresets(locale: LocaleType = 'zh-CN'): PromptPreset[] 
     isBuiltIn: true,
     createdAt: now,
     updatedAt: now,
-  }
+  };
 
-  return [BUILTIN_DEFAULT]
+  return [BUILTIN_DEFAULT];
 }
 
-/** English note.
-export const BUILTIN_PRESETS: PromptPreset[] = getBuiltinPresets('zh-CN')
+/** Default built-in preset collection used when no locale override is provided. */
+export const BUILTIN_PRESETS: PromptPreset[] = getBuiltinPresets("zh-CN");
 
 /**
- * English note.
- * English note.
- * English note.
+ * Looks up the canonical built-in preset definition for a locale.
  */
-export function getOriginalBuiltinPreset(presetId: string, locale: LocaleType = 'zh-CN'): PromptPreset | undefined {
-  const presets = getBuiltinPresets(locale)
-  return presets.find((p) => p.id === presetId)
+export function getOriginalBuiltinPreset(
+  presetId: string,
+  locale: LocaleType = "zh-CN",
+): PromptPreset | undefined {
+  const presets = getBuiltinPresets(locale);
+  return presets.find((p) => p.id === presetId);
 }
 
-// English engineering note.
-
-/** English note.
+/** Minimal owner metadata used while rendering locked prompt previews. */
 export interface OwnerInfoPreview {
-  displayName: string
+  displayName: string;
 }
 
 /**
- * English note.
- * English note.
- *
- * English note.
- * English note.
- * English note.
+ * Builds the immutable prompt section injected by the application around every
+ * user-editable preset.
  */
 export function getLockedPromptSectionPreview(
-  chatType: 'group' | 'private' = 'group',
+  chatType: "group" | "private" = "group",
   ownerInfo?: OwnerInfoPreview,
-  locale: LocaleType = 'zh-CN'
+  locale: LocaleType = "zh-CN",
 ): string {
-  const content = i18nContent[locale] || i18nContent['zh-CN']
-  const now = new Date()
+  const content = i18nContent[locale] || i18nContent["zh-CN"];
+  const now = new Date();
 
-  // English engineering note.
-  const dateLocale = locale === 'zh-CN' ? 'zh-CN' : 'en-US'
+  const dateLocale = locale === "zh-CN" ? "zh-CN" : "en-US";
   const currentDate = now.toLocaleDateString(dateLocale, {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    weekday: 'long',
-  })
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "long",
+  });
 
-  const chatContext = content.lockedSection.chatContext[chatType]
+  const chatContext = content.lockedSection.chatContext[chatType];
 
-  // English engineering note.
-  const ownerNote = ownerInfo ? content.lockedSection.ownerNoteTemplate(ownerInfo.displayName, chatContext) : ''
+  const ownerNote = ownerInfo
+    ? content.lockedSection.ownerNoteTemplate(
+        ownerInfo.displayName,
+        chatContext,
+      )
+    : "";
 
-  const memberNote = content.lockedSection.memberNote[chatType]
-  const year = now.getFullYear()
-  const prevYear = year - 1
+  const memberNote = content.lockedSection.memberNote[chatType];
+  const year = now.getFullYear();
+  const prevYear = year - 1;
 
   return `${content.lockedSection.currentDatePrefix} ${currentDate}。
 ${ownerNote}
@@ -228,31 +210,31 @@ ${memberNote}
 
 ${content.lockedSection.timeParamsTemplate(year, prevYear)}
 
-${content.lockedSection.conclusion}`
+${content.lockedSection.conclusion}`;
 }
 
 /**
- * English note.
- * English note.
- * English note.
- * English note.
- * English note.
- * English note.
+ * Builds the full prompt preview shown in settings by combining editable and
+ * locked prompt sections.
  */
 export function buildPromptPreview(
   roleDefinition: string,
   responseRules: string,
-  chatType: 'group' | 'private' = 'group',
+  chatType: "group" | "private" = "group",
   ownerInfo?: OwnerInfoPreview,
-  locale: LocaleType = 'zh-CN'
+  locale: LocaleType = "zh-CN",
 ): string {
-  const content = i18nContent[locale] || i18nContent['zh-CN']
-  const lockedSection = getLockedPromptSectionPreview(chatType, ownerInfo, locale)
+  const content = i18nContent[locale] || i18nContent["zh-CN"];
+  const lockedSection = getLockedPromptSectionPreview(
+    chatType,
+    ownerInfo,
+    locale,
+  );
 
   return `${roleDefinition}
 
 ${lockedSection}
 
 ${content.lockedSection.responseRulesLabel}
-${responseRules}`
+${responseRules}`;
 }

@@ -43,6 +43,18 @@ pub enum Platform {
     /// Signal application.
     Signal,
 
+    /// Skype application.
+    Skype,
+
+    /// Google Chat application.
+    GoogleChat,
+
+    /// Zoom application.
+    Zoom,
+
+    /// Viber application.
+    Viber,
+
     /// Custom platform.
     Custom(String),
 }

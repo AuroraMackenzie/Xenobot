@@ -1128,7 +1128,7 @@ async fn tool_search_messages(
             msg.msg_type as msg_type
         FROM message msg
         JOIN member m ON msg.sender_id = m.id
-        WHERE msg.meta_id = 
+        WHERE msg.meta_id =
         "#,
     );
     qb.push_bind(runtime.meta_id);

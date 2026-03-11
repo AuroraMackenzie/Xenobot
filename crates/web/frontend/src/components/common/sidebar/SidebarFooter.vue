@@ -1,17 +1,17 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { useRouter, useRoute } from 'vue-router'
-import { useLayoutStore } from '@/stores/layout'
-import SidebarButton from './SidebarButton.vue'
+import { computed } from "vue";
+import { useI18n } from "vue-i18n";
+import { useRouter, useRoute } from "vue-router";
+import { useLayoutStore } from "@/stores/layout";
+import SidebarButton from "./SidebarButton.vue";
 
-const { t } = useI18n()
-const router = useRouter()
-const route = useRoute()
-const layoutStore = useLayoutStore()
+const { t } = useI18n();
+const router = useRouter();
+const route = useRoute();
+const layoutStore = useLayoutStore();
 
 // English engineering note.
-const isManagePage = computed(() => route.name === 'workbench')
+const isManagePage = computed(() => route.name === "workbench");
 
 // English engineering note.
 // English engineering note.

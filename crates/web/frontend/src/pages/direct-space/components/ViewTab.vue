@@ -1,42 +1,50 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { SubTabs } from '@/components/UI'
-import UserSelect from '@/components/common/UserSelect.vue'
-import { XenoMessageView } from '@/vendors/insight'
+import { ref, computed } from "vue";
+import { useI18n } from "vue-i18n";
+import { SubTabs } from "@/components/UI";
+import UserSelect from "@/components/common/UserSelect.vue";
+import { XenoMessageView } from "@/vendors/insight";
 
-const { t } = useI18n()
+const { t } = useI18n();
 
 interface TimeFilter {
-  startTs?: number
-  endTs?: number
+  startTs?: number;
+  endTs?: number;
 }
 
 const props = defineProps<{
-  sessionId: string
-  timeFilter?: TimeFilter
-}>()
+  sessionId: string;
+  timeFilter?: TimeFilter;
+}>();
 
 // English engineering note.
 const subTabs = computed(() => [
-  { id: 'message', label: t('analysis.subTabs.view.message'), icon: 'i-heroicons-chat-bubble-left-right' },
-])
+  {
+    id: "message",
+    label: t("analysis.subTabs.view.message"),
+    icon: "i-heroicons-chat-bubble-left-right",
+  },
+]);
 
-const activeSubTab = ref('message')
+const activeSubTab = ref("message");
 
 // English engineering note.
-const selectedMemberId = ref<number | null>(null)
+const selectedMemberId = ref<number | null>(null);
 
 // English engineering note.
 const viewTimeFilter = computed(() => ({
   ...props.timeFilter,
   memberId: selectedMemberId.value,
-}))
+}));
 </script>
 
 <template>
   <div class="xeno-view-shell flex h-full flex-col">
-    <SubTabs v-model="activeSubTab" :items="subTabs" persist-key="privateViewTab">
+    <SubTabs
+      v-model="activeSubTab"
+      :items="subTabs"
+      persist-key="privateViewTab"
+    >
       <template #right>
         <UserSelect v-model="selectedMemberId" :session-id="props.sessionId" />
       </template>
@@ -62,7 +70,11 @@ const viewTimeFilter = computed(() => ({
 .xeno-view-stage {
   border: 1px solid rgba(255, 255, 255, 0.08);
   background:
-    radial-gradient(circle at top right, rgba(59, 130, 246, 0.08), transparent 24%),
+    radial-gradient(
+      circle at top right,
+      rgba(59, 130, 246, 0.08),
+      transparent 24%
+    ),
     linear-gradient(180deg, rgba(15, 23, 42, 0.76), rgba(15, 23, 42, 0.62));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.05),

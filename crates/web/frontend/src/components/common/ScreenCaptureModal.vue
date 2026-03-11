@@ -3,33 +3,43 @@
  * English note.
  * English note.
  */
-import { computed } from 'vue'
+import { computed } from "vue";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 const props = defineProps<{
-  open: boolean
-  imageData: string | null
-}>()
+  open: boolean;
+  imageData: string | null;
+}>();
 
 const emit = defineEmits<{
-  (e: 'update:open', value: boolean): void
-}>()
+  (e: "update:open", value: boolean): void;
+}>();
 
 const isOpen = computed({
   get: () => props.open,
-  set: (value) => emit('update:open', value),
-})
+  set: (value) => emit("update:open", value),
+});
 
 function closeModal() {
-  isOpen.value = false
+  isOpen.value = false;
 }
 </script>
 
 <template>
-  <UModal v-model:open="isOpen" :ui="{ content: 'max-w-5xl z-100' }">
+  <UModal
+    v-model:open="isOpen"
+    :title="t('settings.basic.screenshot.title')"
+    description="Review the captured image before saving or sharing."
+    :ui="{ content: 'max-w-5xl z-100' }"
+  >
     <template #content>
       <div class="xeno-capture-shell flex flex-col">
         <!-- Header -->
-        <div class="xeno-capture-header flex items-center justify-between px-6 py-4">
+        <div
+          class="xeno-capture-header flex items-center justify-between px-6 py-4"
+        >
           <div class="flex items-center gap-3">
             <div
               class="xeno-capture-icon flex h-10 w-10 items-center justify-center rounded-xl"
@@ -37,16 +47,33 @@ function closeModal() {
               <UIcon name="i-heroicons-camera" class="h-5 w-5 text-white" />
             </div>
             <div class="min-w-0">
-              <h2 class="break-words text-lg font-semibold text-gray-900 dark:text-white">截图预览</h2>
+              <h2
+                class="break-words text-lg font-semibold text-gray-900 dark:text-white"
+              >
+                截图预览
+              </h2>
             </div>
           </div>
-          <UButton icon="i-heroicons-x-mark" variant="ghost" color="neutral" size="sm" @click="closeModal" />
+          <UButton
+            icon="i-heroicons-x-mark"
+            variant="ghost"
+            color="neutral"
+            size="sm"
+            @click="closeModal"
+          />
         </div>
 
         <!-- Image Preview -->
         <div class="xeno-capture-body p-4">
-          <div class="xeno-capture-frame mx-auto max-h-[70vh] overflow-auto rounded-lg">
-            <img v-if="imageData" :src="imageData" alt="截图预览" class="block w-full" />
+          <div
+            class="xeno-capture-frame mx-auto max-h-[70vh] overflow-auto rounded-lg"
+          >
+            <img
+              v-if="imageData"
+              :src="imageData"
+              alt="截图预览"
+              class="block w-full"
+            />
           </div>
         </div>
       </div>
@@ -59,7 +86,11 @@ function closeModal() {
   border: 1px solid var(--xeno-border-soft);
   border-radius: 1.6rem;
   background:
-    radial-gradient(circle at top left, rgba(255, 122, 172, 0.12), transparent 24%),
+    radial-gradient(
+      circle at top left,
+      rgba(255, 122, 172, 0.12),
+      transparent 24%
+    ),
     linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 24%),
     rgba(7, 18, 29, 0.95);
   box-shadow:

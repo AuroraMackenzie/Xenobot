@@ -3,97 +3,105 @@
  * English note.
  * English note.
  */
-import { ref, watch, toRaw, nextTick, onMounted } from 'vue'
-import { useI18n } from 'vue-i18n'
-import FilterPanel from './FilterPanel.vue'
-import MessageList from './MessageList.vue'
-import SessionTimeline from './SessionTimeline.vue'
-import type { ChatRecordQuery } from './types'
-import { useLayoutStore } from '@/stores/layout'
-import { useSessionStore } from '@/stores/session'
-import { storeToRefs } from 'pinia'
+import { ref, watch, toRaw, nextTick, onMounted } from "vue";
+import { useI18n } from "vue-i18n";
+import FilterPanel from "./FilterPanel.vue";
+import MessageList from "./MessageList.vue";
+import SessionTimeline from "./SessionTimeline.vue";
+import type { ChatRecordQuery } from "./types";
+import { useLayoutStore } from "@/stores/layout";
+import { useSessionStore } from "@/stores/session";
+import { storeToRefs } from "pinia";
 
-const { t } = useI18n()
-const layoutStore = useLayoutStore()
-const sessionStore = useSessionStore()
-const { currentSessionId } = storeToRefs(sessionStore)
+const { t } = useI18n();
+const layoutStore = useLayoutStore();
+const sessionStore = useSessionStore();
+const { currentSessionId } = storeToRefs(sessionStore);
 
 // English engineering note.
-const isWindows = ref(false)
+const isWindows = ref(false);
 
 onMounted(() => {
-  isWindows.value = navigator.platform.toLowerCase().includes('win')
-})
+  isWindows.value = navigator.platform.toLowerCase().includes("win");
+});
 
 // English engineering note.
-const messageListRef = ref<InstanceType<typeof MessageList> | null>(null)
+const messageListRef = ref<InstanceType<typeof MessageList> | null>(null);
 
 // English engineering note.
-const localQuery = ref<ChatRecordQuery>({})
+const localQuery = ref<ChatRecordQuery>({});
 
 // English engineering note.
-const messageCount = ref(0)
+const messageCount = ref(0);
 
 // English engineering note.
-const timelineCollapsed = ref(false)
+const timelineCollapsed = ref(false);
 
 // English engineering note.
-const activeSessionId = ref<number | undefined>(undefined)
+const activeSessionId = ref<number | undefined>(undefined);
 
 // English engineering note.
-const sessionsCache = ref<Array<{ id: number; startTs: number; endTs: number; firstMessageId: number }>>([])
+const sessionsCache = ref<
+  Array<{ id: number; startTs: number; endTs: number; firstMessageId: number }>
+>([]);
 
 // English engineering note.
-const matchedSessionIds = ref<Set<number> | undefined>(undefined)
+const matchedSessionIds = ref<Set<number> | undefined>(undefined);
 
 // English engineering note.
 function handleApplyFilter(query: ChatRecordQuery) {
-  localQuery.value = query
+  localQuery.value = query;
 }
 
 // English engineering note.
 function handleResetFilter() {
-  localQuery.value = {}
-  matchedSessionIds.value = undefined
+  localQuery.value = {};
+  matchedSessionIds.value = undefined;
 }
 
 // English engineering note.
 function handleCountChange(count: number) {
-  messageCount.value = count
+  messageCount.value = count;
 }
 
 // English engineering note.
 function handleMessageTimestampsChange(timestamps: number[]) {
   // English engineering note.
   if (!localQuery.value.keywords?.length || !sessionsCache.value.length) {
-    matchedSessionIds.value = undefined
-    return
+    matchedSessionIds.value = undefined;
+    return;
   }
 
   // English engineering note.
-  const sessionIds = new Set<number>()
+  const sessionIds = new Set<number>();
   for (const ts of timestamps) {
     for (const session of sessionsCache.value) {
       if (ts >= session.startTs && ts <= session.endTs) {
-        sessionIds.add(session.id)
-        break
+        sessionIds.add(session.id);
+        break;
       }
     }
   }
 
-  matchedSessionIds.value = sessionIds.size > 0 ? sessionIds : undefined
+  matchedSessionIds.value = sessionIds.size > 0 ? sessionIds : undefined;
 }
 
 // English engineering note.
-function handleVisibleMessageChange(payload: { id: number; timestamp: number }) {
-  if (!sessionsCache.value.length) return
+function handleVisibleMessageChange(payload: {
+  id: number;
+  timestamp: number;
+}) {
+  if (!sessionsCache.value.length) return;
 
   // English engineering note.
-  let targetSession: { id: number } | undefined
+  let targetSession: { id: number } | undefined;
   for (const session of sessionsCache.value) {
-    if (payload.timestamp >= session.startTs && payload.timestamp <= session.endTs) {
-      targetSession = session
-      break
+    if (
+      payload.timestamp >= session.startTs &&
+      payload.timestamp <= session.endTs
+    ) {
+      targetSession = session;
+      break;
     }
   }
 
@@ -101,21 +109,21 @@ function handleVisibleMessageChange(payload: { id: number; timestamp: number }) 
   if (!targetSession) {
     for (const session of sessionsCache.value) {
       if (session.firstMessageId <= payload.id) {
-        targetSession = session
+        targetSession = session;
       } else {
-        break
+        break;
       }
     }
   }
 
   if (targetSession && targetSession.id !== activeSessionId.value) {
-    activeSessionId.value = targetSession.id
+    activeSessionId.value = targetSession.id;
   }
 }
 
 // English engineering note.
 function handleSessionSelect(_sessionId: number, firstMessageId: number) {
-  activeSessionId.value = _sessionId
+  activeSessionId.value = _sessionId;
 
   // English engineering note.
   // English engineering note.
@@ -123,7 +131,7 @@ function handleSessionSelect(_sessionId: number, firstMessageId: number) {
   localQuery.value = {
     ...localQuery.value,
     scrollToMessageId: firstMessageId,
-  }
+  };
 }
 
 // English engineering note.
@@ -131,23 +139,25 @@ function handleJumpToMessage(messageId: number) {
   // English engineering note.
   localQuery.value = {
     scrollToMessageId: messageId,
-  }
+  };
 }
 
 // English engineering note.
 async function loadSessionsCache() {
-  if (!currentSessionId.value) return
+  if (!currentSessionId.value) return;
 
   try {
-    const sessions = await window.sessionApi.getSessions(currentSessionId.value)
+    const sessions = await window.sessionApi.getSessions(
+      currentSessionId.value,
+    );
     sessionsCache.value = sessions.map((s) => ({
       id: s.id,
       startTs: s.startTs,
       endTs: s.endTs,
       firstMessageId: s.firstMessageId,
-    }))
+    }));
   } catch {
-    sessionsCache.value = []
+    sessionsCache.value = [];
   }
 }
 
@@ -157,39 +167,50 @@ watch(
   async (isOpen) => {
     if (isOpen) {
       // English engineering note.
-      const query = toRaw(layoutStore.chatRecordQuery)
-      localQuery.value = query ? { ...query } : {}
+      const query = toRaw(layoutStore.chatRecordQuery);
+      localQuery.value = query ? { ...query } : {};
       // English engineering note.
-      await loadSessionsCache()
+      await loadSessionsCache();
       // English engineering note.
       if (sessionsCache.value.length > 0) {
-        activeSessionId.value = sessionsCache.value[sessionsCache.value.length - 1].id
+        activeSessionId.value =
+          sessionsCache.value[sessionsCache.value.length - 1].id;
       }
       // English engineering note.
-      await nextTick()
-      messageListRef.value?.refresh()
+      await nextTick();
+      messageListRef.value?.refresh();
     } else {
       // English engineering note.
-      localQuery.value = {}
-      messageCount.value = 0
-      activeSessionId.value = undefined
-      sessionsCache.value = []
+      localQuery.value = {};
+      messageCount.value = 0;
+      activeSessionId.value = undefined;
+      sessionsCache.value = [];
     }
-  }
-)
+  },
+);
 </script>
 
 <template>
-  <UDrawer v-model:open="layoutStore.showChatRecordDrawer" direction="right" :handle="false" :ui="{ content: 'z-50' }">
+  <UDrawer
+    v-model:open="layoutStore.showChatRecordDrawer"
+    direction="right"
+    :handle="false"
+    :ui="{ content: 'z-50' }"
+  >
     <template #content>
-      <div class="xeno-record-drawer flex h-full w-[760px] max-w-[100vw] flex-col" style="-webkit-app-region: no-drag">
+      <div
+        class="xeno-record-drawer flex h-full w-[760px] max-w-[100vw] flex-col"
+        style="-webkit-app-region: no-drag"
+      >
         <!-- English UI note -->
         <div
           class="xeno-record-drawer-header flex items-center justify-between px-4"
           :class="isWindows ? 'pt-10 pb-3' : 'py-3'"
         >
-          <h3 class="break-words pr-3 text-lg font-semibold text-gray-900 dark:text-white">
-            {{ t('records.drawer.title') }}
+          <h3
+            class="break-words pr-3 text-lg font-semibold text-gray-900 dark:text-white"
+          >
+            {{ t("records.drawer.title") }}
           </h3>
           <UButton
             icon="i-heroicons-x-mark"
@@ -201,7 +222,11 @@ watch(
         </div>
 
         <!-- English UI note -->
-        <FilterPanel :query="localQuery" @apply="handleApplyFilter" @reset="handleResetFilter" />
+        <FilterPanel
+          :query="localQuery"
+          @apply="handleApplyFilter"
+          @reset="handleResetFilter"
+        />
 
         <!-- English UI note -->
         <div class="flex min-h-0 flex-1">
@@ -231,8 +256,13 @@ watch(
         </div>
 
         <!-- English UI note -->
-        <div v-if="messageCount > 0" class="xeno-record-drawer-footer shrink-0 px-4 py-2">
-          <span class="text-xs text-gray-500">{{ t('records.drawer.loadedCount', { count: messageCount }) }}</span>
+        <div
+          v-if="messageCount > 0"
+          class="xeno-record-drawer-footer shrink-0 px-4 py-2"
+        >
+          <span class="text-xs text-gray-500">{{
+            t("records.drawer.loadedCount", { count: messageCount })
+          }}</span>
         </div>
       </div>
     </template>
@@ -242,7 +272,11 @@ watch(
 <style scoped>
 .xeno-record-drawer {
   background:
-    radial-gradient(circle at top left, rgba(84, 214, 255, 0.1), transparent 24%),
+    radial-gradient(
+      circle at top left,
+      rgba(84, 214, 255, 0.1),
+      transparent 24%
+    ),
     linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 22%),
     rgba(7, 18, 29, 0.97);
   border-left: 1px solid rgba(139, 166, 189, 0.14);

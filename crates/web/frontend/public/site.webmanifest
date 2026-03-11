@@ -1,0 +1,20 @@
+{
+  "name": "Xenobot",
+  "short_name": "Xenobot",
+  "description": "Xenobot is a Rust-first, privacy-preserving, multi-platform chat data workspace for authorized exports, incremental import, analytics, and AI-assisted exploration on Apple Silicon.",
+  "background_color": "#0a101c",
+  "theme_color": "#0a101c",
+  "display": "standalone",
+  "icons": [
+    {
+      "src": "/icons/xenobot-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/xenobot-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

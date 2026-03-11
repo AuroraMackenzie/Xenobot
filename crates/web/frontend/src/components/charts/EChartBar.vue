@@ -2,24 +2,24 @@
 /**
  * English note.
  */
-import { computed } from 'vue'
-import type { EChartsOption } from 'echarts'
-import EChart from './EChart.vue'
+import { computed } from "vue";
+import type { EChartsOption } from "echarts";
+import EChart from "./EChart.vue";
 
 export interface EChartBarData {
-  labels: string[]
-  values: number[]
+  labels: string[];
+  values: number[];
 }
 
 interface Props {
-  data: EChartBarData
-  height?: number
-  /** English note.
-  horizontal?: boolean
-  /** English note.
-  gradient?: boolean
-  /** English note.
-  borderRadius?: number
+  data: EChartBarData;
+  height?: number;
+  // English engineering note.
+  horizontal?: boolean;
+  // English engineering note.
+  gradient?: boolean;
+  // English engineering note.
+  borderRadius?: number;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -27,34 +27,34 @@ const props = withDefaults(defineProps<Props>(), {
   horizontal: false,
   gradient: true,
   borderRadius: 4,
-})
+});
 
 // English engineering note.
 const gradientColor = {
-  type: 'linear' as const,
+  type: "linear" as const,
   x: 0,
   y: 0,
   x2: 0,
   y2: 1,
   colorStops: [
-    { offset: 0, color: '#0ea5c9' }, // English engineering note.
-    { offset: 1, color: '#44b9d4' }, // English engineering note.
+    { offset: 0, color: "#0ea5c9" }, // English engineering note.
+    { offset: 1, color: "#44b9d4" }, // English engineering note.
   ],
-}
+};
 
 const option = computed<EChartsOption>(() => {
-  const isHorizontal = props.horizontal
+  const isHorizontal = props.horizontal;
 
   return {
     tooltip: {
-      trigger: 'axis',
+      trigger: "axis",
       axisPointer: {
-        type: 'shadow',
+        type: "shadow",
       },
-      backgroundColor: 'rgba(0, 0, 0, 0.8)',
-      borderColor: 'transparent',
+      backgroundColor: "rgba(0, 0, 0, 0.8)",
+      borderColor: "transparent",
       textStyle: {
-        color: '#fff',
+        color: "#fff",
       },
     },
     grid: {
@@ -66,54 +66,54 @@ const option = computed<EChartsOption>(() => {
     },
     xAxis: isHorizontal
       ? {
-          type: 'value',
+          type: "value",
           axisLine: { show: false },
           axisTick: { show: false },
           splitLine: {
             lineStyle: {
-              type: 'dashed',
-              color: '#e5e7eb',
+              type: "dashed",
+              color: "#e5e7eb",
             },
           },
         }
       : {
-          type: 'category',
+          type: "category",
           data: props.data.labels,
           axisLine: { show: false },
           axisTick: { show: false },
           axisLabel: {
             fontSize: 11,
-            color: '#6b7280',
+            color: "#6b7280",
           },
         },
     yAxis: isHorizontal
       ? {
-          type: 'category',
+          type: "category",
           data: props.data.labels,
           axisLine: { show: false },
           axisTick: { show: false },
           axisLabel: {
             fontSize: 11,
-            color: '#6b7280',
+            color: "#6b7280",
           },
         }
       : {
-          type: 'value',
+          type: "value",
           axisLine: { show: false },
           axisTick: { show: false },
           splitLine: {
             lineStyle: {
-              type: 'dashed',
-              color: '#e5e7eb',
+              type: "dashed",
+              color: "#e5e7eb",
             },
           },
         },
     series: [
       {
-        type: 'bar',
+        type: "bar",
         data: props.data.values,
         itemStyle: {
-          color: props.gradient ? gradientColor : '#0ea5c9',
+          color: props.gradient ? gradientColor : "#0ea5c9",
           borderRadius: props.borderRadius,
         },
         barMaxWidth: 40,
@@ -123,17 +123,17 @@ const option = computed<EChartsOption>(() => {
               ? {
                   ...gradientColor,
                   colorStops: [
-                    { offset: 0, color: '#0a88ac' }, // English engineering note.
-                    { offset: 1, color: '#0ea5c9' }, // English engineering note.
+                    { offset: 0, color: "#0a88ac" }, // English engineering note.
+                    { offset: 1, color: "#0ea5c9" }, // English engineering note.
                   ],
                 }
-              : '#0a88ac',
+              : "#0a88ac",
           },
         },
       },
     ],
-  }
-})
+  };
+});
 </script>
 
 <template>

@@ -1,209 +1,225 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { storeToRefs } from 'pinia'
-import dayjs from 'dayjs'
-import { useToast } from '@nuxt/ui/runtime/composables/useToast.js'
-import { usePromptStore } from '@/stores/prompt'
-import { exportConversation, type ExportFormat } from '@/utils/conversationExport'
+import { ref, onMounted, watch } from "vue";
+import { useI18n } from "vue-i18n";
+import { storeToRefs } from "pinia";
+import dayjs from "dayjs";
+import { useToast } from "@nuxt/ui/runtime/composables/useToast.js";
+import { usePromptStore } from "@/stores/prompt";
+import {
+  exportConversation,
+  type ExportFormat,
+} from "@/utils/conversationExport";
 
-const { t } = useI18n()
-const toast = useToast()
-const promptStore = usePromptStore()
-const { aiGlobalSettings } = storeToRefs(promptStore)
+const { t } = useI18n();
+const toast = useToast();
+const promptStore = usePromptStore();
+const { aiGlobalSettings } = storeToRefs(promptStore);
 
 interface Conversation {
-  id: string
-  sessionId: string
-  title: string | null
-  createdAt: number
-  updatedAt: number
+  id: string;
+  sessionId: string;
+  title: string | null;
+  createdAt: number;
+  updatedAt: number;
 }
 
 // Props
 const props = defineProps<{
-  sessionId: string
-  activeId: string | null
-}>()
+  sessionId: string;
+  activeId: string | null;
+}>();
 
 // Emits
 const emit = defineEmits<{
-  select: [id: string]
-  create: []
-  delete: [id: string]
-}>()
+  select: [id: string];
+  create: [];
+  delete: [id: string];
+}>();
 
 // State
-const conversations = ref<Conversation[]>([])
-const isLoading = ref(false)
-const isExporting = ref<string | null>(null) // English engineering note.
-const editingId = ref<string | null>(null)
-const editingTitle = ref('')
-const isCollapsed = ref(false)
+const conversations = ref<Conversation[]>([]);
+const isLoading = ref(false);
+const isExporting = ref<string | null>(null); // English engineering note.
+const editingId = ref<string | null>(null);
+const editingTitle = ref("");
+const isCollapsed = ref(false);
 
 // English engineering note.
 async function loadConversations() {
-  isLoading.value = true
+  isLoading.value = true;
   try {
-    conversations.value = await window.aiApi.getConversations(props.sessionId)
+    conversations.value = await window.aiApi.getConversations(props.sessionId);
   } catch (error) {
-    console.error('加载对话列表失败：', error)
+    console.error("[ConversationList] Failed to load conversations:", error);
   } finally {
-    isLoading.value = false
+    isLoading.value = false;
   }
 }
 
 // English engineering note.
 function formatTime(timestamp: number): string {
-  const now = dayjs()
-  const date = dayjs(timestamp * 1000)
+  const now = dayjs();
+  const date = dayjs(timestamp * 1000);
 
-  if (now.diff(date, 'day') === 0) {
-    return date.format('HH:mm')
-  } else if (now.diff(date, 'day') < 7) {
-    return date.format('ddd HH:mm')
+  if (now.diff(date, "day") === 0) {
+    return date.format("HH:mm");
+  } else if (now.diff(date, "day") < 7) {
+    return date.format("ddd HH:mm");
   } else {
-    return date.format('MM-DD')
+    return date.format("MM-DD");
   }
 }
 
 // English engineering note.
 function getTitle(conv: Conversation): string {
-  return conv.title || t('ai.chat.conversation.newChat')
+  return conv.title || t("ai.chat.conversation.newChat");
 }
 
 // English engineering note.
 function startEditing(conv: Conversation) {
-  editingId.value = conv.id
-  editingTitle.value = conv.title || ''
+  editingId.value = conv.id;
+  editingTitle.value = conv.title || "";
 }
 
 // English engineering note.
 async function saveTitle(convId: string) {
   if (editingTitle.value.trim()) {
     try {
-      await window.aiApi.updateConversationTitle(convId, editingTitle.value.trim())
-      const conv = conversations.value.find((c) => c.id === convId)
+      await window.aiApi.updateConversationTitle(
+        convId,
+        editingTitle.value.trim(),
+      );
+      const conv = conversations.value.find((c) => c.id === convId);
       if (conv) {
-        conv.title = editingTitle.value.trim()
+        conv.title = editingTitle.value.trim();
       }
     } catch (error) {
-      console.error('更新标题失败：', error)
+      console.error(
+        "[ConversationList] Failed to update conversation title:",
+        error,
+      );
     }
   }
-  editingId.value = null
+  editingId.value = null;
 }
 
 // English engineering note.
 async function handleDelete(convId: string) {
   try {
-    await window.aiApi.deleteConversation(convId)
-    conversations.value = conversations.value.filter((c) => c.id !== convId)
-    emit('delete', convId)
+    await window.aiApi.deleteConversation(convId);
+    conversations.value = conversations.value.filter((c) => c.id !== convId);
+    emit("delete", convId);
   } catch (error) {
-    console.error('删除对话失败：', error)
+    console.error("[ConversationList] Failed to delete conversation:", error);
   }
 }
 
 // English engineering note.
 async function handleExport(conv: Conversation) {
-  if (isExporting.value) return
+  if (isExporting.value) return;
 
-  isExporting.value = conv.id
+  isExporting.value = conv.id;
   try {
     // English engineering note.
-    const messages = await window.aiApi.getMessages(conv.id)
+    const messages = await window.aiApi.getMessages(conv.id);
 
     if (messages.length === 0) {
       toast.add({
-        title: t('ai.chat.conversation.export.noMessages'),
-        icon: 'i-heroicons-exclamation-triangle',
-        color: 'warning',
+        title: t("ai.chat.conversation.export.noMessages"),
+        icon: "i-heroicons-exclamation-triangle",
+        color: "warning",
         duration: 2000,
-      })
-      return
+      });
+      return;
     }
 
     // English engineering note.
-    const format = (aiGlobalSettings.value.exportFormat || 'markdown') as ExportFormat
-    const title = conv.title || t('ai.chat.conversation.newChat')
+    const format = (aiGlobalSettings.value.exportFormat ||
+      "markdown") as ExportFormat;
+    const title = conv.title || t("ai.chat.conversation.newChat");
 
     // English engineering note.
     const labels = {
-      createdAt: t('ai.chat.conversation.export.createdAt'),
-      user: t('ai.chat.conversation.export.user'),
-      assistant: t('ai.chat.conversation.export.assistant'),
-    }
+      createdAt: t("ai.chat.conversation.export.createdAt"),
+      user: t("ai.chat.conversation.export.user"),
+      assistant: t("ai.chat.conversation.export.assistant"),
+    };
 
     // English engineering note.
     const messagesWithMs = messages.map((msg) => ({
       ...msg,
       timestamp: msg.timestamp * 1000,
-    }))
+    }));
 
     // English engineering note.
-    const result = await exportConversation(title, messagesWithMs, conv.createdAt * 1000, format, labels)
+    const result = await exportConversation(
+      title,
+      messagesWithMs,
+      conv.createdAt * 1000,
+      format,
+      labels,
+    );
 
     if (result.success && result.filePath) {
       // English engineering note.
-      const filename = result.filePath.split('/').pop() || result.filePath
-      const exportedFilePath = result.filePath
+      const filename = result.filePath.split("/").pop() || result.filePath;
+      const exportedFilePath = result.filePath;
       // English engineering note.
       toast.add({
-        title: t('common.exportSuccess'),
+        title: t("common.exportSuccess"),
         description: filename,
-        icon: 'i-heroicons-check-circle',
-        color: 'primary',
+        icon: "i-heroicons-check-circle",
+        color: "primary",
         duration: 2000,
         actions: [
           {
-            label: t('common.openFolder'),
+            label: t("common.openFolder"),
             onClick: () => {
-              window.cacheApi.showInFolder(exportedFilePath)
+              window.cacheApi.showInFolder(exportedFilePath);
             },
           },
         ],
-      })
+      });
     } else {
       toast.add({
-        title: t('common.exportFailed'),
+        title: t("common.exportFailed"),
         description: result.error,
-        icon: 'i-heroicons-x-circle',
-        color: 'error',
+        icon: "i-heroicons-x-circle",
+        color: "error",
         duration: 2000,
-      })
+      });
     }
   } catch (error) {
-    console.error('导出对话失败：', error)
+    console.error("[ConversationList] Failed to export conversation:", error);
     toast.add({
-      title: t('common.exportFailed'),
+      title: t("common.exportFailed"),
       description: String(error),
-      icon: 'i-heroicons-x-circle',
-      color: 'error',
+      icon: "i-heroicons-x-circle",
+      color: "error",
       duration: 2000,
-    })
+    });
   } finally {
-    isExporting.value = null
+    isExporting.value = null;
   }
 }
 
 // English engineering note.
 onMounted(() => {
-  loadConversations()
-})
+  loadConversations();
+});
 
 // English engineering note.
 watch(
   () => props.sessionId,
   () => {
-    loadConversations()
-  }
-)
+    loadConversations();
+  },
+);
 
 // English engineering note.
 defineExpose({
   refresh: loadConversations,
-})
+});
 </script>
 
 <template>
@@ -212,9 +228,13 @@ defineExpose({
     :class="isCollapsed ? 'w-10' : 'w-64'"
   >
     <!-- English UI note -->
-    <div class="flex items-center justify-between border-b border-gray-200 p-2 dark:border-gray-800">
+    <div
+      class="flex items-center justify-between border-b border-gray-200 p-2 dark:border-gray-800"
+    >
       <template v-if="!isCollapsed">
-        <span class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('ai.chat.conversation.title') }}</span>
+        <span class="text-xs font-medium text-gray-500 dark:text-gray-400">{{
+          t("ai.chat.conversation.title")
+        }}</span>
         <div class="flex items-center gap-1">
           <UButton
             icon="i-heroicons-plus"
@@ -246,17 +266,36 @@ defineExpose({
     <div v-if="!isCollapsed" class="flex-1 overflow-y-auto p-2">
       <!-- English UI note -->
       <div v-if="isLoading" class="flex items-center justify-center py-8">
-        <UIcon name="i-heroicons-arrow-path" class="h-5 w-5 animate-spin text-gray-400" />
+        <UIcon
+          name="i-heroicons-arrow-path"
+          class="h-5 w-5 animate-spin text-gray-400"
+        />
       </div>
 
       <!-- English UI note -->
-      <div v-else-if="conversations.length === 0" class="flex flex-col items-center justify-center py-12 text-center">
-        <div class="flex h-12 w-12 items-center justify-center rounded-full bg-gray-50 dark:bg-gray-800">
-          <UIcon name="i-heroicons-chat-bubble-left" class="h-6 w-6 text-gray-300 dark:text-gray-600" />
+      <div
+        v-else-if="conversations.length === 0"
+        class="flex flex-col items-center justify-center py-12 text-center"
+      >
+        <div
+          class="flex h-12 w-12 items-center justify-center rounded-full bg-gray-50 dark:bg-gray-800"
+        >
+          <UIcon
+            name="i-heroicons-chat-bubble-left"
+            class="h-6 w-6 text-gray-300 dark:text-gray-600"
+          />
         </div>
-        <p class="mt-3 text-xs text-gray-400">{{ t('ai.chat.conversation.empty') }}</p>
-        <UButton class="mt-2" size="xs" variant="link" color="primary" @click="emit('create')">
-          {{ t('ai.chat.conversation.startNew') }}
+        <p class="mt-3 text-xs text-gray-400">
+          {{ t("ai.chat.conversation.empty") }}
+        </p>
+        <UButton
+          class="mt-2"
+          size="xs"
+          variant="link"
+          color="primary"
+          @click="emit('create')"
+        >
+          {{ t("ai.chat.conversation.startNew") }}
         </UButton>
       </div>
 
@@ -324,7 +363,11 @@ defineExpose({
                   ]"
                 >
                   <UButton
-                    :icon="isExporting === conv.id ? 'i-heroicons-arrow-path' : 'i-heroicons-arrow-down-tray'"
+                    :icon="
+                      isExporting === conv.id
+                        ? 'i-heroicons-arrow-path'
+                        : 'i-heroicons-arrow-down-tray'
+                    "
                     color="gray"
                     variant="ghost"
                     size="2xs"
@@ -360,7 +403,10 @@ defineExpose({
     </div>
 
     <!-- English UI note -->
-    <div v-else class="flex flex-1 flex-col items-center gap-2 overflow-y-auto py-2">
+    <div
+      v-else
+      class="flex flex-1 flex-col items-center gap-2 overflow-y-auto py-2"
+    >
       <!-- English UI note -->
       <button
         class="rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-pink-500 dark:hover:bg-gray-800"
@@ -378,7 +424,11 @@ defineExpose({
         v-for="conv in conversations"
         :key="conv.id"
         class="rounded p-1 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
-        :class="[activeId === conv.id ? 'text-pink-500' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300']"
+        :class="[
+          activeId === conv.id
+            ? 'text-pink-500'
+            : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300',
+        ]"
         :title="getTitle(conv)"
         @click="emit('select', conv.id)"
       >

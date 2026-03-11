@@ -3,18 +3,18 @@
  * English note.
  * English note.
  */
-import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
-import * as echarts from 'echarts/core'
-import { CanvasRenderer } from 'echarts/renderers'
-import { PieChart, BarChart, LineChart, HeatmapChart } from 'echarts/charts'
+import { ref, onMounted, onUnmounted, watch, computed } from "vue";
+import * as echarts from "echarts/core";
+import { CanvasRenderer } from "echarts/renderers";
+import { PieChart, BarChart, LineChart, HeatmapChart } from "echarts/charts";
 import {
   TitleComponent,
   TooltipComponent,
   LegendComponent,
   GridComponent,
   VisualMapComponent,
-} from 'echarts/components'
-import type { EChartsOption } from 'echarts'
+} from "echarts/components";
+import type { EChartsOption } from "echarts";
 
 // English engineering note.
 echarts.use([
@@ -28,70 +28,73 @@ echarts.use([
   LegendComponent,
   GridComponent,
   VisualMapComponent,
-])
+]);
 
 interface Props {
-  option: EChartsOption
-  height?: number | string
-  loading?: boolean
-  theme?: 'light' | 'dark' | 'auto'
+  option: EChartsOption;
+  height?: number | string;
+  loading?: boolean;
+  theme?: "light" | "dark" | "auto";
 }
 
 const props = withDefaults(defineProps<Props>(), {
   height: 300,
   loading: false,
-  theme: 'auto',
-})
+  theme: "auto",
+});
 
-const chartRef = ref<HTMLDivElement>()
-let chartInstance: echarts.ECharts | null = null
+const chartRef = ref<HTMLDivElement>();
+let chartInstance: echarts.ECharts | null = null;
 
 // English engineering note.
 const heightStyle = computed(() => {
-  if (typeof props.height === 'number') {
-    return `${props.height}px`
+  if (typeof props.height === "number") {
+    return `${props.height}px`;
   }
-  return props.height
-})
+  return props.height;
+});
 
 // English engineering note.
 const isDark = computed(() => {
-  if (props.theme === 'auto') {
-    return document.documentElement.classList.contains('dark')
+  if (props.theme === "auto") {
+    return document.documentElement.classList.contains("dark");
   }
-  return props.theme === 'dark'
-})
+  return props.theme === "dark";
+});
 
 // English engineering note.
 function initChart() {
-  if (!chartRef.value) return
+  if (!chartRef.value) return;
 
   // English engineering note.
   if (chartInstance) {
-    chartInstance.dispose()
+    chartInstance.dispose();
   }
 
   // English engineering note.
-  chartInstance = echarts.init(chartRef.value, isDark.value ? 'dark' : undefined)
-  chartInstance.setOption(props.option)
+  chartInstance = echarts.init(
+    chartRef.value,
+    isDark.value ? "dark" : undefined,
+  );
+  chartInstance.setOption(props.option);
 }
 
 // English engineering note.
 function updateChart() {
   if (!chartInstance) {
-    initChart()
-    return
+    initChart();
+    return;
   }
-  chartInstance.setOption(props.option, { notMerge: true })
+  chartInstance.setOption(props.option, { notMerge: true });
 }
 
 // English engineering note.
 function handleResize() {
-  chartInstance?.resize()
+  chartInstance?.resize();
 }
 
 // English engineering note.
-watch(() => props.option, updateChart, { deep: true })
+watch(() => props.option, updateChart, { deep: true });
 
 // English engineering note.
 watch(
@@ -99,63 +102,63 @@ watch(
   () => {
     // English engineering note.
     setTimeout(() => {
-      chartInstance?.resize()
-    }, 0)
-  }
-)
+      chartInstance?.resize();
+    }, 0);
+  },
+);
 
 // English engineering note.
 watch(isDark, () => {
-  initChart()
-})
+  initChart();
+});
 
 // English engineering note.
 watch(
   () => props.loading,
   (loading) => {
     if (loading) {
-      chartInstance?.showLoading('default', {
-        text: '',
+      chartInstance?.showLoading("default", {
+        text: "",
         spinnerRadius: 12,
         lineWidth: 2,
-      })
+      });
     } else {
-      chartInstance?.hideLoading()
+      chartInstance?.hideLoading();
     }
-  }
-)
+  },
+);
 
 // English engineering note.
-let observer: MutationObserver | null = null
+let observer: MutationObserver | null = null;
 
 onMounted(() => {
-  initChart()
-  window.addEventListener('resize', handleResize)
+  initChart();
+  window.addEventListener("resize", handleResize);
 
   // English engineering note.
   observer = new MutationObserver(() => {
-    if (props.theme === 'auto') {
-      initChart()
+    if (props.theme === "auto") {
+      initChart();
     }
-  })
+  });
   observer.observe(document.documentElement, {
     attributes: true,
-    attributeFilter: ['class'],
-  })
-})
+    attributeFilter: ["class"],
+  });
+});
 
 onUnmounted(() => {
-  window.removeEventListener('resize', handleResize)
-  observer?.disconnect()
-  chartInstance?.dispose()
-  chartInstance = null
-})
+  window.removeEventListener("resize", handleResize);
+  observer?.disconnect();
+  chartInstance?.dispose();
+  chartInstance = null;
+});
 
 // English engineering note.
 defineExpose({
   getInstance: () => chartInstance,
   resize: handleResize,
-})
+});
 </script>
 
 <template>

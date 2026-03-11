@@ -1,4 +1,4 @@
-//! Legal-safe Microsoft Teams adapter for Xenobot.
+//! Legal-safe Teams adapter for Xenobot.
 //!
 //! This crate supports source discovery and authorized export parsing only.
 //! It does not implement process-memory key extraction or encryption bypass.
@@ -6,17 +6,29 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
-use std::path::Path;
+pub mod account;
+pub mod audio;
+pub mod config;
+pub mod media;
+pub mod monitor;
+pub mod service;
+
+use std::path::{Path, PathBuf};
 
 use thiserror::Error;
 use xenobot_analysis::parsers::{ParseError, ParsedChat, ParserRegistry};
 use xenobot_core::platform_sources::{discover_sources_for_platform, SourceCandidate};
 use xenobot_core::types::Platform;
 
+pub use config::TeamsConfig;
+pub use service::{AuthorizedTeamsWorkspace, StagedTeamsExport, TeamsService};
+/// Common result type used by Teams crate operations.
+pub type TeamsResult<T> = Result<T, TeamsError>;
+
 /// Stable platform identifier.
 pub const PLATFORM_ID: &str = "teams";
 
-/// Legal-safe adapter for Microsoft Teams workflows.
+/// Legal-safe adapter for Teams workflows.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct TeamsAdapter;
 
@@ -40,7 +52,6 @@ impl TeamsAdapter {
     pub fn parse_authorized_export(&self, path: &Path) -> Result<ParsedChat, TeamsError> {
         let registry = ParserRegistry::new();
         let parsed = registry.detect_and_parse(path).map_err(TeamsError::Parse)?;
-
         if parsed.platform.eq_ignore_ascii_case(PLATFORM_ID) {
             Ok(parsed)
         } else {
@@ -57,12 +68,31 @@ impl TeamsAdapter {
     }
 }
 
-/// Errors returned by the Microsoft Teams adapter.
+/// Errors returned by the Teams adapter.
 #[derive(Debug, Error)]
 pub enum TeamsError {
     /// Parse error returned by analysis parser registry.
     #[error("parse error: {0}")]
     Parse(#[from] ParseError),
+
+    /// Path is outside the configured authorized roots.
+    #[error("path is outside authorized roots: {path}")]
+    UnauthorizedPath {
+        /// Rejected source path.
+        path: PathBuf,
+    },
+
+    /// I/O error while reading export assets.
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+
+    /// File monitoring error.
+    #[error("file monitoring error: {0}")]
+    FileMonitor(#[from] notify::Error),
+
+    /// Internal orchestration or external tool failure.
+    #[error("internal error: {0}")]
+    Internal(#[from] anyhow::Error),
 
     /// Parsed export did not match the expected platform.
     #[error("parsed platform mismatch: expected {expected}, got {actual}")]
@@ -89,8 +119,6 @@ mod tests {
         let adapter = TeamsAdapter::new();
         let sources = adapter.discover_sources();
         assert!(!sources.is_empty());
-        assert!(sources
-            .iter()
-            .all(|candidate| candidate.platform_id == PLATFORM_ID));
+        assert!(sources.iter().all(|candidate| candidate.platform_id == PLATFORM_ID));
     }
 }

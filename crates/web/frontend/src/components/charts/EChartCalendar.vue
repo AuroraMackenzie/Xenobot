@@ -2,94 +2,104 @@
 /**
  * English note.
  */
-import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
-import { useI18n } from 'vue-i18n'
-import * as echarts from 'echarts/core'
-import { HeatmapChart } from 'echarts/charts'
-import { CalendarComponent, TooltipComponent, VisualMapComponent } from 'echarts/components'
-import { CanvasRenderer } from 'echarts/renderers'
-import { useDark } from '@vueuse/core'
-import type { EChartsOption } from 'echarts'
+import { computed, ref, watch, onMounted, onUnmounted } from "vue";
+import { useI18n } from "vue-i18n";
+import * as echarts from "echarts/core";
+import { HeatmapChart } from "echarts/charts";
+import {
+  CalendarComponent,
+  TooltipComponent,
+  VisualMapComponent,
+} from "echarts/components";
+import { CanvasRenderer } from "echarts/renderers";
+import { useDark } from "@vueuse/core";
+import type { EChartsOption } from "echarts";
 
 // English engineering note.
-echarts.use([HeatmapChart, CalendarComponent, TooltipComponent, VisualMapComponent, CanvasRenderer])
+echarts.use([
+  HeatmapChart,
+  CalendarComponent,
+  TooltipComponent,
+  VisualMapComponent,
+  CanvasRenderer,
+]);
 
-type ECOption = EChartsOption
+type ECOption = EChartsOption;
 
 export interface CalendarData {
-  date: string // YYYY-MM-DD
-  value: number
+  date: string; // YYYY-MM-DD
+  value: number;
 }
 
 interface Props {
-  data: CalendarData[]
-  height?: number
-  year?: number // English engineering note.
+  data: CalendarData[];
+  height?: number;
+  year?: number; // English engineering note.
 }
 
 const props = withDefaults(defineProps<Props>(), {
   height: 180,
-})
+});
 
-const { t, locale } = useI18n()
-const isDark = useDark()
-const chartRef = ref<HTMLElement | null>(null)
-let chartInstance: echarts.ECharts | null = null
+const { t, locale } = useI18n();
+const isDark = useDark();
+const chartRef = ref<HTMLElement | null>(null);
+let chartInstance: echarts.ECharts | null = null;
 
 // English engineering note.
 const yearRange = computed(() => {
-  if (props.year) return props.year
+  if (props.year) return props.year;
 
   if (props.data.length === 0) {
-    return new Date().getFullYear()
+    return new Date().getFullYear();
   }
 
   // English engineering note.
-  const years = props.data.map((d) => parseInt(d.date.split('-')[0]))
-  return Math.max(...years)
-})
+  const years = props.data.map((d) => parseInt(d.date.split("-")[0]));
+  return Math.max(...years);
+});
 
 // English engineering note.
 const maxValue = computed(() => {
-  if (props.data.length === 0) return 10
-  return Math.max(...props.data.map((d) => d.value), 1)
-})
+  if (props.data.length === 0) return 10;
+  return Math.max(...props.data.map((d) => d.value), 1);
+});
 
 // English engineering note.
 const chartData = computed(() => {
-  return props.data.map((d) => [d.date, d.value])
-})
+  return props.data.map((d) => [d.date, d.value]);
+});
 
 // English engineering note.
 const themeColors = {
-  light: ['#d6f1f7', '#82d2e4', '#44b9d4', '#0ea5c9'],
-  dark: ['#0b2630', '#104357', '#136b83', '#0ea5c9'],
-}
+  light: ["#d6f1f7", "#82d2e4", "#44b9d4", "#0ea5c9"],
+  dark: ["#0b2630", "#104357", "#136b83", "#0ea5c9"],
+};
 
 const option = computed<ECOption>(() => ({
   tooltip: {
-    trigger: 'item',
+    trigger: "item",
     formatter: (params: any) => {
-      const date = params.data[0]
-      const value = params.data[1]
-      return `${date}<br/>${t('views.message.calendarTooltipMessages')}: ${value}`
+      const date = params.data[0];
+      const value = params.data[1];
+      return `${date}<br/>${t("views.message.calendarTooltipMessages")}: ${value}`;
     },
   },
   visualMap: {
     min: 0,
     max: maxValue.value,
     calculable: false,
-    orient: 'horizontal',
-    left: 'center',
+    orient: "horizontal",
+    left: "center",
     bottom: 0,
     itemWidth: 10,
     itemHeight: 100,
-    text: [`${maxValue.value}`, '0'], // English engineering note.
+    text: [`${maxValue.value}`, "0"], // English engineering note.
     inRange: {
       color: isDark.value ? themeColors.dark : themeColors.light,
     },
     textStyle: {
-      color: isDark.value ? '#9ca3af' : '#6b7280',
+      color: isDark.value ? "#9ca3af" : "#6b7280",
       fontSize: 10,
     },
     show: true,
@@ -101,46 +111,46 @@ const option = computed<ECOption>(() => ({
     range: String(yearRange.value),
     itemStyle: {
       borderWidth: 2,
-      borderColor: isDark.value ? '#1f2937' : '#ffffff',
+      borderColor: isDark.value ? "#1f2937" : "#ffffff",
     },
     yearLabel: {
       show: true,
-      position: 'top',
-      color: isDark.value ? '#9ca3af' : '#6b7280',
+      position: "top",
+      color: isDark.value ? "#9ca3af" : "#6b7280",
       fontSize: 12,
     },
     monthLabel: {
       show: true,
-      color: isDark.value ? '#9ca3af' : '#6b7280',
+      color: isDark.value ? "#9ca3af" : "#6b7280",
       fontSize: 10,
       nameMap: [
-        t('common.month.jan'),
-        t('common.month.feb'),
-        t('common.month.mar'),
-        t('common.month.apr'),
-        t('common.month.may'),
-        t('common.month.jun'),
-        t('common.month.jul'),
-        t('common.month.aug'),
-        t('common.month.sep'),
-        t('common.month.oct'),
-        t('common.month.nov'),
-        t('common.month.dec'),
+        t("common.month.jan"),
+        t("common.month.feb"),
+        t("common.month.mar"),
+        t("common.month.apr"),
+        t("common.month.may"),
+        t("common.month.jun"),
+        t("common.month.jul"),
+        t("common.month.aug"),
+        t("common.month.sep"),
+        t("common.month.oct"),
+        t("common.month.nov"),
+        t("common.month.dec"),
       ],
     },
     dayLabel: {
       show: true,
       firstDay: 1, // English engineering note.
-      color: isDark.value ? '#6b7280' : '#9ca3af',
+      color: isDark.value ? "#6b7280" : "#9ca3af",
       fontSize: 10,
       nameMap: [
-        t('common.weekday.sun'),
-        t('common.weekday.mon'),
-        t('common.weekday.tue'),
-        t('common.weekday.wed'),
-        t('common.weekday.thu'),
-        t('common.weekday.fri'),
-        t('common.weekday.sat'),
+        t("common.weekday.sun"),
+        t("common.weekday.mon"),
+        t("common.weekday.tue"),
+        t("common.weekday.wed"),
+        t("common.weekday.thu"),
+        t("common.weekday.fri"),
+        t("common.weekday.sat"),
       ],
     },
     splitLine: {
@@ -149,55 +159,59 @@ const option = computed<ECOption>(() => ({
   },
   series: [
     {
-      type: 'heatmap',
-      coordinateSystem: 'calendar',
+      type: "heatmap",
+      coordinateSystem: "calendar",
       data: chartData.value,
     },
   ],
-}))
+}));
 
 // English engineering note.
 function initChart() {
-  if (!chartRef.value) return
+  if (!chartRef.value) return;
 
-  chartInstance = echarts.init(chartRef.value, isDark.value ? 'dark' : undefined, {
-    renderer: 'canvas',
-  })
-  chartInstance.setOption(option.value)
+  chartInstance = echarts.init(
+    chartRef.value,
+    isDark.value ? "dark" : undefined,
+    {
+      renderer: "canvas",
+    },
+  );
+  chartInstance.setOption(option.value);
 }
 
 // English engineering note.
 function updateChart() {
-  if (!chartInstance) return
-  chartInstance.setOption(option.value, { notMerge: true })
+  if (!chartInstance) return;
+  chartInstance.setOption(option.value, { notMerge: true });
 }
 
 // English engineering note.
 function handleResize() {
-  chartInstance?.resize()
+  chartInstance?.resize();
 }
 
 // English engineering note.
 watch([() => props.data, isDark, locale], () => {
-  updateChart()
-})
+  updateChart();
+});
 
 watch(
   () => props.year,
   () => {
-    updateChart()
-  }
-)
+    updateChart();
+  },
+);
 
 onMounted(() => {
-  initChart()
-  window.addEventListener('resize', handleResize)
-})
+  initChart();
+  window.addEventListener("resize", handleResize);
+});
 
 onUnmounted(() => {
-  window.removeEventListener('resize', handleResize)
-  chartInstance?.dispose()
-})
+  window.removeEventListener("resize", handleResize);
+  chartInstance?.dispose();
+});
 </script>
 
 <template>

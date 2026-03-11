@@ -1,109 +1,123 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { storeToRefs } from 'pinia'
-import { useI18n } from 'vue-i18n'
-import { useLLMStore, type AIServiceConfigDisplay } from '@/stores/llm'
-import AIModelEditModal from './AIModelEditModal.vue'
-import AlertTips from './AlertTips.vue'
+import { ref, computed, onMounted } from "vue";
+import { storeToRefs } from "pinia";
+import { useI18n } from "vue-i18n";
+import { useLLMStore, type AIServiceConfigDisplay } from "@/stores/llm";
+import AIModelEditModal from "./AIModelEditModal.vue";
+import AlertTips from "./AlertTips.vue";
 
-const { t, locale } = useI18n()
+const { t, locale } = useI18n();
 
 const emit = defineEmits<{
-  'config-changed': []
-}>()
+  "config-changed": [];
+}>();
 
 const aiTips = computed(() => {
   const config = JSON.parse(
-    localStorage.getItem(`xenobot_app_config_${locale.value}`) || localStorage.getItem('xenobot_app_config') || '{}'
-  )
-  return config.aiTips || {}
-})
+    localStorage.getItem(`xenobot_app_config_${locale.value}`) ||
+      localStorage.getItem("xenobot_app_config") ||
+      "{}",
+  );
+  return config.aiTips || {};
+});
 
-const llmStore = useLLMStore()
-const { configs, providers, activeConfigId, isLoading, isMaxConfigs } = storeToRefs(llmStore)
+const llmStore = useLLMStore();
+const { configs, providers, activeConfigId, isLoading, isMaxConfigs } =
+  storeToRefs(llmStore);
 
-const showEditModal = ref(false)
-const editMode = ref<'add' | 'edit'>('add')
-const editingConfig = ref<AIServiceConfigDisplay | null>(null)
+const showEditModal = ref(false);
+const editMode = ref<"add" | "edit">("add");
+const editingConfig = ref<AIServiceConfigDisplay | null>(null);
 
 function openAddModal() {
-  editMode.value = 'add'
-  editingConfig.value = null
-  showEditModal.value = true
+  editMode.value = "add";
+  editingConfig.value = null;
+  showEditModal.value = true;
 }
 
 function openEditModal(config: AIServiceConfigDisplay) {
-  editMode.value = 'edit'
-  editingConfig.value = config
-  showEditModal.value = true
+  editMode.value = "edit";
+  editingConfig.value = config;
+  showEditModal.value = true;
 }
 
 async function handleModalSaved() {
-  await llmStore.refreshConfigs()
-  emit('config-changed')
+  await llmStore.refreshConfigs();
+  emit("config-changed");
 }
 
 async function deleteConfig(id: string) {
   try {
-    const result = await window.llmApi.deleteConfig(id)
+    const result = await window.llmApi.deleteConfig(id);
     if (result.success) {
-      await llmStore.refreshConfigs()
-      emit('config-changed')
+      await llmStore.refreshConfigs();
+      emit("config-changed");
     } else {
-      console.error('[AIModelConfigTab] Failed to delete configuration:', result.error)
+      console.error(
+        "[AIModelConfigTab] Failed to delete configuration:",
+        result.error,
+      );
     }
   } catch (error) {
-    console.error('[AIModelConfigTab] Failed to delete configuration:', error)
+    console.error("[AIModelConfigTab] Failed to delete configuration:", error);
   }
 }
 
 async function setActive(id: string) {
-  const success = await llmStore.setActiveConfig(id)
+  const success = await llmStore.setActiveConfig(id);
   if (success) {
-    emit('config-changed')
+    emit("config-changed");
   }
 }
 
 function getProviderName(providerId: string): string {
   // Get localized provider name
-  const key = `providers.${providerId}.name`
-  const translated = t(key)
+  const key = `providers.${providerId}.name`;
+  const translated = t(key);
   if (translated !== key) {
-    return translated
+    return translated;
   }
   // Fallback to store method
-  return llmStore.getProviderName(providerId)
+  return llmStore.getProviderName(providerId);
 }
 
 function refresh() {
-  llmStore.refreshConfigs()
+  llmStore.refreshConfigs();
 }
 
-defineExpose({ refresh })
+defineExpose({ refresh });
 
 onMounted(() => {
   if (!llmStore.isInitialized) {
-    llmStore.init()
+    llmStore.init();
   } else {
-    llmStore.refreshConfigs()
+    llmStore.refreshConfigs();
   }
-})
+});
 </script>
 
 <template>
   <!-- English UI note -->
   <div v-if="isLoading" class="flex items-center justify-center py-12">
-    <UIcon name="i-heroicons-arrow-path" class="h-6 w-6 animate-spin text-gray-400" />
+    <UIcon
+      name="i-heroicons-arrow-path"
+      class="h-6 w-6 animate-spin text-gray-400"
+    />
   </div>
 
   <!-- English UI note -->
   <div v-else class="xeno-ai-config-shell space-y-4">
     <!-- English UI note -->
-    <h4 class="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
+    <h4
+      class="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white"
+    >
       <UIcon name="i-heroicons-sparkles" class="h-4 w-4 text-violet-500" />
-      {{ t('settings.aiConfig.title') }}
+      {{ t("settings.aiConfig.title") }}
     </h4>
-    <AlertTips v-if="configs.length === 0 && aiTips.configTab?.show" :content="aiTips.configTab?.content" />
+    <AlertTips
+      v-if="configs.length === 0 && aiTips.configTab?.show"
+      :content="aiTips.configTab?.content"
+    />
     <!-- English UI note -->
     <div v-if="configs.length > 0" class="space-y-2">
       <div
@@ -128,31 +142,49 @@ onMounted(() => {
             ]"
           >
             <UIcon
-              :name="config.id === activeConfigId ? 'i-heroicons-check' : 'i-heroicons-sparkles'"
+              :name="
+                config.id === activeConfigId
+                  ? 'i-heroicons-check'
+                  : 'i-heroicons-sparkles'
+              "
               class="h-4 w-4"
             />
           </div>
           <div>
             <div class="flex items-center gap-2">
-              <span class="font-medium text-gray-900 dark:text-white">{{ config.name }}</span>
-              <UBadge v-if="config.id === activeConfigId" color="primary" variant="soft" size="xs">
-                {{ t('settings.aiConfig.inUse') }}
+              <span class="font-medium text-gray-900 dark:text-white">{{
+                config.name
+              }}</span>
+              <UBadge
+                v-if="config.id === activeConfigId"
+                color="primary"
+                variant="soft"
+                size="xs"
+              >
+                {{ t("settings.aiConfig.inUse") }}
               </UBadge>
             </div>
-            <div class="mt-0.5 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+            <div
+              class="mt-0.5 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400"
+            >
               <span>{{ getProviderName(config.provider) }}</span>
               <span>·</span>
-              <span>{{ config.model || t('settings.aiConfig.defaultModel') }}</span>
+              <span>{{
+                config.model || t("settings.aiConfig.defaultModel")
+              }}</span>
               <span v-if="config.baseUrl">·</span>
               <span v-if="config.baseUrl" class="text-violet-500">
-                {{ t('settings.aiConfig.customEndpoint') }}
+                {{ t("settings.aiConfig.customEndpoint") }}
               </span>
             </div>
           </div>
         </div>
 
         <!-- English UI note -->
-        <div class="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100" @click.stop>
+        <div
+          class="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100"
+          @click.stop
+        >
           <UButton
             size="xs"
             color="neutral"
@@ -160,7 +192,13 @@ onMounted(() => {
             icon="i-heroicons-pencil-square"
             @click="openEditModal(config)"
           />
-          <UButton size="xs" color="error" variant="ghost" icon="i-heroicons-trash" @click="deleteConfig(config.id)" />
+          <UButton
+            size="xs"
+            color="error"
+            variant="ghost"
+            icon="i-heroicons-trash"
+            @click="deleteConfig(config.id)"
+          />
         </div>
       </div>
     </div>
@@ -170,16 +208,32 @@ onMounted(() => {
       v-else
       class="xeno-ai-config-empty flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 py-12 dark:border-gray-700"
     >
-      <UIcon name="i-heroicons-sparkles" class="h-12 w-12 text-gray-300 dark:text-gray-600" />
-      <p class="mt-4 text-sm text-gray-500 dark:text-gray-400">{{ t('settings.aiConfig.empty.title') }}</p>
-      <p class="text-xs text-gray-400 dark:text-gray-500">{{ t('settings.aiConfig.empty.description') }}</p>
+      <UIcon
+        name="i-heroicons-sparkles"
+        class="h-12 w-12 text-gray-300 dark:text-gray-600"
+      />
+      <p class="mt-4 text-sm text-gray-500 dark:text-gray-400">
+        {{ t("settings.aiConfig.empty.title") }}
+      </p>
+      <p class="text-xs text-gray-400 dark:text-gray-500">
+        {{ t("settings.aiConfig.empty.description") }}
+      </p>
     </div>
 
     <!-- English UI note -->
     <div class="flex justify-center">
-      <UButton variant="soft" :disabled="isMaxConfigs" class="mt-4" @click="openAddModal">
+      <UButton
+        variant="soft"
+        :disabled="isMaxConfigs"
+        class="mt-4"
+        @click="openAddModal"
+      >
         <UIcon name="i-heroicons-plus" class="mr-2 h-4 w-4" />
-        {{ isMaxConfigs ? t('settings.aiConfig.maxConfigs') : t('settings.aiConfig.addConfig') }}
+        {{
+          isMaxConfigs
+            ? t("settings.aiConfig.maxConfigs")
+            : t("settings.aiConfig.addConfig")
+        }}
       </UButton>
     </div>
   </div>
@@ -200,7 +254,11 @@ onMounted(() => {
   border-radius: 1.5rem;
   padding: 1rem;
   background:
-    radial-gradient(circle at top right, rgba(139, 92, 246, 0.08), transparent 24%),
+    radial-gradient(
+      circle at top right,
+      rgba(139, 92, 246, 0.08),
+      transparent 24%
+    ),
     linear-gradient(180deg, rgba(15, 23, 42, 0.72), rgba(15, 23, 42, 0.6));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.05),

@@ -6,15 +6,27 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use thiserror::Error;
 use xenobot_analysis::parsers::{ParseError, ParsedChat, ParserRegistry};
 use xenobot_core::platform_sources::{discover_sources_for_platform, SourceCandidate};
 use xenobot_core::types::Platform;
 
+pub mod config;
+pub mod account;
+pub mod audio;
+pub mod media;
+pub mod monitor;
+pub mod service;
+
 /// Stable platform identifier.
 pub const PLATFORM_ID: &str = "viber";
+
+pub use config::ViberConfig;
+pub use service::{AuthorizedViberWorkspace, StagedViberExport, ViberService};
+/// Convenience result type for Viber workflows.
+pub type ViberResult<T> = Result<T, ViberError>;
 
 /// Legal-safe adapter for Viber workflows.
 #[derive(Debug, Clone, Copy, Default)]
@@ -53,7 +65,7 @@ impl ViberAdapter {
 
     /// Return the core platform enum used by source discovery.
     pub fn platform(&self) -> Platform {
-        Platform::Custom("viber".to_string())
+        Platform::Viber
     }
 }
 
@@ -63,6 +75,25 @@ pub enum ViberError {
     /// Parse error returned by analysis parser registry.
     #[error("parse error: {0}")]
     Parse(#[from] ParseError),
+
+    /// File system IO error while reading authorized assets.
+    #[error("io error: {0}")]
+    Io(#[from] std::io::Error),
+
+    /// File monitor error while starting directory watches.
+    #[error("file monitor error: {0}")]
+    FileMonitor(#[from] notify::Error),
+
+    /// Internal workflow error produced by helper utilities.
+    #[error("internal error: {0}")]
+    Internal(#[from] anyhow::Error),
+
+    /// Path is outside the configured authorized roots.
+    #[error("path is outside authorized roots: {path}")]
+    UnauthorizedPath {
+        /// Rejected source path.
+        path: PathBuf,
+    },
 
     /// Parsed export did not match the expected platform.
     #[error("parsed platform mismatch: expected {expected}, got {actual}")]

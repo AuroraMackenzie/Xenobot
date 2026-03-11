@@ -1,6 +1,7 @@
 //! Configuration for WeChat data extraction.
 
 use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 
 /// WeChat-specific configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -19,6 +20,9 @@ pub struct WeChatConfig {
     pub auto_decrypt: bool,
     /// HTTP server address for MCP integration
     pub http_addr: String,
+    /// Explicitly authorized roots for export ingestion.
+    #[serde(default)]
+    pub authorized_roots: Vec<PathBuf>,
 }
 
 impl Default for WeChatConfig {
@@ -46,7 +50,44 @@ impl Default for WeChatConfig {
             platform_version: 2, // macOS
             auto_decrypt: true,
             http_addr: "127.0.0.1:8080".to_string(),
+            authorized_roots: vec![],
         }
+    }
+}
+
+impl WeChatConfig {
+    /// Create a configuration with explicit authorized roots.
+    pub fn with_authorized_roots<I, P>(paths: I) -> Self
+    where
+        I: IntoIterator<Item = P>,
+        P: Into<PathBuf>,
+    {
+        Self {
+            authorized_roots: paths.into_iter().map(Into::into).collect(),
+            ..Self::default()
+        }
+    }
+
+    /// Return the configured authorized roots.
+    pub fn authorized_roots(&self) -> &[PathBuf] {
+        &self.authorized_roots
+    }
+
+    /// Add one authorized root at runtime.
+    pub fn add_authorized_root<P>(&mut self, path: P)
+    where
+        P: Into<PathBuf>,
+    {
+        self.authorized_roots.push(path.into());
+    }
+
+    /// Return whether a candidate file path is inside an authorized root.
+    pub fn is_authorized_path(&self, path: &Path) -> bool {
+        if self.authorized_roots.is_empty() {
+            return true;
+        }
+
+        self.authorized_roots.iter().any(|root| path.starts_with(root))
     }
 }
 

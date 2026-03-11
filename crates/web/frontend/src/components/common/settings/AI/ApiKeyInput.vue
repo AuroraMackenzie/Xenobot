@@ -1,56 +1,61 @@
 <script setup lang="ts">
-import { ref, useAttrs, computed } from 'vue'
+import { ref, useAttrs, computed } from "vue";
 
-const props = withDefaults(
+withDefaults(
   defineProps<{
-    modelValue: string
-    placeholder?: string
-    label?: string
-    optionalText?: string // English engineering note.
-    hint?: string
+    modelValue: string;
+    placeholder?: string;
+    label?: string;
+    optionalText?: string; // English engineering note.
+    hint?: string;
     // English engineering note.
-    validateLoading?: boolean
-    validateDisabled?: boolean
-    validateText?: string
-    validationResult?: 'idle' | 'valid' | 'invalid'
-    validationMessage?: string
+    validateLoading?: boolean;
+    validateDisabled?: boolean;
+    validateText?: string;
+    validationResult?: "idle" | "valid" | "invalid";
+    validationMessage?: string;
   }>(),
   {
-    placeholder: '',
-    label: 'API Key',
-    optionalText: '',
-    hint: '',
+    placeholder: "",
+    label: "API Key",
+    optionalText: "",
+    hint: "",
     validateLoading: false,
     validateDisabled: false,
-    validateText: 'Validate',
-    validationResult: 'idle',
-    validationMessage: '',
-  }
-)
+    validateText: "Validate",
+    validationResult: "idle",
+    validationMessage: "",
+  },
+);
 
 const emit = defineEmits<{
-  'update:modelValue': [value: string]
-  validate: []
-}>()
+  "update:modelValue": [value: string];
+  validate: [];
+}>();
 
-const attrs = useAttrs()
-
-// English engineering note.
-const showValidateButton = computed(() => 'onValidate' in attrs)
+const attrs = useAttrs();
 
 // English engineering note.
-const showPassword = ref(false)
+const showValidateButton = computed(() => "onValidate" in attrs);
+
+// English engineering note.
+const showPassword = ref(false);
 
 function updateValue(value: string) {
-  emit('update:modelValue', value)
+  emit("update:modelValue", value);
 }
 </script>
 
 <template>
   <div>
-    <label v-if="label" class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+    <label
+      v-if="label"
+      class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+    >
       {{ label }}
-      <span v-if="optionalText" class="font-normal text-gray-400">{{ optionalText }}</span>
+      <span v-if="optionalText" class="font-normal text-gray-400">{{
+        optionalText
+      }}</span>
     </label>
     <div class="flex gap-2">
       <UInput

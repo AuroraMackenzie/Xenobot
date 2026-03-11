@@ -1,121 +1,123 @@
 <script setup lang="ts">
-import { ref, computed, watch, toRaw } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { useToast } from '@nuxt/ui/runtime/composables/useToast.js'
-import { useSessionStore } from '@/stores/session'
-import ConditionPanel from './ConditionPanel.vue'
-import SessionPanel from './SessionPanel.vue'
-import PreviewPanel from './PreviewPanel.vue'
-import FilterHistory from './FilterHistory.vue'
-import LocalAnalysisModal from './LocalAnalysisModal.vue'
+import { ref, computed, watch, toRaw } from "vue";
+import { useI18n } from "vue-i18n";
+import { useToast } from "@nuxt/ui/runtime/composables/useToast.js";
+import { useSessionStore } from "@/stores/session";
+import ConditionPanel from "./ConditionPanel.vue";
+import SessionPanel from "./SessionPanel.vue";
+import PreviewPanel from "./PreviewPanel.vue";
+import FilterHistory from "./FilterHistory.vue";
+import LocalAnalysisModal from "./LocalAnalysisModal.vue";
 
-const { t } = useI18n()
-const toast = useToast()
-const sessionStore = useSessionStore()
+const { t } = useI18n();
+const toast = useToast();
+const sessionStore = useSessionStore();
 
-const filterMode = ref<'condition' | 'session'>('condition')
+const filterMode = ref<"condition" | "session">("condition");
 
 const conditionFilter = ref<{
-  keywords: string[]
-  timeRange: { start: number; end: number } | null
-  senderIds: number[]
-  contextSize: number
+  keywords: string[];
+  timeRange: { start: number; end: number } | null;
+  senderIds: number[];
+  contextSize: number;
 }>({
   keywords: [],
   timeRange: null,
   senderIds: [],
   contextSize: 10,
-})
+});
 
-const selectedSessionIds = ref<number[]>([])
+const selectedSessionIds = ref<number[]>([]);
 
 interface FilterMessage {
-  id: number
-  senderName: string
-  senderPlatformId: string
-  senderAliases: string[]
-  senderAvatar: string | null
-  content: string
-  timestamp: number
-  type: number
-  replyToMessageId: string | null
-  replyToContent: string | null
-  replyToSenderName: string | null
-  isHit: boolean
+  id: number;
+  senderName: string;
+  senderPlatformId: string;
+  senderAliases: string[];
+  senderAvatar: string | null;
+  content: string;
+  timestamp: number;
+  type: number;
+  replyToMessageId: string | null;
+  replyToContent: string | null;
+  replyToSenderName: string | null;
+  isHit: boolean;
 }
 
 interface PaginationInfo {
-  page: number
-  pageSize: number
-  totalBlocks: number
-  totalHits: number
-  hasMore: boolean
+  page: number;
+  pageSize: number;
+  totalBlocks: number;
+  totalHits: number;
+  hasMore: boolean;
 }
 
 const filterResult = ref<{
   blocks: Array<{
-    startTs: number
-    endTs: number
-    messages: FilterMessage[]
-    hitCount: number
-  }>
+    startTs: number;
+    endTs: number;
+    messages: FilterMessage[];
+    hitCount: number;
+  }>;
   stats: {
-    totalMessages: number
-    hitMessages: number
-    totalChars: number
-  }
-  pagination: PaginationInfo
-} | null>(null)
+    totalMessages: number;
+    hitMessages: number;
+    totalChars: number;
+  };
+  pagination: PaginationInfo;
+} | null>(null);
 
-const isFiltering = ref(false)
-const isLoadingMore = ref(false)
-const showHistory = ref(false)
-const showAnalysisModal = ref(false)
+const isFiltering = ref(false);
+const isLoadingMore = ref(false);
+const showHistory = ref(false);
+const showAnalysisModal = ref(false);
 
-const PAGE_SIZE = 50
+const PAGE_SIZE = 50;
 
 const estimatedTokens = computed(() => {
-  if (!filterResult.value) return 0
-  return Math.ceil(filterResult.value.stats.totalChars * 1.5)
-})
+  if (!filterResult.value) return 0;
+  return Math.ceil(filterResult.value.stats.totalChars * 1.5);
+});
 
 const tokenStatus = computed(() => {
-  const tokens = estimatedTokens.value
-  if (tokens < 50000) return 'green'
-  if (tokens < 100000) return 'yellow'
-  return 'red'
-})
+  const tokens = estimatedTokens.value;
+  if (tokens < 50000) return "green";
+  if (tokens < 100000) return "yellow";
+  return "red";
+});
 
 const canExecuteFilter = computed(() => {
-  if (isFiltering.value) return false
+  if (isFiltering.value) return false;
 
-  if (filterMode.value === 'condition') {
+  if (filterMode.value === "condition") {
     return (
       conditionFilter.value.keywords.length > 0 ||
       conditionFilter.value.senderIds.length > 0 ||
       conditionFilter.value.timeRange !== null
-    )
+    );
   } else {
-    return selectedSessionIds.value.length > 0
+    return selectedSessionIds.value.length > 0;
   }
-})
+});
 
 async function executeFilter() {
-  const sessionId = sessionStore.currentSessionId
-  if (!sessionId) return
+  const sessionId = sessionStore.currentSessionId;
+  if (!sessionId) return;
 
-  isFiltering.value = true
-  filterResult.value = null
+  isFiltering.value = true;
+  filterResult.value = null;
 
   try {
-    if (filterMode.value === 'condition') {
-      const rawFilter = toRaw(conditionFilter.value)
-      const keywords = rawFilter.keywords.length > 0 ? [...rawFilter.keywords] : undefined
+    if (filterMode.value === "condition") {
+      const rawFilter = toRaw(conditionFilter.value);
+      const keywords =
+        rawFilter.keywords.length > 0 ? [...rawFilter.keywords] : undefined;
       const timeFilter = rawFilter.timeRange
         ? { startTs: rawFilter.timeRange.start, endTs: rawFilter.timeRange.end }
-        : undefined
-      const senderIds = rawFilter.senderIds.length > 0 ? [...rawFilter.senderIds] : undefined
-      const contextSize = rawFilter.contextSize
+        : undefined;
+      const senderIds =
+        rawFilter.senderIds.length > 0 ? [...rawFilter.senderIds] : undefined;
+      const contextSize = rawFilter.contextSize;
 
       const result = await window.aiApi.filterMessagesWithContext(
         sessionId,
@@ -124,39 +126,52 @@ async function executeFilter() {
         senderIds,
         contextSize,
         1,
-        PAGE_SIZE
-      )
-      filterResult.value = result
+        PAGE_SIZE,
+      );
+      filterResult.value = result;
     } else {
-      if (selectedSessionIds.value.length === 0) return
-      const sessionIds = [...toRaw(selectedSessionIds.value)]
-      const result = await window.aiApi.getMultipleSessionsMessages(sessionId, sessionIds, 1, PAGE_SIZE)
-      filterResult.value = result
+      if (selectedSessionIds.value.length === 0) return;
+      const sessionIds = [...toRaw(selectedSessionIds.value)];
+      const result = await window.aiApi.getMultipleSessionsMessages(
+        sessionId,
+        sessionIds,
+        1,
+        PAGE_SIZE,
+      );
+      filterResult.value = result;
     }
   } catch (error) {
-    console.error('[FilterTab] Failed to execute filter:', error)
+    console.error("[FilterTab] Failed to execute filter:", error);
   } finally {
-    isFiltering.value = false
+    isFiltering.value = false;
   }
 }
 
 async function loadMoreBlocks() {
-  const sessionId = sessionStore.currentSessionId
-  if (!sessionId || !filterResult.value || !filterResult.value.pagination.hasMore || isLoadingMore.value) return
+  const sessionId = sessionStore.currentSessionId;
+  if (
+    !sessionId ||
+    !filterResult.value ||
+    !filterResult.value.pagination.hasMore ||
+    isLoadingMore.value
+  )
+    return;
 
-  isLoadingMore.value = true
-  const nextPage = filterResult.value.pagination.page + 1
+  isLoadingMore.value = true;
+  const nextPage = filterResult.value.pagination.page + 1;
 
   try {
-    let result
-    if (filterMode.value === 'condition') {
-      const rawFilter = toRaw(conditionFilter.value)
-      const keywords = rawFilter.keywords.length > 0 ? [...rawFilter.keywords] : undefined
+    let result;
+    if (filterMode.value === "condition") {
+      const rawFilter = toRaw(conditionFilter.value);
+      const keywords =
+        rawFilter.keywords.length > 0 ? [...rawFilter.keywords] : undefined;
       const timeFilter = rawFilter.timeRange
         ? { startTs: rawFilter.timeRange.start, endTs: rawFilter.timeRange.end }
-        : undefined
-      const senderIds = rawFilter.senderIds.length > 0 ? [...rawFilter.senderIds] : undefined
-      const contextSize = rawFilter.contextSize
+        : undefined;
+      const senderIds =
+        rawFilter.senderIds.length > 0 ? [...rawFilter.senderIds] : undefined;
+      const contextSize = rawFilter.contextSize;
 
       result = await window.aiApi.filterMessagesWithContext(
         sessionId,
@@ -165,11 +180,16 @@ async function loadMoreBlocks() {
         senderIds,
         contextSize,
         nextPage,
-        PAGE_SIZE
-      )
+        PAGE_SIZE,
+      );
     } else {
-      const sessionIds = [...toRaw(selectedSessionIds.value)]
-      result = await window.aiApi.getMultipleSessionsMessages(sessionId, sessionIds, nextPage, PAGE_SIZE)
+      const sessionIds = [...toRaw(selectedSessionIds.value)];
+      result = await window.aiApi.getMultipleSessionsMessages(
+        sessionId,
+        sessionIds,
+        nextPage,
+        PAGE_SIZE,
+      );
     }
 
     if (result && result.blocks.length > 0) {
@@ -177,140 +197,153 @@ async function loadMoreBlocks() {
         blocks: [...filterResult.value.blocks, ...result.blocks],
         stats: filterResult.value.stats,
         pagination: result.pagination,
-      }
+      };
     }
   } catch (error) {
-    console.error('[FilterTab] Failed to load more blocks:', error)
+    console.error("[FilterTab] Failed to load more blocks:", error);
   } finally {
-    isLoadingMore.value = false
+    isLoadingMore.value = false;
   }
 }
 
-const isExporting = ref(false)
+const isExporting = ref(false);
 const exportProgress = ref<{
-  percentage: number
-  message: string
-} | null>(null)
+  percentage: number;
+  message: string;
+} | null>(null);
 
-let unsubscribeExportProgress: (() => void) | null = null
+let unsubscribeExportProgress: (() => void) | null = null;
 
 function startExportProgressListener() {
   unsubscribeExportProgress = window.aiApi.onExportProgress((progress) => {
     exportProgress.value = {
       percentage: progress.percentage,
       message: progress.message,
+    };
+    if (progress.stage === "done" || progress.stage === "error") {
+      exportProgress.value = null;
     }
-    if (progress.stage === 'done' || progress.stage === 'error') {
-      exportProgress.value = null
-    }
-  })
+  });
 }
 
 function stopExportProgressListener() {
   if (unsubscribeExportProgress) {
-    unsubscribeExportProgress()
-    unsubscribeExportProgress = null
+    unsubscribeExportProgress();
+    unsubscribeExportProgress = null;
   }
-  exportProgress.value = null
+  exportProgress.value = null;
 }
 
 async function exportFeedPack() {
-  if (!filterResult.value || filterResult.value.blocks.length === 0) return
+  if (!filterResult.value || filterResult.value.blocks.length === 0) return;
 
-  const sessionId = sessionStore.currentSessionId
-  if (!sessionId) return
+  const sessionId = sessionStore.currentSessionId;
+  if (!sessionId) return;
 
-  const sessionInfo = sessionStore.currentSession
-  const sessionName = sessionInfo?.name || t('analysis.filter.unknownSession')
+  const sessionInfo = sessionStore.currentSession;
+  const sessionName = sessionInfo?.name || t("analysis.filter.unknownSession");
 
   const dialogResult = await window.api.dialog.showOpenDialog({
-    title: t('analysis.filter.selectExportDirectory'),
-    properties: ['openDirectory', 'createDirectory'],
-  })
-  if (dialogResult.canceled || !dialogResult.filePaths[0]) return
-  const outputDir = dialogResult.filePaths[0]
+    title: t("analysis.filter.selectExportDirectory"),
+    properties: ["openDirectory", "createDirectory"],
+  });
+  if (dialogResult.canceled || !dialogResult.filePaths[0]) return;
+  const outputDir = dialogResult.filePaths[0];
 
-  isExporting.value = true
-  exportProgress.value = { percentage: 0, message: t('analysis.filter.exportPreparing') }
+  isExporting.value = true;
+  exportProgress.value = {
+    percentage: 0,
+    message: t("analysis.filter.exportPreparing"),
+  };
 
-  startExportProgressListener()
+  startExportProgressListener();
 
   try {
-    const rawFilter = toRaw(conditionFilter.value)
+    const rawFilter = toRaw(conditionFilter.value);
     const exportParams = {
       sessionId,
       sessionName,
       outputDir,
       filterMode: filterMode.value,
-      keywords: rawFilter.keywords.length > 0 ? [...rawFilter.keywords] : undefined,
+      keywords:
+        rawFilter.keywords.length > 0 ? [...rawFilter.keywords] : undefined,
       timeFilter: rawFilter.timeRange
         ? { startTs: rawFilter.timeRange.start, endTs: rawFilter.timeRange.end }
         : undefined,
-      senderIds: rawFilter.senderIds.length > 0 ? [...rawFilter.senderIds] : undefined,
+      senderIds:
+        rawFilter.senderIds.length > 0 ? [...rawFilter.senderIds] : undefined,
       contextSize: rawFilter.contextSize,
-      chatSessionIds: filterMode.value === 'session' ? [...toRaw(selectedSessionIds.value)] : undefined,
-    }
+      chatSessionIds:
+        filterMode.value === "session"
+          ? [...toRaw(selectedSessionIds.value)]
+          : undefined,
+    };
 
-    const exportResult = await window.aiApi.exportFilterResultToFile(exportParams)
+    const exportResult =
+      await window.aiApi.exportFilterResultToFile(exportParams);
 
     if (exportResult.success && exportResult.filePath) {
       toast.add({
-        title: t('analysis.filter.exportSuccess'),
+        title: t("analysis.filter.exportSuccess"),
         description: exportResult.filePath,
-        color: 'green',
-        icon: 'i-heroicons-check-circle',
-      })
+        color: "green",
+        icon: "i-heroicons-check-circle",
+      });
     } else {
       toast.add({
-        title: t('analysis.filter.exportFailed'),
-        description: exportResult.error || t('common.error.unknown'),
-        color: 'red',
-        icon: 'i-heroicons-x-circle',
-      })
+        title: t("analysis.filter.exportFailed"),
+        description: exportResult.error || t("common.error.unknown"),
+        color: "red",
+        icon: "i-heroicons-x-circle",
+      });
     }
   } catch (error) {
-    console.error('[FilterTab] Failed to export filtered result:', error)
+    console.error("[FilterTab] Failed to export filtered result:", error);
     toast.add({
-      title: t('analysis.filter.exportFailed'),
+      title: t("analysis.filter.exportFailed"),
       description: String(error),
-      color: 'red',
-      icon: 'i-heroicons-x-circle',
-    })
+      color: "red",
+      icon: "i-heroicons-x-circle",
+    });
   } finally {
-    stopExportProgressListener()
-    isExporting.value = false
+    stopExportProgressListener();
+    isExporting.value = false;
   }
 }
 
 function openLocalAnalysis() {
-  if (!filterResult.value || filterResult.value.blocks.length === 0) return
-  showAnalysisModal.value = true
+  if (!filterResult.value || filterResult.value.blocks.length === 0) return;
+  showAnalysisModal.value = true;
 }
 
 watch(filterMode, () => {
-  filterResult.value = null
-})
+  filterResult.value = null;
+});
 
 function loadHistoryCondition(condition: {
-  mode: 'condition' | 'session'
-  conditionFilter?: typeof conditionFilter.value
-  selectedSessionIds?: number[]
+  mode: "condition" | "session";
+  conditionFilter?: typeof conditionFilter.value;
+  selectedSessionIds?: number[];
 }) {
-  filterMode.value = condition.mode
-  if (condition.mode === 'condition' && condition.conditionFilter) {
-    conditionFilter.value = { ...condition.conditionFilter }
-  } else if (condition.mode === 'session' && condition.selectedSessionIds) {
-    selectedSessionIds.value = [...condition.selectedSessionIds]
+  filterMode.value = condition.mode;
+  if (condition.mode === "condition" && condition.conditionFilter) {
+    conditionFilter.value = { ...condition.conditionFilter };
+  } else if (condition.mode === "session" && condition.selectedSessionIds) {
+    selectedSessionIds.value = [...condition.selectedSessionIds];
   }
-  showHistory.value = false
+  showHistory.value = false;
 }
 </script>
 
 <template>
   <div class="xeno-filter-shell h-full flex flex-col">
-    <div class="xeno-filter-header flex-none flex items-center justify-between px-4 py-3">
+    <div
+      class="xeno-filter-header flex-none flex items-center justify-between px-4 py-3"
+    >
       <div class="flex items-center gap-4">
-        <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ t('analysis.filter.title') }}</h2>
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+          {{ t("analysis.filter.title") }}
+        </h2>
 
         <!-- English UI note -->
         <div class="xeno-filter-mode flex items-center gap-1 p-1 rounded-lg">
@@ -323,7 +356,7 @@ function loadHistoryCondition(condition: {
             "
             @click="filterMode = 'condition'"
           >
-            {{ t('analysis.filter.conditionMode') }}
+            {{ t("analysis.filter.conditionMode") }}
           </button>
           <button
             class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
@@ -334,14 +367,19 @@ function loadHistoryCondition(condition: {
             "
             @click="filterMode = 'session'"
           >
-            {{ t('analysis.filter.sessionMode') }}
+            {{ t("analysis.filter.sessionMode") }}
           </button>
         </div>
       </div>
 
       <div class="flex items-center gap-2">
-        <UButton variant="ghost" icon="i-heroicons-clock" size="sm" @click="showHistory = true">
-          {{ t('analysis.filter.history') }}
+        <UButton
+          variant="ghost"
+          icon="i-heroicons-clock"
+          size="sm"
+          @click="showHistory = true"
+        >
+          {{ t("analysis.filter.history") }}
         </UButton>
       </div>
     </div>
@@ -362,8 +400,14 @@ function loadHistoryCondition(condition: {
         </div>
 
         <div class="xeno-filter-left-footer flex-none p-4">
-          <UButton block color="primary" :loading="isFiltering" :disabled="!canExecuteFilter" @click="executeFilter">
-            {{ t('analysis.filter.execute') }}
+          <UButton
+            block
+            color="primary"
+            :loading="isFiltering"
+            :disabled="!canExecuteFilter"
+            @click="executeFilter"
+          >
+            {{ t("analysis.filter.execute") }}
           </UButton>
         </div>
       </div>
@@ -384,11 +428,15 @@ function loadHistoryCondition(condition: {
             class="xeno-filter-actions flex-none flex flex-col gap-2 px-4 py-3"
           >
             <div v-if="isExporting && exportProgress" class="w-full">
-              <div class="mb-1 flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
+              <div
+                class="mb-1 flex items-center justify-between text-sm text-gray-600 dark:text-gray-400"
+              >
                 <span>{{ exportProgress.message }}</span>
                 <span>{{ exportProgress.percentage }}%</span>
               </div>
-              <div class="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+              <div
+                class="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden"
+              >
                 <div
                   class="h-full bg-primary-500 transition-all duration-300"
                   :style="{ width: `${exportProgress.percentage}%` }"
@@ -403,10 +451,14 @@ function loadHistoryCondition(condition: {
                 :disabled="isExporting"
                 @click="exportFeedPack"
               >
-                {{ t('analysis.filter.export') }}
+                {{ t("analysis.filter.export") }}
               </UButton>
-              <UButton color="primary" icon="i-heroicons-sparkles" @click="openLocalAnalysis">
-                {{ t('analysis.filter.localAnalysis') }}
+              <UButton
+                color="primary"
+                icon="i-heroicons-sparkles"
+                @click="openLocalAnalysis"
+              >
+                {{ t("analysis.filter.localAnalysis") }}
               </UButton>
             </div>
           </div>
@@ -416,7 +468,11 @@ function loadHistoryCondition(condition: {
 
     <FilterHistory v-model:open="showHistory" @load="loadHistoryCondition" />
 
-    <LocalAnalysisModal v-model:open="showAnalysisModal" :filter-result="filterResult" :filter-mode="filterMode" />
+    <LocalAnalysisModal
+      v-model:open="showAnalysisModal"
+      :filter-result="filterResult"
+      :filter-mode="filterMode"
+    />
   </div>
 </template>
 
@@ -424,7 +480,11 @@ function loadHistoryCondition(condition: {
 .xeno-filter-shell {
   background:
     linear-gradient(180deg, transparent, var(--xeno-surface-muted)),
-    radial-gradient(circle at top right, rgba(84, 214, 255, 0.06), transparent 24%);
+    radial-gradient(
+      circle at top right,
+      rgba(84, 214, 255, 0.06),
+      transparent 24%
+    );
 }
 
 .xeno-filter-header {
