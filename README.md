@@ -36,13 +36,6 @@ Xenobot is a Rust-native chat data engineering project for authorized exports, i
 | Quality gate | `docs/QUALITY_GATE.md` |
 | Operations runbook | `docs/OPERATIONS_RUNBOOK.md` |
 
-### Reference Boundaries
-- ChatLab, chatlog, and CipherTalk are treated as reference projects only.
-- Xenobot does not directly reuse their licensed UI assets, icons, page structure, or source code.
-- Windows-only DLL, memory-scan, and process-hook workflows from reference projects are intentionally excluded from Xenobot.
-
----
-
 ### Legal and Safe Defaults
 - Authorized export files and user-accessible local directories only.
 - No process-memory key extraction, decryption bypass, or offensive capability.
