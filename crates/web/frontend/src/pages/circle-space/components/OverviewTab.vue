@@ -117,7 +117,7 @@ watch(
 </script>
 
 <template>
-  <div class="xeno-overview-shell main-content space-y-6 p-6">
+  <div class="xeno-overview-shell--group main-content space-y-6 p-6">
     <!-- English UI note -->
     <OverviewIdentityCard
       :session="session"
@@ -172,19 +172,3 @@ watch(
     />
   </div>
 </template>
-
-<style scoped>
-.xeno-overview-shell {
-  background:
-    radial-gradient(
-      circle at top right,
-      rgba(59, 130, 246, 0.08),
-      transparent 26%
-    ),
-    radial-gradient(
-      circle at left center,
-      rgba(14, 165, 233, 0.06),
-      transparent 24%
-    );
-}
-</style>

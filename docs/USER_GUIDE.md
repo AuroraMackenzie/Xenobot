@@ -57,6 +57,11 @@ cargo run -p xenobot-cli --features "api,analysis" -- api smoke --db-path /tmp/x
 
 Smoke checks include:
 - `GET /health`
+- `POST /chat/import` for `wechat`, `qq`, and `discord`
+- strict verification of both `detectedPlatform` and `payloadPlatform`
+- session generation + member activity
+- summary persistence + memory entry creation
+- keyword search + semantic search
 - `POST /chat/sessions/:session_id/generate-sql` (must include session-scoped `msg.meta_id` filter)
 - `POST /chat/sessions/:session_id/execute-sql`
 

@@ -13,9 +13,9 @@ use xenobot_analysis::parsers::{ParseError, ParsedChat, ParserRegistry};
 use xenobot_core::platform_sources::{discover_sources_for_platform, SourceCandidate};
 use xenobot_core::types::Platform;
 
-pub mod config;
 pub mod account;
 pub mod audio;
+pub mod config;
 pub mod media;
 pub mod monitor;
 pub mod service;

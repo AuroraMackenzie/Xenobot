@@ -20,6 +20,44 @@ This document describes the current HTTP endpoints exposed by `xenobot-api` (Axu
   - `features` matrix
   - `runtime.os`, `runtime.arch`
 
+## Core Operations
+
+- `GET /core/platform-capabilities`
+
+### `GET /core/platform-capabilities`
+
+Returns Xenobot's current machine-readable 17-platform capability matrix.
+
+Use this endpoint when you need to answer questions like:
+
+- how many platforms currently match the WeChat reference depth
+- which platforms currently have a platform-specific runtime detector layer
+- which platforms currently have a legal-safe decrypt path
+- whether downstream analysis availability reflects full native workflow parity or only successful normalized import
+
+Response highlights:
+
+- `scope.legalSafeOnly`
+- `scope.excludedImplementationStyles`
+- `scope.notes`
+- `summary.totalPlatforms`
+- `summary.platformsAtWechatDepth`
+- `summary.platformsBelowWechatDepth`
+- `summary.platformsWithRuntimeDetector`
+- `summary.platformsWithLegalSafeDecrypt`
+- `summary.allPlatformsAtPlannedEndState`
+- `platforms[]`
+  - `platformId`
+  - `name`
+  - `tier`
+  - `priorityWave`
+  - `atWechatDepth`
+  - `plannedEndStateReached`
+  - `ingest`
+  - `downstream`
+  - `knownGaps`
+  - `nextFocus`
+
 ## Network Operations
 
 - `GET /network/proxy-config`
@@ -63,6 +101,14 @@ curl -s "http://127.0.0.1:8080/api/network/sandbox-doctor" | jq
 - `POST /detect-format`
 - `POST /import-with-options`
 - `POST /scan-multi-chat-file`
+
+`POST /import` success payload now includes:
+- `sessionId`
+- `detectedPlatform`
+- `payloadPlatform`
+- `sessionName`
+- `diagnostics`
+- `webhookSummary`
 
 ## Media
 
@@ -110,6 +156,54 @@ Notes:
 - `ffmpegPath` may also be provided as `ffmpegBinary` for compatibility.
 
 Both endpoints return in-memory payload bytes as Base64 (`bytes`) and never require a temporary output file path.
+
+## Memory
+
+- `GET /memory/sessions/:session_id/entries`
+- `POST /memory/sessions/:session_id/sync-session-summaries`
+
+### `GET /memory/sessions/:session_id/entries`
+
+Returns explicit persisted memory entries for a normalized chat session space.
+
+Query params:
+
+- `kind`
+- `limit`
+- `offset`
+
+Response highlights:
+
+- `items[]`
+  - `id`
+  - `metaId`
+  - `chatSessionId`
+  - `memoryKind`
+  - `title`
+  - `content`
+  - `tags`
+  - `sourceLabel`
+  - `importance`
+  - `createdAt`
+  - `updatedAt`
+- `count`
+- `limit`
+- `offset`
+
+Current first-party memory source:
+
+- generated `session_summary` entries are automatically written into `memory_entry`
+- existing `chat_session.summary` rows can be backfilled with the sync endpoint
+
+### `POST /memory/sessions/:session_id/sync-session-summaries`
+
+Backfills existing non-empty `chat_session.summary` rows into the explicit memory store.
+
+Response highlights:
+
+- `scanned`
+- `upserted`
+- `skipped`
 
 ## AI Search
 

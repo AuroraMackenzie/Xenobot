@@ -19,7 +19,7 @@ const { locale } = storeToRefs(settingsStore);
 // Color Mode
 const colorMode = useColorMode({
   emitAuto: true,
-  initialValue: "light",
+  initialValue: "dark",
 });
 
 // Color mode options
@@ -60,17 +60,15 @@ watch(
     <!-- English UI note -->
     <div>
       <h3
-        class="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white"
+        class="xeno-settings-title mb-3 flex items-center gap-2 text-sm font-semibold"
       >
         <UIcon name="i-heroicons-language" class="h-4 w-4 text-green-500" />
         {{ t("settings.basic.language.title") }}
       </h3>
-      <div
-        class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50"
-      >
+      <div class="xeno-settings-card p-4">
         <div class="flex items-center justify-between">
           <div class="flex-1 pr-4">
-            <p class="text-sm font-medium text-gray-900 dark:text-white">
+            <p class="xeno-settings-copy text-sm font-medium">
               {{ t("settings.basic.language.description") }}
             </p>
           </div>
@@ -89,17 +87,15 @@ watch(
     <!-- English UI note -->
     <div>
       <h3
-        class="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white"
+        class="xeno-settings-title mb-3 flex items-center gap-2 text-sm font-semibold"
       >
         <UIcon name="i-heroicons-paint-brush" class="h-4 w-4 text-pink-500" />
         {{ t("settings.basic.appearance.title") }}
       </h3>
-      <div
-        class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50"
-      >
+      <div class="xeno-settings-card p-4">
         <div class="flex items-center justify-between">
           <div class="flex-1 pr-4">
-            <p class="text-sm font-medium text-gray-900 dark:text-white">
+            <p class="xeno-settings-copy text-sm font-medium">
               {{ t("settings.basic.appearance.themeMode") }}
             </p>
           </div>
@@ -118,20 +114,18 @@ watch(
     <!-- English UI note -->
     <div>
       <h3
-        class="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white"
+        class="xeno-settings-title mb-3 flex items-center gap-2 text-sm font-semibold"
       >
         <UIcon name="i-heroicons-camera" class="h-4 w-4 text-blue-500" />
         {{ t("settings.basic.screenshot.title") }}
       </h3>
-      <div
-        class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50"
-      >
+      <div class="xeno-settings-card p-4">
         <div class="flex items-center justify-between">
           <div class="flex-1 pr-4">
-            <p class="text-sm font-medium text-gray-900 dark:text-white">
+            <p class="xeno-settings-copy text-sm font-medium">
               {{ t("settings.basic.screenshot.mobileAdapt") }}
             </p>
-            <p class="text-xs text-gray-500 dark:text-gray-400">
+            <p class="xeno-settings-caption text-xs">
               {{ t("settings.basic.screenshot.mobileAdaptDesc") }}
             </p>
           </div>
@@ -144,3 +138,28 @@ watch(
     <NetworkSettingsSection />
   </div>
 </template>
+
+<style scoped>
+.xeno-settings-title {
+  color: var(--xeno-text-main);
+}
+
+.xeno-settings-card {
+  border: 1px solid var(--xeno-border-soft);
+  border-radius: 1rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 120%),
+    rgba(7, 18, 29, 0.66);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 18px 42px rgba(4, 10, 19, 0.16);
+}
+
+.xeno-settings-copy {
+  color: var(--xeno-text-main);
+}
+
+.xeno-settings-caption {
+  color: var(--xeno-text-secondary);
+}
+</style>

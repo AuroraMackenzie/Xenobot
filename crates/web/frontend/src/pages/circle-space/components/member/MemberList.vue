@@ -11,20 +11,11 @@ const props = defineProps<{
   sessionId: string;
 }>();
 
-// Emits
-const emit = defineEmits<{
-  "data-changed": [];
-}>();
-
 // English engineering note.
 const members = ref<MemberWithStats[]>([]);
 const allMembers = ref<MemberWithStats[]>([]); // English engineering note.
 const isLoading = ref(false);
 const searchQuery = ref("");
-
-// English engineering note.
-const deletingMember = ref<MemberWithStats | null>(null);
-const isDeleting = ref(false);
 
 // English engineering note.
 const pageSize = 20;
@@ -124,41 +115,6 @@ async function updateAliases(member: MemberWithStats, newAliases: string[]) {
     console.error("[CircleSpaceMemberList] Failed to save aliases:", error);
   } finally {
     savingAliasesId.value = null;
-  }
-}
-
-// English engineering note.
-function showDeleteConfirm(member: MemberWithStats) {
-  deletingMember.value = member;
-}
-
-// English engineering note.
-function cancelDelete() {
-  deletingMember.value = null;
-}
-
-// English engineering note.
-async function confirmDelete() {
-  if (!deletingMember.value) return;
-  isDeleting.value = true;
-  try {
-    const success = await window.chatApi.deleteMember(
-      props.sessionId,
-      deletingMember.value.id,
-    );
-    if (success) {
-      // English engineering note.
-      await loadMembers();
-      // English engineering note.
-      await loadAllMembers();
-      // English engineering note.
-      emit("data-changed");
-    }
-  } catch (error) {
-    console.error("[CircleSpaceMemberList] Failed to delete member:", error);
-  } finally {
-    isDeleting.value = false;
-    deletingMember.value = null;
   }
 }
 
@@ -301,9 +257,6 @@ onMounted(() => {
                 <th class="px-4 py-4 min-w-[300px]">
                   {{ t("members.list.table.customAlias") }}
                 </th>
-                <th class="px-4 py-4 min-w-[96px] text-right">
-                  {{ t("members.list.table.actions") }}
-                </th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -380,14 +333,6 @@ onMounted(() => {
                     </div>
                   </div>
                 </td>
-
-                <td class="px-4 py-4 text-right">
-                  <UButton
-                    :label="t('members.list.delete')"
-                    size="xs"
-                    @click="showDeleteConfirm(member)"
-                  />
-                </td>
               </tr>
             </tbody>
           </table>
@@ -444,71 +389,34 @@ onMounted(() => {
         </p>
       </div>
     </div>
-
-    <!-- English UI note -->
-    <UModal
-      :open="!!deletingMember"
-      :ui="{ content: 'max-w-sm' }"
-      @update:open="deletingMember = null"
-    >
-      <template #content>
-        <div class="xeno-delete-card p-6 text-center">
-          <div
-            class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30"
-          >
-            <UIcon
-              name="i-heroicons-exclamation-triangle"
-              class="h-7 w-7 text-red-500"
-            />
-          </div>
-          <h3 class="mb-2 text-lg font-semibold text-gray-900 dark:text-white">
-            {{ t("members.list.modal.title") }}
-          </h3>
-          <p class="mb-6 text-sm text-gray-500 dark:text-gray-400">
-            {{
-              t("members.list.modal.content", {
-                name: deletingMember ? getDisplayName(deletingMember) : "",
-                count: deletingMember?.messageCount.toLocaleString(),
-              })
-            }}
-          </p>
-          <div class="flex justify-center gap-3">
-            <UButton variant="outline" @click="cancelDelete">{{
-              t("members.list.modal.cancel")
-            }}</UButton>
-            <UButton color="error" :loading="isDeleting" @click="confirmDelete">
-              {{ t("members.list.modal.confirm") }}
-            </UButton>
-          </div>
-        </div>
-      </template>
-    </UModal>
   </div>
 </template>
 
 <style scoped>
 .xeno-member-ledger,
-.xeno-member-warning,
-.xeno-delete-card {
-  border: 1px solid rgba(255, 255, 255, 0.08);
+.xeno-member-warning {
+  border: 1px solid var(--xeno-border-soft);
   background:
     radial-gradient(
       circle at top right,
       rgba(59, 130, 246, 0.08),
       transparent 24%
     ),
-    linear-gradient(180deg, rgba(15, 23, 42, 0.74), rgba(15, 23, 42, 0.62));
+    var(--xeno-stage-shell-bg);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 18px 38px rgba(2, 6, 23, 0.18);
-  backdrop-filter: blur(18px);
+    inset 0 1px 0 var(--xeno-surface-hairline),
+    0 18px 38px rgba(2, 6, 23, 0.14);
+  backdrop-filter: none;
 }
 
 .xeno-member-warning {
-  background: linear-gradient(
-    180deg,
-    rgba(217, 119, 6, 0.14),
-    rgba(15, 23, 42, 0.62)
-  );
+  background:
+    radial-gradient(
+      circle at top right,
+      rgba(251, 191, 36, 0.12),
+      transparent 26%
+    ),
+    linear-gradient(180deg, rgba(217, 119, 6, 0.08), transparent 120%),
+    var(--xeno-stage-shell-bg);
 }
 </style>

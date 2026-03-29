@@ -56,7 +56,11 @@ pub fn shell_quote_arg(value: &str) -> String {
 
 #[cfg(unix)]
 fn unix_socket_max_path_bytes() -> usize {
-    if cfg!(target_os = "macos") { 103 } else { 107 }
+    if cfg!(target_os = "macos") {
+        103
+    } else {
+        107
+    }
 }
 
 #[cfg(unix)]
@@ -252,11 +256,7 @@ pub fn diagnose_sandbox(file_gateway_dir: Option<PathBuf>) -> Result<SandboxDoct
             writable: gateway_writable,
             error: gateway_error,
         },
-        recommended: build_sandbox_start_recommendation(
-            tcp_allowed,
-            uds.allowed,
-            &gateway_root,
-        ),
+        recommended: build_sandbox_start_recommendation(tcp_allowed, uds.allowed, &gateway_root),
     })
 }
 
@@ -277,7 +277,9 @@ mod tests {
         let gateway = Path::new("/tmp/xenobot gateway");
         let recommendation = build_sandbox_start_recommendation(false, true, gateway);
         assert_eq!(recommendation.mode, "unix");
-        assert!(recommendation.command.contains("--unix-socket /tmp/xenobot.sock"));
+        assert!(recommendation
+            .command
+            .contains("--unix-socket /tmp/xenobot.sock"));
     }
 
     #[test]
@@ -286,7 +288,9 @@ mod tests {
         let recommendation = build_sandbox_start_recommendation(false, false, gateway);
         assert_eq!(recommendation.mode, "file-gateway");
         assert!(recommendation.command.contains("--force-file-gateway"));
-        assert!(recommendation.command.contains("--file-gateway-dir '/tmp/xenobot gateway/with spaces'"));
+        assert!(recommendation
+            .command
+            .contains("--file-gateway-dir '/tmp/xenobot gateway/with spaces'"));
     }
 
     #[test]
@@ -295,6 +299,8 @@ mod tests {
         let recommendation = build_sandbox_start_recommendation(false, false, gateway);
         assert_eq!(recommendation.mode, "file-gateway");
         assert!(recommendation.command.contains("--force-file-gateway"));
-        assert!(recommendation.command.contains("--file-gateway-dir '/tmp/xenobot gate'\"'\"'space'"));
+        assert!(recommendation
+            .command
+            .contains("--file-gateway-dir '/tmp/xenobot gate'\"'\"'space'"));
     }
 }

@@ -43,9 +43,7 @@ pub fn classify_media_path(path: &Path) -> InstagramMediaKind {
         .map(|value| value.to_ascii_lowercase());
 
     match ext.as_deref() {
-        Some("jpg" | "jpeg" | "png" | "gif" | "bmp" | "heic" | "webp") => {
-            InstagramMediaKind::Image
-        }
+        Some("jpg" | "jpeg" | "png" | "gif" | "bmp" | "heic" | "webp") => InstagramMediaKind::Image,
         Some("mp4" | "mov" | "avi" | "mkv" | "webm") => InstagramMediaKind::Video,
         Some("ogg" | "opus" | "mp3" | "m4a" | "wav" | "aac") => InstagramMediaKind::Audio,
         Some("pdf" | "doc" | "docx" | "xls" | "xlsx" | "ppt" | "pptx" | "txt" | "csv") => {
@@ -63,7 +61,8 @@ where
     I: IntoIterator<Item = P>,
     P: AsRef<Path>,
 {
-    paths.into_iter()
+    paths
+        .into_iter()
         .filter_map(|path| {
             let path = path.as_ref();
             let metadata = fs::metadata(path).ok()?;
@@ -124,7 +123,10 @@ mod tests {
     }
     #[test]
     fn classifies_unknown_extensions_as_unknown() {
-        assert_eq!(classify_media_path(Path::new("mystery.bin")), InstagramMediaKind::Unknown);
+        assert_eq!(
+            classify_media_path(Path::new("mystery.bin")),
+            InstagramMediaKind::Unknown
+        );
     }
 
     #[test]
@@ -136,5 +138,4 @@ mod tests {
         let assets = collect_media_assets([nested_dir.as_path()]);
         assert!(assets.is_empty());
     }
-
 }

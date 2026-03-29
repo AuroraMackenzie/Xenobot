@@ -16,19 +16,17 @@ defineProps<{
 </script>
 
 <template>
-  <div class="main-content flex h-full items-center justify-center p-6">
-    <div
-      class="flex h-full w-full items-center justify-center rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 dark:border-gray-700 dark:bg-gray-900/50"
-    >
+  <div class="main-content xeno-analysis-empty-state">
+    <div class="xeno-analysis-empty-panel">
       <div class="text-center">
         <UIcon
           name="i-heroicons-chart-bar"
-          class="mx-auto h-12 w-12 text-gray-400"
+          class="xeno-analysis-empty-icon mx-auto h-12 w-12"
         />
-        <p class="mt-3 text-sm font-medium text-gray-600 dark:text-gray-400">
+        <p class="xeno-analysis-empty-title mt-3 text-sm font-medium">
           {{ t("views.timeline.title") }}
         </p>
-        <p class="mt-1 max-w-md px-4 text-sm text-gray-500">
+        <p class="xeno-analysis-empty-copy mt-1 max-w-md px-4 text-sm">
           {{ t("views.timeline.description") }}
         </p>
       </div>

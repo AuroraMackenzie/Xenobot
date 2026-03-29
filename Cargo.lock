@@ -6051,6 +6051,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "xenobot-visual"
+version = "0.1.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "xenobot-web"
 version = "0.1.0"
 dependencies = [

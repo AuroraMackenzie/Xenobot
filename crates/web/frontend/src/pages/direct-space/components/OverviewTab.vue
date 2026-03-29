@@ -139,7 +139,7 @@ watch(
 </script>
 
 <template>
-  <div class="xeno-overview-shell main-content space-y-6 p-6">
+  <div class="xeno-overview-shell--private main-content space-y-6 p-6">
     <!-- English UI note -->
     <OverviewIdentityCard
       :session="session"
@@ -155,9 +155,9 @@ watch(
       :show-divider="false"
     >
       <div class="p-5">
-        <div class="flex items-center gap-8">
+        <div class="xeno-comparison-layout">
           <!-- English UI note -->
-          <div class="flex-1 text-center">
+          <div class="xeno-comparison-participant">
             <!-- English UI note -->
             <img
               v-if="memberComparisonData.member1.avatar"
@@ -167,19 +167,21 @@ watch(
             />
             <div
               v-else
-              class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-pink-100 dark:bg-pink-900/30"
+              class="xeno-comparison-orb xeno-comparison-orb--private"
             >
-              <span class="text-2xl font-bold text-pink-600 dark:text-pink-400">
+              <span
+                class="xeno-comparison-initial xeno-comparison-initial--private"
+              >
                 {{ memberComparisonData.member1.name.charAt(0) }}
               </span>
             </div>
-            <p class="mt-2 text-sm font-medium text-gray-900 dark:text-white">
+            <p class="xeno-comparison-name text-sm font-medium">
               {{ memberComparisonData.member1.name }}
             </p>
-            <p class="text-2xl font-black text-pink-600 dark:text-pink-400">
+            <p class="xeno-comparison-ratio xeno-comparison-ratio--private">
               {{ memberComparisonData.member1.percentage }}%
             </p>
-            <p class="text-sm text-gray-500 dark:text-gray-400">
+            <p class="xeno-comparison-copy text-sm">
               {{ memberComparisonData.member1.count.toLocaleString() }}
               {{ t("analysis.overview.messageUnit") }}
             </p>
@@ -187,30 +189,30 @@ watch(
 
           <!-- English UI note -->
           <div class="flex-1">
-            <div
-              class="relative h-8 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800"
-            >
+            <div class="xeno-comparison-track">
               <div
-                class="absolute left-0 top-0 h-full rounded-l-full bg-pink-500 transition-all"
+                class="xeno-comparison-segment xeno-comparison-segment--private transition-all"
                 :style="{
                   width: `${memberComparisonData.member1.percentage}%`,
                 }"
               />
               <div
-                class="absolute right-0 top-0 h-full rounded-r-full bg-blue-500 transition-all"
+                class="xeno-comparison-segment xeno-comparison-segment--group transition-all"
                 :style="{
                   width: `${memberComparisonData.member2.percentage}%`,
                 }"
               />
             </div>
-            <div class="mt-2 flex justify-between text-xs text-gray-500">
+            <div
+              class="xeno-comparison-scale mt-2 flex justify-between text-xs"
+            >
               <span>{{ memberComparisonData.member1.percentage }}%</span>
               <span>{{ memberComparisonData.member2.percentage }}%</span>
             </div>
           </div>
 
           <!-- English UI note -->
-          <div class="flex-1 text-center">
+          <div class="xeno-comparison-participant">
             <!-- English UI note -->
             <img
               v-if="memberComparisonData.member2.avatar"
@@ -218,21 +220,20 @@ watch(
               :alt="memberComparisonData.member2.name"
               class="mx-auto h-16 w-16 rounded-full object-cover"
             />
-            <div
-              v-else
-              class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30"
-            >
-              <span class="text-2xl font-bold text-blue-600 dark:text-blue-400">
+            <div v-else class="xeno-comparison-orb xeno-comparison-orb--group">
+              <span
+                class="xeno-comparison-initial xeno-comparison-initial--group"
+              >
                 {{ memberComparisonData.member2.name.charAt(0) }}
               </span>
             </div>
-            <p class="mt-2 text-sm font-medium text-gray-900 dark:text-white">
+            <p class="xeno-comparison-name text-sm font-medium">
               {{ memberComparisonData.member2.name }}
             </p>
-            <p class="text-2xl font-black text-blue-600 dark:text-blue-400">
+            <p class="xeno-comparison-ratio xeno-comparison-ratio--group">
               {{ memberComparisonData.member2.percentage }}%
             </p>
-            <p class="text-sm text-gray-500 dark:text-gray-400">
+            <p class="xeno-comparison-copy text-sm">
               {{ memberComparisonData.member2.count.toLocaleString() }}
               {{ t("analysis.overview.messageUnit") }}
             </p>
@@ -288,19 +289,3 @@ watch(
     />
   </div>
 </template>
-
-<style scoped>
-.xeno-overview-shell {
-  background:
-    radial-gradient(
-      circle at top right,
-      rgba(59, 130, 246, 0.08),
-      transparent 26%
-    ),
-    radial-gradient(
-      circle at left center,
-      rgba(236, 72, 153, 0.06),
-      transparent 24%
-    );
-}
-</style>

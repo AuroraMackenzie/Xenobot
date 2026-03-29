@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tracing::instrument;
+use xenobot_core::platform_capability_report;
 
 use crate::ApiError;
 
@@ -28,6 +29,7 @@ pub fn router() -> Router {
     Router::new()
         // Theme
         .route("/theme", post(set_theme_source))
+        .route("/platform-capabilities", get(get_platform_capabilities))
         // Dialog
         .route("/dialog/open", post(show_open_dialog))
         // Clipboard
@@ -79,6 +81,12 @@ async fn set_theme_source(Json(req): Json<SetThemeSourceRequest>) -> Result<Json
         )));
     }
     Ok(Json(()))
+}
+
+#[instrument]
+async fn get_platform_capabilities(
+) -> Result<Json<xenobot_core::PlatformCapabilityReport>, ApiError> {
+    Ok(Json(platform_capability_report()))
 }
 
 #[instrument]
@@ -212,4 +220,46 @@ async fn relaunch() -> Result<Json<serde_json::Value>, ApiError> {
         "success": false,
         "message": "relaunch_not_supported_in_http_mode",
     })))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::{to_bytes, Body};
+    use axum::http::{Method, Request, StatusCode};
+    use tower::util::ServiceExt;
+
+    #[tokio::test]
+    async fn platform_capabilities_route_returns_machine_readable_report() {
+        let app = router();
+        let request = Request::builder()
+            .method(Method::GET)
+            .uri("/platform-capabilities")
+            .body(Body::empty())
+            .expect("build request");
+
+        let response = app.oneshot(request).await.expect("route response");
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let bytes = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("read body");
+        let json: serde_json::Value = serde_json::from_slice(&bytes).expect("json body");
+
+        assert_eq!(json["summary"]["totalPlatforms"], 17);
+        assert_eq!(json["summary"]["platformsAtWechatDepth"], 1);
+        assert_eq!(json["summary"]["platformsWithLegalSafeDecrypt"], 1);
+
+        let platforms = json["platforms"]
+            .as_array()
+            .expect("platforms must be an array");
+        assert_eq!(platforms.len(), 17);
+
+        let wechat = platforms
+            .iter()
+            .find(|entry| entry["platformId"] == "wechat")
+            .expect("wechat entry must exist");
+        assert_eq!(wechat["atWechatDepth"], true);
+        assert_eq!(wechat["ingest"]["nativeRuntimeDetector"], true);
+    }
 }

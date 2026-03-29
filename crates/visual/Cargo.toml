@@ -1,0 +1,10 @@
+[package]
+name = "xenobot-visual"
+version = "0.1.0"
+edition = "2021"
+authors = ["Xenobot Team"]
+description = "Original visual math core for Xenobot immersive rendering"
+license = "AGPL-3.0-only"
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }

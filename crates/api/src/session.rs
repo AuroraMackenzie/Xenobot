@@ -518,6 +518,7 @@ async fn load_summary_messages(
         LEFT JOIN member mb ON mb.id = m.sender_id
         WHERE mc.session_id = ?1
           AND m.meta_id = ?2
+          AND m.msg_type != 7
         ORDER BY m.ts ASC, m.id ASC
         "#,
     )
@@ -558,6 +559,13 @@ async fn generate_summary_internal(
     if !force_regenerate {
         if let Some(summary) = existing_summary {
             if !summary.trim().is_empty() {
+                crate::memory::upsert_session_summary_memory(
+                    pool,
+                    meta_id,
+                    chat_session_id,
+                    &summary,
+                )
+                .await?;
                 return Ok(GenerateSummaryResponse {
                     success: true,
                     summary: Some(summary),
@@ -586,6 +594,7 @@ async fn generate_summary_internal(
         .execute(pool)
         .await
         .map_err(|e| ApiError::Database(e.to_string()))?;
+    crate::memory::upsert_session_summary_memory(pool, meta_id, chat_session_id, &summary).await?;
 
     Ok(GenerateSummaryResponse {
         success: true,
@@ -622,6 +631,7 @@ async fn check_summary_generatable(
         JOIN message m ON m.id = mc.message_id
         WHERE mc.session_id = ?1
           AND m.meta_id = ?2
+          AND m.msg_type != 7
           AND LENGTH(TRIM(COALESCE(m.content, ''))) > 0
         "#,
     )

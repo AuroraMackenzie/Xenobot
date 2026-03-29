@@ -422,7 +422,7 @@ onMounted(() => {
 
 <style scoped>
 .xeno-wordcloud-shell {
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--xeno-border-soft);
   border-radius: 1.75rem;
   background:
     radial-gradient(
@@ -435,21 +435,17 @@ onMounted(() => {
       rgba(250, 204, 21, 0.06),
       transparent 20%
     ),
-    linear-gradient(180deg, rgba(15, 23, 42, 0.74), rgba(15, 23, 42, 0.62));
+    var(--xeno-stage-shell-bg);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 18px 38px rgba(2, 6, 23, 0.18);
-  backdrop-filter: blur(18px);
+    inset 0 1px 0 var(--xeno-surface-hairline),
+    0 18px 38px rgba(2, 6, 23, 0.14);
+  backdrop-filter: none;
 }
 
 .xeno-wordcloud-stage,
 .xeno-wordcloud-sidebar {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: linear-gradient(
-    180deg,
-    rgba(15, 23, 42, 0.6),
-    rgba(15, 23, 42, 0.48)
-  );
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--xeno-border-soft);
+  background: var(--xeno-stage-inner-bg);
+  box-shadow: inset 0 1px 0 var(--xeno-surface-hairline);
 }
 </style>

@@ -632,8 +632,8 @@ async fn test_generate_sql_keyword_intent_without_quotes_does_not_add_like_filte
 }
 
 #[tokio::test]
-async fn test_generate_sql_fallback_intent_keeps_session_scope() -> Result<(), Box<dyn std::error::Error>>
-{
+async fn test_generate_sql_fallback_intent_keeps_session_scope(
+) -> Result<(), Box<dyn std::error::Error>> {
     let _guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
     let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("..")

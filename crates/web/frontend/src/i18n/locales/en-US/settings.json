@@ -355,7 +355,7 @@
     "noConfigs": "No configs yet, click the button above to add",
     "active": "Active",
     "setActive": "Set Active",
-    "deleteConfirm": "Delete config \"{name}\"?",
+    "deleteConfirm": "Configuration removal is disabled in safe mode for \"{name}\".",
     "configName": "Config Name",
     "configNamePlaceholder": "e.g. Ollama Embedding",
     "apiSource": "API Source",
@@ -379,6 +379,6 @@
     "cached": "Cached",
     "size": "Size",
     "clear": "Clear",
-    "clearVectorStoreConfirm": "Clear all vector cache? This will cause recalculation on next search."
+    "clearVectorStoreConfirm": "Vector cache reset is disabled in safe mode."
   }
 }

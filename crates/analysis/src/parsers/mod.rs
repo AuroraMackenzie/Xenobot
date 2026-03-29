@@ -122,6 +122,7 @@ impl ParserRegistry {
     }
 
     fn register_default_parsers(&mut self) {
+        self.parsers.push(Box::new(ManualReviewParser::new()));
         self.parsers.push(Box::new(WhatsAppParser::new()));
         self.parsers.push(Box::new(LINEParser::new()));
         self.parsers.push(Box::new(QQParser::new()));
@@ -269,6 +270,216 @@ fn score_parsed_chat(
         score += 25;
     }
     score
+}
+
+/// Parser for Xenobot manual-review selection packs.
+pub struct ManualReviewParser {
+    name_str: String,
+}
+
+impl ManualReviewParser {
+    /// Creates a new ManualReviewParser instance.
+    pub fn new() -> Self {
+        Self {
+            name_str: "manual-review".to_string(),
+        }
+    }
+}
+
+impl ChatParser for ManualReviewParser {
+    fn name(&self) -> &str {
+        &self.name_str
+    }
+
+    fn can_parse(&self, path: &Path) -> bool {
+        let path_str = path.to_string_lossy().to_ascii_lowercase();
+        path_str.contains("manual-review")
+            || path_str.contains("manual_review")
+            || path_str.contains("manual-selection")
+            || path_str.contains("manual_selection")
+    }
+
+    fn parse(&self, path: &Path) -> Result<ParsedChat, ParseError> {
+        let content = std::fs::read_to_string(path)?;
+        let value: serde_json::Value = serde_json::from_str(&content)?;
+        parse_manual_review_value(&value, path).ok_or_else(|| {
+            ParseError::UnsupportedFormat("not a xenobot manual-review selection pack".to_string())
+        })
+    }
+}
+
+fn parse_manual_review_value(value: &serde_json::Value, path: &Path) -> Option<ParsedChat> {
+    let schema = value_get_string(value, &["schema", "type"])?.to_ascii_lowercase();
+    let capture_mode =
+        value_get_string(value, &["captureMode", "capture_mode"])?.to_ascii_lowercase();
+    if schema != "xenobot/manual-review" || capture_mode != "manual-selection" {
+        return None;
+    }
+
+    let platform = value_get_string(value, &["platform"])?
+        .trim()
+        .to_ascii_lowercase();
+    if platform.is_empty() {
+        return None;
+    }
+
+    let chat_name = value_get_string(value, &["chatName", "chat_name"]).unwrap_or_else(|| {
+        path.file_stem()
+            .map(|stem| stem.to_string_lossy().to_string())
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| "Manual Review".to_string())
+    });
+    let chat_type = match value_get_string(value, &["chatType", "chat_type"])
+        .unwrap_or_else(|| "group".to_string())
+        .trim()
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "private" | "direct" | "dm" => ChatType::Private,
+        _ => ChatType::Group,
+    };
+
+    let mut members = std::collections::BTreeMap::<String, ChatMember>::new();
+    if let Some(member_values) = value.get("members").and_then(|entries| entries.as_array()) {
+        for raw_member in member_values {
+            let id = value_get_string(raw_member, &["id", "senderId", "sender_id"])?;
+            upsert_member(
+                &mut members,
+                id,
+                value_get_string(raw_member, &["name", "senderName", "sender_name"]),
+                value_get_string(raw_member, &["displayName", "display_name", "nickname"]),
+            );
+        }
+    }
+
+    let mut messages = Vec::new();
+    if let Some(message_values) = value
+        .get("selectedMessages")
+        .and_then(|entries| entries.as_array())
+    {
+        for raw_message in message_values {
+            let sender = value_get_string(raw_message, &["senderId", "sender_id", "sender"])
+                .filter(|value| !value.trim().is_empty())
+                .unwrap_or_else(|| "manual-user".to_string());
+            let sender_name = value_get_string(
+                raw_message,
+                &["senderName", "sender_name", "displayName", "display_name"],
+            );
+            let content =
+                value_get_string(raw_message, &["content", "text", "body"]).unwrap_or_default();
+            let timestamp = parse_manual_review_timestamp(raw_message).unwrap_or(0);
+            let msg_type = parse_manual_review_message_type(raw_message);
+
+            upsert_member(
+                &mut members,
+                sender.clone(),
+                sender_name.clone(),
+                sender_name.clone(),
+            );
+            messages.push(ParsedMessage {
+                sender,
+                sender_name,
+                timestamp,
+                content,
+                msg_type,
+            });
+        }
+    }
+
+    if let Some(file_values) = value
+        .get("selectedFiles")
+        .and_then(|entries| entries.as_array())
+    {
+        for raw_file in file_values {
+            let sender = value_get_string(raw_file, &["senderId", "sender_id", "sender"])
+                .filter(|value| !value.trim().is_empty())
+                .unwrap_or_else(|| "manual-user".to_string());
+            let sender_name = value_get_string(
+                raw_file,
+                &["senderName", "sender_name", "displayName", "display_name"],
+            );
+            let timestamp = parse_manual_review_timestamp(raw_file).unwrap_or(0);
+            let label = value_get_string(
+                raw_file,
+                &["label", "name", "title", "path", "filePath", "file_path"],
+            )
+            .unwrap_or_else(|| "selected-file".to_string());
+            let note = value_get_string(raw_file, &["note", "caption", "summary", "reason"]);
+            let content = note
+                .map(|note| format!("{} | {}", label, note))
+                .unwrap_or(label);
+            let msg_type = match value_get_string(raw_file, &["kind", "fileKind", "file_kind"])
+                .unwrap_or_else(|| "file".to_string())
+                .trim()
+                .to_ascii_lowercase()
+                .as_str()
+            {
+                "image" | "screenshot" => MessageType::Image,
+                "audio" | "voice" => MessageType::Audio,
+                "video" => MessageType::Video,
+                "link" => MessageType::Link,
+                _ => MessageType::File,
+            };
+
+            upsert_member(
+                &mut members,
+                sender.clone(),
+                sender_name.clone(),
+                sender_name.clone(),
+            );
+            messages.push(ParsedMessage {
+                sender,
+                sender_name,
+                timestamp,
+                content,
+                msg_type,
+            });
+        }
+    }
+
+    Some(ParsedChat {
+        platform,
+        chat_name,
+        chat_type,
+        messages,
+        members: members.into_values().collect(),
+    })
+}
+
+fn parse_manual_review_timestamp(value: &serde_json::Value) -> Option<i64> {
+    use chrono::TimeZone;
+
+    if let Some(ts) = value_get_i64(value, &["timestamp", "ts"]) {
+        return Some(ts);
+    }
+
+    let raw = value_get_string(value, &["timestamp", "ts"])?;
+    chrono::DateTime::parse_from_rfc3339(raw.trim())
+        .map(|dt| dt.timestamp())
+        .or_else(|_| {
+            chrono::NaiveDateTime::parse_from_str(raw.trim(), "%Y-%m-%d %H:%M:%S")
+                .map(|dt| chrono::Utc.from_utc_datetime(&dt).timestamp())
+        })
+        .ok()
+}
+
+fn parse_manual_review_message_type(value: &serde_json::Value) -> MessageType {
+    match value_get_string(value, &["messageType", "message_type", "type"])
+        .unwrap_or_else(|| "text".to_string())
+        .trim()
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "image" => MessageType::Image,
+        "video" => MessageType::Video,
+        "audio" | "voice" => MessageType::Audio,
+        "file" | "attachment" => MessageType::File,
+        "sticker" | "emoji" => MessageType::Sticker,
+        "location" => MessageType::Location,
+        "system" => MessageType::System,
+        "link" => MessageType::Link,
+        _ => MessageType::Text,
+    }
 }
 
 /// Parser for WhatsApp chat exports.
@@ -453,6 +664,90 @@ fn parse_line_timestamp(s: &str) -> Option<i64> {
         .map(|dt| Utc.from_utc_datetime(&dt).timestamp())
 }
 
+fn file_stem_string(path: &Path) -> Result<String, ParseError> {
+    Ok(path
+        .file_stem()
+        .ok_or(ParseError::InvalidFormat("missing file stem".to_string()))?
+        .to_string_lossy()
+        .to_string())
+}
+
+fn value_get_any<'a>(value: &'a serde_json::Value, keys: &[&str]) -> Option<&'a serde_json::Value> {
+    let object = value.as_object()?;
+    keys.iter().find_map(|key| object.get(*key))
+}
+
+fn value_get_string(value: &serde_json::Value, keys: &[&str]) -> Option<String> {
+    match value_get_any(value, keys)? {
+        serde_json::Value::String(v) => Some(v.clone()),
+        serde_json::Value::Number(v) => Some(v.to_string()),
+        _ => None,
+    }
+}
+
+fn value_get_i64(value: &serde_json::Value, keys: &[&str]) -> Option<i64> {
+    match value_get_any(value, keys)? {
+        serde_json::Value::Number(v) => v
+            .as_i64()
+            .or_else(|| v.as_u64().and_then(|inner| i64::try_from(inner).ok())),
+        serde_json::Value::String(v) => v.parse::<i64>().ok(),
+        _ => None,
+    }
+}
+
+fn value_get_bool(value: &serde_json::Value, keys: &[&str]) -> Option<bool> {
+    match value_get_any(value, keys)? {
+        serde_json::Value::Bool(v) => Some(*v),
+        serde_json::Value::Number(v) => Some(v.as_i64()? != 0),
+        serde_json::Value::String(v) => match v.trim().to_ascii_lowercase().as_str() {
+            "1" | "true" | "yes" => Some(true),
+            "0" | "false" | "no" => Some(false),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+fn upsert_member(
+    members: &mut std::collections::BTreeMap<String, ChatMember>,
+    id: String,
+    name: Option<String>,
+    display_name: Option<String>,
+) {
+    let clean_name = name.and_then(|value| {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    });
+    let clean_display_name = display_name.and_then(|value| {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    });
+
+    members
+        .entry(id.clone())
+        .and_modify(|existing| {
+            if existing.name.is_none() {
+                existing.name = clean_name.clone();
+            }
+            if existing.display_name.is_none() {
+                existing.display_name = clean_display_name.clone();
+            }
+        })
+        .or_insert(ChatMember {
+            id,
+            name: clean_name,
+            display_name: clean_display_name,
+        });
+}
+
 /// Parser for QQ chat exports.
 pub struct QQParser {
     name_str: String,
@@ -479,8 +774,20 @@ impl ChatParser for QQParser {
 
     fn parse(&self, path: &Path) -> Result<ParsedChat, ParseError> {
         let content = std::fs::read_to_string(path)?;
+        let fallback_chat_name = file_stem_string(path)?;
+
+        if let Ok(root) = serde_json::from_str::<serde_json::Value>(&content) {
+            if let Some(parsed) = parse_qq_chat_exporter_json(&root, &fallback_chat_name) {
+                return Ok(parsed);
+            }
+        }
+
+        if let Some(parsed) = parse_qq_official_export(&content, &fallback_chat_name) {
+            return Ok(parsed);
+        }
+
         let mut messages = Vec::new();
-        let mut members = std::collections::HashSet::new();
+        let mut members = std::collections::BTreeMap::new();
 
         for line in content.lines() {
             let line = line.trim();
@@ -489,28 +796,22 @@ impl ChatParser for QQParser {
             }
 
             if let Some(msg) = parse_qq_line(line) {
-                members.insert(msg.sender.clone());
+                upsert_member(
+                    &mut members,
+                    msg.sender.clone(),
+                    msg.sender_name.clone(),
+                    msg.sender_name.clone(),
+                );
                 messages.push(msg);
             }
         }
 
         Ok(ParsedChat {
             platform: "qq".to_string(),
-            chat_name: path
-                .file_stem()
-                .ok_or(ParseError::InvalidFormat("missing file stem".to_string()))?
-                .to_string_lossy()
-                .to_string(),
+            chat_name: fallback_chat_name,
             chat_type: ChatType::Group,
             messages,
-            members: members
-                .into_iter()
-                .map(|id| ChatMember {
-                    id,
-                    name: None,
-                    display_name: None,
-                })
-                .collect(),
+            members: members.into_values().collect(),
         })
     }
 }
@@ -523,13 +824,14 @@ fn parse_qq_line(line: &str) -> Option<ParsedMessage> {
     let timestamp_str = caps.get(1)?.as_str();
     let sender = caps.get(2)?.as_str().to_string();
     let content = caps.get(3)?.as_str().to_string();
+    let msg_type = infer_qq_message_type(&content);
 
     Some(ParsedMessage {
         sender,
         sender_name: None,
         timestamp: parse_qq_timestamp(timestamp_str)?,
         content,
-        msg_type: MessageType::Text,
+        msg_type,
     })
 }
 
@@ -538,6 +840,408 @@ fn parse_qq_timestamp(s: &str) -> Option<i64> {
     NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S")
         .ok()
         .map(|dt| Utc.from_utc_datetime(&dt).timestamp())
+}
+
+fn clean_qq_nickname(raw: &str) -> String {
+    let prefix = regex::Regex::new(r"^(?:【[^】]*】\s*)+").ok();
+    let trimmed = raw.trim();
+    match prefix {
+        Some(pattern) => {
+            let cleaned = pattern.replace(trimmed, "").trim().to_string();
+            if cleaned.is_empty() {
+                trimmed.to_string()
+            } else {
+                cleaned
+            }
+        }
+        None => trimmed.to_string(),
+    }
+}
+
+fn infer_qq_message_type(content: &str) -> MessageType {
+    let trimmed = content.trim();
+    if trimmed.is_empty() {
+        return MessageType::System;
+    }
+    if matches!(trimmed, "[图片]" | "[Image]") {
+        return MessageType::Image;
+    }
+    if matches!(trimmed, "[视频]" | "[Video]") {
+        return MessageType::Video;
+    }
+    if matches!(trimmed, "[语音]" | "[Audio]" | "[Voice]") {
+        return MessageType::Audio;
+    }
+    if matches!(trimmed, "[文件]" | "[File]") {
+        return MessageType::File;
+    }
+    if matches!(trimmed, "[位置]" | "[地理位置]" | "[Location]") {
+        return MessageType::Location;
+    }
+    if matches!(trimmed, "[链接]" | "[卡片消息]" | "[Link]") {
+        return MessageType::Link;
+    }
+    if matches!(trimmed, "[表情]" | "[Sticker]") {
+        return MessageType::Sticker;
+    }
+    if trimmed.contains("加入了群聊")
+        || trimmed.contains("退出了群聊")
+        || trimmed.contains("被移出群聊")
+        || trimmed.contains("修改了群名称")
+        || trimmed.contains("撤回了一条消息")
+        || trimmed.contains("群公告")
+    {
+        return MessageType::System;
+    }
+    MessageType::Text
+}
+
+fn parse_qq_official_export(content: &str, fallback_chat_name: &str) -> Option<ParsedChat> {
+    let header_pattern = regex::Regex::new(
+        r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s+(.+?)(?:\(([^)]+)\)|<([^>]+)>)?$",
+    )
+    .ok()?;
+    let group_pattern = regex::Regex::new(r"^消息对象:(.+)$").ok()?;
+
+    struct PendingQqMessage {
+        sender_id: String,
+        sender_name: String,
+        timestamp: i64,
+        content_lines: Vec<String>,
+    }
+
+    let mut chat_name = fallback_chat_name.to_string();
+    let mut members = std::collections::BTreeMap::new();
+    let mut messages = Vec::new();
+    let mut current: Option<PendingQqMessage> = None;
+    let mut saw_header = false;
+
+    let push_current =
+        |pending: Option<PendingQqMessage>,
+         messages: &mut Vec<ParsedMessage>,
+         members: &mut std::collections::BTreeMap<String, ChatMember>| {
+            if let Some(pending) = pending {
+                let content = pending.content_lines.join("\n").trim().to_string();
+                if content.is_empty() {
+                    return;
+                }
+
+                upsert_member(
+                    members,
+                    pending.sender_id.clone(),
+                    Some(pending.sender_name.clone()),
+                    Some(pending.sender_name.clone()),
+                );
+                messages.push(ParsedMessage {
+                    sender: pending.sender_id,
+                    sender_name: Some(pending.sender_name),
+                    timestamp: pending.timestamp,
+                    content: content.clone(),
+                    msg_type: infer_qq_message_type(&content),
+                });
+            }
+        };
+
+    for raw_line in content.lines() {
+        let line = raw_line.trim_end_matches('\r');
+
+        if let Some(captures) = group_pattern.captures(line) {
+            if let Some(value) = captures.get(1) {
+                let candidate = value.as_str().trim();
+                if !candidate.is_empty() {
+                    chat_name = candidate.to_string();
+                }
+            }
+            continue;
+        }
+
+        if let Some(captures) = header_pattern.captures(line) {
+            saw_header = true;
+            push_current(current.take(), &mut messages, &mut members);
+
+            let timestamp = parse_qq_timestamp(captures.get(1)?.as_str())?;
+            let raw_sender_name = captures.get(2)?.as_str();
+            let sender_name = clean_qq_nickname(raw_sender_name);
+            let sender_id = captures
+                .get(3)
+                .or_else(|| captures.get(4))
+                .map(|value| value.as_str().trim().to_string())
+                .filter(|value| !value.is_empty())
+                .unwrap_or_else(|| sender_name.clone());
+
+            current = Some(PendingQqMessage {
+                sender_id,
+                sender_name,
+                timestamp,
+                content_lines: Vec::new(),
+            });
+            continue;
+        }
+
+        if let Some(pending) = current.as_mut() {
+            pending.content_lines.push(line.to_string());
+        }
+    }
+
+    push_current(current, &mut messages, &mut members);
+
+    if !saw_header {
+        return None;
+    }
+
+    Some(ParsedChat {
+        platform: "qq".to_string(),
+        chat_name,
+        chat_type: ChatType::Group,
+        messages,
+        members: members.into_values().collect(),
+    })
+}
+
+fn parse_qq_chat_exporter_json(
+    root: &serde_json::Value,
+    fallback_chat_name: &str,
+) -> Option<ParsedChat> {
+    let (chat_name, chat_type, raw_messages) = extract_qce_export_root(root, fallback_chat_name)?;
+    let mut parsed_messages = Vec::new();
+    let mut members = std::collections::BTreeMap::new();
+
+    for raw_message in raw_messages {
+        let Some(parsed) = parse_qce_message_value(raw_message) else {
+            continue;
+        };
+        let (sender_id, account_name, display_name) = extract_qce_sender_identity(raw_message);
+        upsert_member(&mut members, sender_id, account_name, display_name);
+        parsed_messages.push(parsed);
+    }
+
+    if parsed_messages.is_empty() {
+        return None;
+    }
+
+    Some(ParsedChat {
+        platform: "qq".to_string(),
+        chat_name,
+        chat_type,
+        messages: parsed_messages,
+        members: members.into_values().collect(),
+    })
+}
+
+fn extract_qce_export_root<'a>(
+    root: &'a serde_json::Value,
+    fallback_chat_name: &str,
+) -> Option<(String, ChatType, &'a [serde_json::Value])> {
+    let messages = root.get("messages")?.as_array()?;
+    if !messages.iter().any(looks_like_qce_message) {
+        return None;
+    }
+
+    let chat_info = root.get("chatInfo");
+    let chat_name = chat_info
+        .and_then(|value| value_get_string(value, &["name"]))
+        .unwrap_or_else(|| fallback_chat_name.to_string());
+    let chat_type = chat_info
+        .and_then(|value| value_get_string(value, &["type"]))
+        .map(|raw| match raw.trim().to_ascii_lowercase().as_str() {
+            "friend" | "private" | "direct" | "dm" => ChatType::Private,
+            _ => ChatType::Group,
+        })
+        .unwrap_or(ChatType::Group);
+
+    Some((chat_name, chat_type, messages.as_slice()))
+}
+
+fn looks_like_qce_message(value: &serde_json::Value) -> bool {
+    value
+        .get("sender")
+        .and_then(|sender| sender.as_object())
+        .is_some()
+        && value
+            .get("content")
+            .and_then(|content| content.as_object())
+            .is_some()
+        && value_get_any(value, &["timestamp", "time"]).is_some()
+}
+
+fn extract_qce_sender_identity(
+    value: &serde_json::Value,
+) -> (String, Option<String>, Option<String>) {
+    let sender = value.get("sender");
+    let account_name = sender.and_then(|inner| {
+        value_get_string(inner, &["name"])
+            .or_else(|| value_get_string(inner, &["nickname"]))
+            .or_else(|| value_get_string(inner, &["remark"]))
+            .or_else(|| value_get_string(inner, &["groupCard"]))
+    });
+    let display_name = sender.and_then(|inner| {
+        value_get_string(inner, &["groupCard"])
+            .or_else(|| value_get_string(inner, &["remark"]))
+            .or_else(|| value_get_string(inner, &["name"]))
+            .or_else(|| value_get_string(inner, &["nickname"]))
+    });
+    let sender_id = sender
+        .and_then(|inner| {
+            value_get_string(inner, &["uid"])
+                .or_else(|| value_get_string(inner, &["uin"]))
+                .or_else(|| display_name.clone())
+                .or_else(|| account_name.clone())
+        })
+        .unwrap_or_else(|| "qq-unknown".to_string());
+
+    (sender_id, account_name, display_name)
+}
+
+fn normalize_epoch_seconds(timestamp: i64) -> i64 {
+    if timestamp > 1_000_000_000_000 {
+        timestamp / 1000
+    } else {
+        timestamp
+    }
+}
+
+fn infer_qce_message_type(value: &serde_json::Value, content_text: &str) -> MessageType {
+    if value_get_bool(value, &["system"]).unwrap_or(false) {
+        return MessageType::System;
+    }
+
+    if let Some(raw_type) = value_get_string(value, &["type"]) {
+        match raw_type.trim().to_ascii_lowercase().as_str() {
+            "image" => return MessageType::Image,
+            "video" => return MessageType::Video,
+            "audio" | "voice" => return MessageType::Audio,
+            "file" => return MessageType::File,
+            "face" | "market_face" | "emoji" | "sticker" => return MessageType::Sticker,
+            "location" => return MessageType::Location,
+            "json" | "link" | "share" => return MessageType::Link,
+            "system" => return MessageType::System,
+            _ => {}
+        }
+    }
+
+    let content = value.get("content");
+    if let Some(resources) = content
+        .and_then(|inner| inner.get("resources"))
+        .and_then(|inner| inner.as_array())
+    {
+        for resource in resources {
+            if let Some(kind) = value_get_string(resource, &["type"]) {
+                match kind.trim().to_ascii_lowercase().as_str() {
+                    "image" => return MessageType::Image,
+                    "video" => return MessageType::Video,
+                    "audio" | "voice" => return MessageType::Audio,
+                    "file" => return MessageType::File,
+                    "emoji" | "face" | "sticker" => return MessageType::Sticker,
+                    "location" => return MessageType::Location,
+                    "link" | "json" | "card" => return MessageType::Link,
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    if let Some(elements) = content
+        .and_then(|inner| inner.get("elements"))
+        .and_then(|inner| inner.as_array())
+    {
+        for element in elements {
+            if let Some(kind) = value_get_string(element, &["type"]) {
+                match kind.trim().to_ascii_lowercase().as_str() {
+                    "image" => return MessageType::Image,
+                    "video" => return MessageType::Video,
+                    "audio" | "voice" => return MessageType::Audio,
+                    "file" => return MessageType::File,
+                    "face" | "market_face" | "emoji" | "sticker" => return MessageType::Sticker,
+                    "location" => return MessageType::Location,
+                    "json" | "share" | "reply" | "forward" => return MessageType::Link,
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    infer_qq_message_type(content_text)
+}
+
+fn build_qce_message_content(value: &serde_json::Value) -> String {
+    let mut segments = Vec::new();
+
+    if let Some(text) = value
+        .get("content")
+        .and_then(|inner| value_get_string(inner, &["text"]))
+        .map(|inner| inner.trim().to_string())
+        .filter(|inner| !inner.is_empty())
+    {
+        segments.push(text);
+    }
+
+    if let Some(resources) = value
+        .get("content")
+        .and_then(|inner| inner.get("resources"))
+        .and_then(|inner| inner.as_array())
+    {
+        for resource in resources {
+            let kind = value_get_string(resource, &["type"])
+                .unwrap_or_else(|| "file".to_string())
+                .trim()
+                .to_ascii_lowercase();
+            let file_name = value_get_string(resource, &["filename", "name", "localPath"])
+                .unwrap_or_else(|| "resource".to_string());
+            let label = match kind.as_str() {
+                "image" => format!("[Image: {}]", file_name),
+                "video" => format!("[Video: {}]", file_name),
+                "audio" | "voice" => format!("[Audio: {}]", file_name),
+                "emoji" | "face" | "sticker" => format!("[Sticker: {}]", file_name),
+                "location" => format!("[Location: {}]", file_name),
+                "json" | "card" | "link" => format!("[Link: {}]", file_name),
+                _ => format!("[File: {}]", file_name),
+            };
+            segments.push(label);
+        }
+    }
+
+    if segments.is_empty() && value_get_bool(value, &["recalled"]).unwrap_or(false) {
+        segments.push("[Recalled message]".to_string());
+    }
+
+    if segments.is_empty() && value_get_bool(value, &["system"]).unwrap_or(false) {
+        segments.push("[System message]".to_string());
+    }
+
+    segments.join("\n").trim().to_string()
+}
+
+fn parse_qce_message_value(value: &serde_json::Value) -> Option<ParsedMessage> {
+    if !looks_like_qce_message(value) {
+        return None;
+    }
+
+    let (sender, account_name, display_name) = extract_qce_sender_identity(value);
+    let sender_name = display_name.or(account_name);
+    let content = build_qce_message_content(value);
+    if content.is_empty() {
+        return None;
+    }
+
+    let timestamp = value_get_i64(value, &["timestamp"])
+        .map(normalize_epoch_seconds)
+        .or_else(|| {
+            value_get_string(value, &["time"]).and_then(|raw| {
+                chrono::DateTime::parse_from_rfc3339(raw.trim())
+                    .map(|inner| inner.timestamp())
+                    .ok()
+            })
+        })
+        .unwrap_or(0);
+    let msg_type = infer_qce_message_type(value, &content);
+
+    Some(ParsedMessage {
+        sender,
+        sender_name,
+        timestamp,
+        content,
+        msg_type,
+    })
 }
 
 /// Parser for Telegram chat exports.
@@ -654,63 +1358,77 @@ impl ChatParser for DiscordParser {
 
     fn parse(&self, path: &Path) -> Result<ParsedChat, ParseError> {
         let content = std::fs::read_to_string(path)?;
+        let root: serde_json::Value = serde_json::from_str(&content)?;
+        let default_chat_name = file_stem_string(path)?;
+        let (chat_name, chat_type, raw_messages) =
+            extract_discord_export_root(&root, &default_chat_name)?;
+        let mut parsed_messages = Vec::new();
+        let mut members = std::collections::BTreeMap::new();
 
-        #[derive(Deserialize)]
-        struct DiscordMessage {
-            #[serde(rename = "ID")]
-            id: Option<String>,
-            #[serde(rename = "Timestamp")]
-            timestamp: Option<String>,
-            #[serde(rename = "Author")]
-            author: Option<DiscordAuthor>,
-            #[serde(rename = "Content")]
-            content: Option<String>,
-        }
+        for raw_message in raw_messages {
+            if !looks_like_discord_message(raw_message) {
+                continue;
+            }
 
-        #[derive(Deserialize)]
-        struct DiscordAuthor {
-            #[serde(rename = "ID")]
-            id: Option<String>,
-            #[serde(rename = "Name")]
-            name: Option<String>,
-        }
+            let Some(author) = value_get_any(raw_message, &["Author", "author"]) else {
+                continue;
+            };
+            let (account_name, display_name) = extract_discord_author_names(author);
+            let sender_name = display_name.clone().or(account_name.clone());
+            let sender = value_get_string(author, &["ID", "id"])
+                .or_else(|| sender_name.clone())
+                .unwrap_or_else(|| "discord-unknown".to_string());
+            let timestamp = value_get_string(raw_message, &["Timestamp", "timestamp"])
+                .and_then(|value| parse_discord_timestamp(&value))
+                .unwrap_or(0);
 
-        let messages: Vec<DiscordMessage> = serde_json::from_str(&content)?;
-
-        let parsed_messages: Vec<ParsedMessage> = messages
-            .iter()
-            .filter_map(|msg| {
-                let author = msg.author.as_ref()?;
-                let sender = author.id.clone().or(author.name.clone())?;
-                let content = msg.content.clone()?;
-                if content.is_empty() {
-                    return None;
+            let mut parts = Vec::new();
+            if let Some(content) = value_get_string(raw_message, &["Content", "content"]) {
+                if !content.trim().is_empty() {
+                    parts.push(content.trim().to_string());
                 }
+            }
 
-                Some(ParsedMessage {
-                    sender,
-                    sender_name: author.name.clone(),
-                    timestamp: msg
-                        .timestamp
-                        .as_ref()
-                        .and_then(|s| parse_discord_timestamp(s))
-                        .unwrap_or(0),
-                    content,
-                    msg_type: MessageType::Text,
-                })
-            })
-            .collect();
+            let attachment_type = append_discord_attachments(raw_message, &mut parts);
+            let has_embed = append_discord_embeds(raw_message, &mut parts);
+            let has_sticker = append_discord_stickers(raw_message, &mut parts);
+            let raw_type = value_get_string(raw_message, &["Type", "type"]);
+            let msg_type = infer_discord_message_type(
+                raw_type.as_deref(),
+                attachment_type,
+                has_sticker,
+                has_embed,
+            );
+
+            if parts.is_empty() {
+                if let Some(type_name) = raw_type {
+                    if matches!(msg_type, MessageType::System) {
+                        parts.push(format!("[System: {}]", type_name));
+                    }
+                }
+            }
+
+            let content = parts.join("\n");
+            if content.trim().is_empty() {
+                continue;
+            }
+
+            upsert_member(&mut members, sender.clone(), account_name, display_name);
+            parsed_messages.push(ParsedMessage {
+                sender,
+                sender_name,
+                timestamp,
+                content,
+                msg_type,
+            });
+        }
 
         Ok(ParsedChat {
             platform: "discord".to_string(),
-            chat_name: path
-                .file_stem()
-                .ok_or(ParseError::InvalidFormat("missing file stem".to_string()))?
-                .to_string_lossy()
-                .to_string(),
-            chat_type: ChatType::Group,
+            chat_name,
+            chat_type,
             messages: parsed_messages,
-            members: vec![],
+            members: members.into_values().collect(),
         })
     }
 }
@@ -720,6 +1438,231 @@ fn parse_discord_timestamp(s: &str) -> Option<i64> {
     DateTime::parse_from_rfc3339(s)
         .ok()
         .map(|dt| dt.timestamp())
+}
+
+fn extract_discord_export_root<'a>(
+    root: &'a serde_json::Value,
+    fallback_chat_name: &str,
+) -> Result<(String, ChatType, &'a [serde_json::Value]), ParseError> {
+    match root {
+        serde_json::Value::Array(items) => {
+            if items.iter().any(looks_like_discord_message) {
+                Ok((
+                    fallback_chat_name.to_string(),
+                    ChatType::Group,
+                    items.as_slice(),
+                ))
+            } else {
+                Err(ParseError::InvalidFormat(
+                    "discord export array did not contain discord-like messages".to_string(),
+                ))
+            }
+        }
+        serde_json::Value::Object(_) => {
+            let Some(messages) =
+                value_get_any(root, &["messages"]).and_then(|value| value.as_array())
+            else {
+                return Err(ParseError::InvalidFormat(
+                    "discord export root missing messages array".to_string(),
+                ));
+            };
+
+            if !messages.iter().any(looks_like_discord_message) {
+                return Err(ParseError::InvalidFormat(
+                    "discord export messages array did not match exporter shape".to_string(),
+                ));
+            }
+
+            let guild_name = value_get_any(root, &["guild"])
+                .and_then(|value| value_get_string(value, &["name", "Name"]));
+            let channel_name = value_get_any(root, &["channel"])
+                .and_then(|value| value_get_string(value, &["name", "Name"]))
+                .unwrap_or_else(|| fallback_chat_name.to_string());
+            let channel_type = value_get_any(root, &["channel"])
+                .and_then(|value| value_get_string(value, &["type", "Type"]))
+                .unwrap_or_default();
+            let chat_type = if channel_type.eq_ignore_ascii_case("directmessage")
+                || channel_type.eq_ignore_ascii_case("dm")
+            {
+                ChatType::Private
+            } else {
+                ChatType::Group
+            };
+            let chat_name = guild_name
+                .map(|guild| format!("{} / #{}", guild, channel_name))
+                .unwrap_or(channel_name);
+            Ok((chat_name, chat_type, messages.as_slice()))
+        }
+        _ => Err(ParseError::InvalidFormat(
+            "discord export must be a JSON array or object root".to_string(),
+        )),
+    }
+}
+
+fn looks_like_discord_message(value: &serde_json::Value) -> bool {
+    value_get_any(value, &["Author", "author"]).is_some()
+        && value_get_any(value, &["Timestamp", "timestamp"]).is_some()
+}
+
+fn extract_discord_author_names(author: &serde_json::Value) -> (Option<String>, Option<String>) {
+    let account_name = value_get_string(
+        author,
+        &[
+            "Name", "name", "username", "Username", "userName", "UserName",
+        ],
+    );
+    let display_name = value_get_string(
+        author,
+        &[
+            "nickname",
+            "Nickname",
+            "nickName",
+            "NickName",
+            "displayName",
+            "DisplayName",
+            "display_name",
+            "globalName",
+            "GlobalName",
+            "global_name",
+        ],
+    )
+    .or_else(|| account_name.clone());
+
+    (account_name, display_name)
+}
+
+fn discord_attachment_marker(file_name: &str) -> (String, MessageType) {
+    let lower = file_name.to_ascii_lowercase();
+    if lower.ends_with(".png")
+        || lower.ends_with(".jpg")
+        || lower.ends_with(".jpeg")
+        || lower.ends_with(".gif")
+        || lower.ends_with(".webp")
+        || lower.ends_with(".bmp")
+        || lower.ends_with(".svg")
+    {
+        return (format!("[Image: {}]", file_name), MessageType::Image);
+    }
+    if lower.ends_with(".mp4")
+        || lower.ends_with(".webm")
+        || lower.ends_with(".mov")
+        || lower.ends_with(".avi")
+        || lower.ends_with(".mkv")
+    {
+        return (format!("[Video: {}]", file_name), MessageType::Video);
+    }
+    if lower.ends_with(".mp3")
+        || lower.ends_with(".wav")
+        || lower.ends_with(".ogg")
+        || lower.ends_with(".flac")
+        || lower.ends_with(".m4a")
+    {
+        return (format!("[Audio: {}]", file_name), MessageType::Audio);
+    }
+    (format!("[File: {}]", file_name), MessageType::File)
+}
+
+fn append_discord_attachments(
+    message: &serde_json::Value,
+    parts: &mut Vec<String>,
+) -> Option<MessageType> {
+    let attachments = value_get_any(message, &["Attachments", "attachments"])?.as_array()?;
+    let mut dominant = None;
+    for attachment in attachments {
+        let file_name = value_get_string(attachment, &["fileName", "filename", "FileName", "name"])
+            .unwrap_or_else(|| "attachment".to_string());
+        let (marker, kind) = discord_attachment_marker(&file_name);
+        parts.push(marker);
+        if dominant.is_none() {
+            dominant = Some(kind);
+        }
+    }
+    dominant
+}
+
+fn append_discord_embeds(message: &serde_json::Value, parts: &mut Vec<String>) -> bool {
+    let Some(embeds) =
+        value_get_any(message, &["Embeds", "embeds"]).and_then(|value| value.as_array())
+    else {
+        return false;
+    };
+
+    let mut appended = false;
+    for embed in embeds {
+        let title = value_get_string(embed, &["title", "Title"])
+            .or_else(|| value_get_string(embed, &["url", "Url"]))
+            .or_else(|| value_get_string(embed, &["description", "Description"]));
+        if let Some(title) = title {
+            parts.push(format!("[Link: {}]", title.trim()));
+            appended = true;
+        }
+    }
+    appended
+}
+
+fn append_discord_stickers(message: &serde_json::Value, parts: &mut Vec<String>) -> bool {
+    let Some(stickers) =
+        value_get_any(message, &["Stickers", "stickers"]).and_then(|value| value.as_array())
+    else {
+        return false;
+    };
+
+    let mut appended = false;
+    for sticker in stickers {
+        if let Some(name) = value_get_string(sticker, &["name", "Name"]) {
+            parts.push(format!("[Sticker: {}]", name.trim()));
+            appended = true;
+        }
+    }
+    appended
+}
+
+fn infer_discord_message_type(
+    raw_type: Option<&str>,
+    attachment_type: Option<MessageType>,
+    has_sticker: bool,
+    has_embed: bool,
+) -> MessageType {
+    if let Some(raw_type) = raw_type {
+        match raw_type {
+            "Default"
+            | "default"
+            | "Reply"
+            | "reply"
+            | "ThreadStarterMessage"
+            | "threadStarterMessage" => {}
+            "ChannelPinnedMessage"
+            | "channelPinnedMessage"
+            | "UserJoin"
+            | "userJoin"
+            | "RecipientAdd"
+            | "recipientAdd"
+            | "RecipientRemove"
+            | "recipientRemove"
+            | "GuildBoost"
+            | "guildBoost"
+            | "Call"
+            | "call"
+            | "AutoModerationAction"
+            | "autoModerationAction"
+            | "ThreadCreated"
+            | "threadCreated"
+            | "ChatInputCommand"
+            | "chatInputCommand" => return MessageType::System,
+            _ => {}
+        }
+    }
+
+    if let Some(kind) = attachment_type {
+        return kind;
+    }
+    if has_sticker {
+        return MessageType::Sticker;
+    }
+    if has_embed {
+        return MessageType::Link;
+    }
+    MessageType::Text
 }
 
 /// Parser for WeChat/WeFlow chat exports.
@@ -749,67 +1692,194 @@ impl ChatParser for WeChatParser {
 
     fn parse(&self, path: &Path) -> Result<ParsedChat, ParseError> {
         let content = std::fs::read_to_string(path)?;
+        let root: serde_json::Value = serde_json::from_str(&content)?;
+        let default_chat_name = file_stem_string(path)?;
+        let (chat_name, chat_type, raw_messages) =
+            extract_wechat_export_root(&root, &default_chat_name)?;
+        let mut parsed_messages = Vec::new();
+        let mut members = std::collections::BTreeMap::new();
 
-        #[derive(Deserialize)]
-        struct WeFlowMessage {
-            #[serde(rename = "msg_id")]
-            msg_id: Option<String>,
-            #[serde(rename = "type")]
-            msg_type: Option<i32>,
-            #[serde(rename = "is_sender")]
-            is_sender: Option<bool>,
-            #[serde(rename = "sender_name")]
-            sender_name: Option<String>,
-            #[serde(rename = "sender_id")]
-            sender_id: Option<String>,
-            #[serde(rename = "create_time")]
-            create_time: Option<i64>,
-            #[serde(rename = "content")]
-            content: Option<String>,
+        for raw_message in raw_messages {
+            let Some(parsed) = parse_wechat_message_value(raw_message) else {
+                continue;
+            };
+            upsert_member(
+                &mut members,
+                parsed.sender.clone(),
+                parsed.sender_name.clone(),
+                parsed.sender_name.clone(),
+            );
+            parsed_messages.push(parsed);
         }
-
-        let messages: Vec<WeFlowMessage> = serde_json::from_str(&content)?;
-
-        let parsed_messages: Vec<ParsedMessage> = messages
-            .iter()
-            .filter_map(|msg| {
-                let is_sender = msg.is_sender.unwrap_or(true);
-                let sender = if is_sender {
-                    "Me".to_string()
-                } else {
-                    msg.sender_id
-                        .clone()
-                        .or(msg.sender_name.clone())
-                        .unwrap_or_else(|| "Unknown".to_string())
-                };
-
-                let content = msg.content.clone()?;
-                if content.is_empty() {
-                    return None;
-                }
-
-                Some(ParsedMessage {
-                    sender,
-                    sender_name: msg.sender_name.clone(),
-                    timestamp: msg.create_time.unwrap_or(0),
-                    content,
-                    msg_type: MessageType::Text,
-                })
-            })
-            .collect();
 
         Ok(ParsedChat {
             platform: "wechat".to_string(),
-            chat_name: path
-                .file_stem()
-                .ok_or(ParseError::InvalidFormat("missing file stem".to_string()))?
-                .to_string_lossy()
-                .to_string(),
-            chat_type: ChatType::Group,
+            chat_name,
+            chat_type,
             messages: parsed_messages,
-            members: vec![],
+            members: members.into_values().collect(),
         })
     }
+}
+
+fn extract_wechat_export_root<'a>(
+    root: &'a serde_json::Value,
+    fallback_chat_name: &str,
+) -> Result<(String, ChatType, &'a [serde_json::Value]), ParseError> {
+    match root {
+        serde_json::Value::Array(items) => {
+            if items.iter().any(looks_like_wechat_message) {
+                Ok((
+                    fallback_chat_name.to_string(),
+                    ChatType::Group,
+                    items.as_slice(),
+                ))
+            } else {
+                Err(ParseError::InvalidFormat(
+                    "wechat export array did not contain wechat-like messages".to_string(),
+                ))
+            }
+        }
+        serde_json::Value::Object(_) => {
+            let Some(messages) =
+                value_get_any(root, &["messages"]).and_then(|value| value.as_array())
+            else {
+                return Err(ParseError::InvalidFormat(
+                    "wechat export root missing messages array".to_string(),
+                ));
+            };
+
+            if !messages.iter().any(looks_like_wechat_message) {
+                return Err(ParseError::InvalidFormat(
+                    "wechat export messages array did not match WeFlow shape".to_string(),
+                ));
+            }
+
+            let session = value_get_any(root, &["session"]);
+            let chat_name = session
+                .and_then(|value| {
+                    value_get_string(value, &["displayName", "display_name"])
+                        .or_else(|| value_get_string(value, &["remark"]))
+                        .or_else(|| value_get_string(value, &["nickname"]))
+                        .or_else(|| value_get_string(value, &["wxid"]))
+                })
+                .or_else(|| value_get_string(root, &["talker"]))
+                .unwrap_or_else(|| fallback_chat_name.to_string());
+            let chat_type = session
+                .and_then(|value| value_get_string(value, &["type"]))
+                .map(|raw| {
+                    if raw.contains("私聊") || raw.eq_ignore_ascii_case("private") {
+                        ChatType::Private
+                    } else {
+                        ChatType::Group
+                    }
+                })
+                .or_else(|| {
+                    value_get_string(root, &["talker"]).map(|talker| {
+                        if talker.ends_with("@chatroom") {
+                            ChatType::Group
+                        } else {
+                            ChatType::Private
+                        }
+                    })
+                })
+                .unwrap_or(ChatType::Group);
+
+            Ok((chat_name, chat_type, messages.as_slice()))
+        }
+        _ => Err(ParseError::InvalidFormat(
+            "wechat export must be a JSON array or object root".to_string(),
+        )),
+    }
+}
+
+fn looks_like_wechat_message(value: &serde_json::Value) -> bool {
+    value_get_any(value, &["create_time", "createTime"]).is_some()
+        && value_get_any(
+            value,
+            &[
+                "sender_id",
+                "sender_name",
+                "senderUsername",
+                "senderDisplayName",
+                "is_sender",
+                "isSend",
+            ],
+        )
+        .is_some()
+}
+
+fn infer_wechat_message_type(value: &serde_json::Value) -> MessageType {
+    if let Some(raw_type) =
+        value_get_string(value, &["typeName", "msgTypeName", "type_name", "type"])
+    {
+        match raw_type.as_str() {
+            "图片消息" | "image" | "Image" => return MessageType::Image,
+            "语音消息" | "audio" | "Audio" | "voice" | "Voice" => return MessageType::Audio,
+            "视频消息" | "video" | "Video" => return MessageType::Video,
+            "文件消息" | "file" | "File" => return MessageType::File,
+            "位置消息" | "location" | "Location" => return MessageType::Location,
+            "系统消息" | "system" | "System" => return MessageType::System,
+            "卡片式链接" | "图文消息" | "link" | "Link" => return MessageType::Link,
+            "动画表情" | "sticker" | "Sticker" => return MessageType::Sticker,
+            _ => {}
+        }
+    }
+
+    match value_get_i64(value, &["type"]) {
+        Some(3) => MessageType::Image,
+        Some(34) => MessageType::Audio,
+        Some(43) => MessageType::Video,
+        Some(47) => MessageType::Sticker,
+        Some(48) => MessageType::Location,
+        Some(49) => MessageType::Link,
+        Some(10000) => MessageType::System,
+        _ => match value_get_i64(value, &["localType"]) {
+            Some(3) => MessageType::Image,
+            Some(34) => MessageType::Audio,
+            Some(43) => MessageType::Video,
+            Some(47) => MessageType::Sticker,
+            Some(48) => MessageType::Location,
+            Some(49) => MessageType::Link,
+            Some(10000) => MessageType::System,
+            _ => MessageType::Text,
+        },
+    }
+}
+
+fn parse_wechat_message_value(value: &serde_json::Value) -> Option<ParsedMessage> {
+    if !looks_like_wechat_message(value) {
+        return None;
+    }
+
+    let content = value_get_string(value, &["parsedContent"])
+        .or_else(|| value_get_string(value, &["content"]))
+        .or_else(|| value_get_string(value, &["rawContent"]))?
+        .trim()
+        .to_string();
+    if content.is_empty() {
+        return None;
+    }
+
+    let sender_name = value_get_string(value, &["sender_name", "senderDisplayName"]);
+    let sender_id = value_get_string(value, &["sender_id", "senderUsername"]);
+    let sent_by_self = value_get_bool(value, &["is_sender", "isSend"]).unwrap_or(false);
+    let sender = if sent_by_self {
+        sender_id.clone().unwrap_or_else(|| "self".to_string())
+    } else {
+        sender_id
+            .clone()
+            .or_else(|| sender_name.clone())
+            .unwrap_or_else(|| "wechat-unknown".to_string())
+    };
+
+    Some(ParsedMessage {
+        sender,
+        sender_name,
+        timestamp: value_get_i64(value, &["create_time", "createTime"]).unwrap_or(0),
+        content,
+        msg_type: infer_wechat_message_type(value),
+    })
 }
 
 /// Parser for Instagram chat exports.
@@ -1790,6 +2860,64 @@ mod tests {
     }
 
     #[test]
+    fn detect_and_parse_supports_manual_review_selection_packs() {
+        let registry = ParserRegistry::new();
+        let fixture = write_temp_file(
+            "manual_review_selection",
+            "json",
+            r#"{
+                "schema": "xenobot/manual-review",
+                "schemaVersion": 1,
+                "captureMode": "manual-selection",
+                "platform": "wechat",
+                "chatName": "Selected Study Notes",
+                "chatType": "group",
+                "members": [
+                    {"id": "alice", "name": "Alice", "displayName": "Alice"},
+                    {"id": "bob", "name": "Bob", "displayName": "Bob"}
+                ],
+                "selectedMessages": [
+                    {
+                        "senderId": "alice",
+                        "senderName": "Alice",
+                        "timestamp": "2025-01-02T10:20:30Z",
+                        "content": "Keep this explanation",
+                        "messageType": "text"
+                    }
+                ],
+                "selectedFiles": [
+                    {
+                        "senderId": "bob",
+                        "senderName": "Bob",
+                        "timestamp": 1735813290,
+                        "kind": "image",
+                        "path": "screenshots/review-1.png",
+                        "note": "Important chart"
+                    }
+                ]
+            }"#,
+        );
+
+        let parsed = registry
+            .detect_and_parse(&fixture)
+            .expect("manual review selection should be detected");
+        assert_eq!(parsed.platform, "wechat");
+        assert_eq!(parsed.chat_name, "Selected Study Notes");
+        assert_eq!(parsed.messages.len(), 2);
+        assert_eq!(parsed.members.len(), 2);
+        assert!(parsed
+            .messages
+            .iter()
+            .any(|msg| msg.content.contains("Keep this explanation")));
+        assert!(parsed
+            .messages
+            .iter()
+            .any(|msg| msg.content.contains("Important chart")));
+
+        let _ = std::fs::remove_file(&fixture);
+    }
+
+    #[test]
     fn detect_and_parse_supports_all_17_platform_fixture_shapes() {
         let registry = ParserRegistry::new();
         let fixtures = vec![
@@ -1808,7 +2936,7 @@ mod tests {
             (
                 "qq_fixture",
                 "txt",
-                "[2025-01-02 10:20:30] Alice hello qq",
+                "消息记录（此消息记录为文本格式，不支持重新导入）\n消息对象:Release Bridge Group\n2025-01-02 10:20:30 【管理员】Alice(10001)\nhello qq\nwith multiline body\n2025-01-02 10:21:05 Bob<bot@example.com>\n[图片]",
                 "qq",
             ),
             (
@@ -1820,13 +2948,13 @@ mod tests {
             (
                 "discord_fixture",
                 "json",
-                r#"[{"ID":"1","Timestamp":"2025-01-02T10:20:30Z","Author":{"ID":"u1","Name":"Alice"},"Content":"hello discord"}]"#,
+                r#"{"guild":{"id":"g1","name":"Launch Guild"},"channel":{"id":"c1","type":"GuildTextChat","name":"release-war-room"},"messages":[{"id":"1","type":"Default","timestamp":"2025-01-02T10:20:30Z","author":{"id":"u1","name":"Alice","nickname":"Alice"},"content":"hello discord","attachments":[{"id":"a1","fileName":"diagram.png"}],"embeds":[{"title":"Launch checklist"}],"stickers":[{"id":"s1","name":"Ready"}]},{"id":"2","type":"ChannelPinnedMessage","timestamp":"2025-01-02T10:21:30Z","author":{"id":"u2","name":"Bob"},"content":""}]}"#,
                 "discord",
             ),
             (
                 "wechat_fixture",
                 "json",
-                r#"[{"msg_id":"1","type":1,"is_sender":false,"sender_name":"Alice","sender_id":"wxid_alice","create_time":1735813230,"content":"hello wechat"}]"#,
+                r#"{"weflow":{"version":"1.0.0"},"session":{"wxid":"launch-room@chatroom","nickname":"Launch Room","remark":"","displayName":"Launch Room","type":"群聊"},"messages":[{"localId":1,"createTime":1735813230,"type":"文本消息","content":"hello wechat","isSend":0,"senderUsername":"wxid_alice","senderDisplayName":"Alice"},{"localId":2,"createTime":1735813290,"type":"系统消息","content":"Bob joined the room","isSend":null,"senderUsername":"system","senderDisplayName":"System"}]}"#,
                 "wechat",
             ),
             (
@@ -1914,5 +3042,159 @@ mod tests {
             );
             let _ = std::fs::remove_file(&fixture);
         }
+    }
+
+    #[test]
+    fn qq_parser_supports_official_multiline_export_and_cleans_prefixed_nicknames() {
+        let registry = ParserRegistry::new();
+        let fixture = write_temp_file(
+            "qq_official_export",
+            "txt",
+            "消息记录（此消息记录为文本格式，不支持重新导入）\n消息对象:Bridge Ops\n2025-01-02 10:20:30 【管理员】Alice(10001)\nhello qq\nthis spans multiple lines\n2025-01-02 10:21:00 Bob<bot@example.com>\n[图片]",
+        );
+
+        let parsed = registry
+            .detect_and_parse(&fixture)
+            .expect("official qq export should parse");
+        assert_eq!(parsed.platform, "qq");
+        assert_eq!(parsed.chat_name, "Bridge Ops");
+        assert_eq!(parsed.messages.len(), 2);
+        assert_eq!(parsed.messages[0].sender, "10001");
+        assert_eq!(parsed.messages[0].sender_name.as_deref(), Some("Alice"));
+        assert_eq!(
+            parsed.messages[0].content,
+            "hello qq\nthis spans multiple lines"
+        );
+        assert!(matches!(
+            parsed.messages[1].msg_type,
+            super::MessageType::Image
+        ));
+        assert_eq!(parsed.members.len(), 2);
+        let _ = std::fs::remove_file(&fixture);
+    }
+
+    #[test]
+    fn qq_parser_supports_qce_json_export_with_resources_and_sender_profiles() {
+        let registry = ParserRegistry::new();
+        let fixture = write_temp_file(
+            "qq_chat_exporter",
+            "json",
+            r#"{"chatInfo":{"name":"Release Bridge Group","type":"group","participantCount":3},"statistics":{"totalMessages":2},"messages":[{"id":"msg-1","seq":"1","timestamp":1735813230000,"time":"2025-01-02T10:20:30.000Z","type":"text","recalled":false,"system":false,"sender":{"uid":"uid-alice","uin":"10001","name":"Alice Account","nickname":"Alice","groupCard":"Captain Alice","remark":"Alice Remark"},"content":{"text":"launch checklist is almost done","html":"<p>launch checklist is almost done</p>","elements":[{"type":"text","data":{"text":"launch checklist is almost done"}}],"resources":[{"type":"image","filename":"diagram.png","size":2048}]}},{"id":"msg-2","seq":"2","timestamp":1735813290000,"time":"2025-01-02T10:21:30.000Z","type":"system","recalled":false,"system":true,"sender":{"uid":"uid-bot","name":"System Bot"},"content":{"text":"","html":"","elements":[],"resources":[]}}]}"#,
+        );
+
+        let parsed = registry
+            .detect_and_parse(&fixture)
+            .expect("qce json export should parse");
+        assert_eq!(parsed.platform, "qq");
+        assert_eq!(parsed.chat_name, "Release Bridge Group");
+        assert!(matches!(parsed.chat_type, super::ChatType::Group));
+        assert_eq!(parsed.messages.len(), 2);
+        assert_eq!(parsed.messages[0].sender, "uid-alice");
+        assert_eq!(
+            parsed.messages[0].sender_name.as_deref(),
+            Some("Captain Alice")
+        );
+        assert!(parsed.messages[0].content.contains("launch checklist"));
+        assert!(parsed.messages[0].content.contains("[Image: diagram.png]"));
+        assert!(matches!(
+            parsed.messages[0].msg_type,
+            super::MessageType::Image
+        ));
+        let alice = parsed
+            .members
+            .iter()
+            .find(|member| member.id == "uid-alice")
+            .expect("qq member should exist");
+        assert_eq!(alice.name.as_deref(), Some("Alice Account"));
+        assert_eq!(alice.display_name.as_deref(), Some("Captain Alice"));
+        let _ = std::fs::remove_file(&fixture);
+    }
+
+    #[test]
+    fn discord_parser_supports_exporter_root_with_attachments_and_system_events() {
+        let registry = ParserRegistry::new();
+        let fixture = write_temp_file(
+            "discord_exporter",
+            "json",
+            r#"{"guild":{"id":"g1","name":"Launch Guild"},"channel":{"id":"c1","type":"GuildTextChat","name":"release-room"},"messages":[{"id":"1","type":"Default","timestamp":"2025-01-02T10:20:30Z","author":{"id":"u1","name":"alice.user","nickname":"Captain Alice","globalName":"Alice Global"},"content":"status looks good","attachments":[{"id":"a1","fileName":"diagram.png"}],"embeds":[{"title":"Launch checklist"}],"stickers":[{"id":"s1","name":"Ready"}]},{"id":"2","type":"ChannelPinnedMessage","timestamp":"2025-01-02T10:21:00Z","author":{"id":"u2","name":"Bob"},"content":""}]}"#,
+        );
+
+        let parsed = registry
+            .detect_and_parse(&fixture)
+            .expect("discord exporter root should parse");
+        assert_eq!(parsed.platform, "discord");
+        assert_eq!(parsed.chat_name, "Launch Guild / #release-room");
+        assert_eq!(parsed.messages.len(), 2);
+        assert_eq!(
+            parsed.messages[0].sender_name.as_deref(),
+            Some("Captain Alice")
+        );
+        assert!(parsed.messages[0].content.contains("[Image: diagram.png]"));
+        assert!(parsed.messages[0]
+            .content
+            .contains("[Link: Launch checklist]"));
+        assert!(parsed.messages[0].content.contains("[Sticker: Ready]"));
+        assert!(matches!(
+            parsed.messages[1].msg_type,
+            super::MessageType::System
+        ));
+        let alice = parsed
+            .members
+            .iter()
+            .find(|member| member.id == "u1")
+            .expect("discord member should exist");
+        assert_eq!(alice.name.as_deref(), Some("alice.user"));
+        assert_eq!(alice.display_name.as_deref(), Some("Captain Alice"));
+        let _ = std::fs::remove_file(&fixture);
+    }
+
+    #[test]
+    fn wechat_parser_supports_weflow_root_and_session_metadata() {
+        let registry = ParserRegistry::new();
+        let fixture = write_temp_file(
+            "weflow_export",
+            "json",
+            r#"{"weflow":{"version":"1.0.0"},"session":{"wxid":"launch-room@chatroom","nickname":"Launch Room","remark":"","displayName":"Launch Room","type":"群聊"},"messages":[{"localId":1,"createTime":1735813230,"type":"文本消息","content":"hello wechat","isSend":0,"senderUsername":"wxid_alice","senderDisplayName":"Alice"},{"localId":2,"createTime":1735813290,"type":"系统消息","content":"Bob joined the room","isSend":null,"senderUsername":"system","senderDisplayName":"System"}]}"#,
+        );
+
+        let parsed = registry
+            .detect_and_parse(&fixture)
+            .expect("weflow root should parse");
+        assert_eq!(parsed.platform, "wechat");
+        assert_eq!(parsed.chat_name, "Launch Room");
+        assert!(matches!(parsed.chat_type, super::ChatType::Group));
+        assert_eq!(parsed.messages.len(), 2);
+        assert!(matches!(
+            parsed.messages[1].msg_type,
+            super::MessageType::System
+        ));
+        let _ = std::fs::remove_file(&fixture);
+    }
+
+    #[test]
+    fn wechat_parser_supports_weflow_http_api_root_without_session() {
+        let registry = ParserRegistry::new();
+        let fixture = write_temp_file(
+            "weflow_http_api_export",
+            "json",
+            r#"{"success":true,"talker":"launch-room@chatroom","count":2,"hasMore":false,"messages":[{"localId":1,"serverId":"456","localType":1,"createTime":1738713600,"isSend":0,"senderUsername":"wxid_member","content":"你好","rawContent":"你好","parsedContent":"Launch readiness still looks good."},{"localId":2,"localType":3,"createTime":1738713660,"isSend":0,"senderUsername":"wxid_member","content":"[图片]","parsedContent":"[图片]","mediaType":"image","mediaFileName":"abc123.jpg","mediaLocalPath":"/tmp/weflow/api-media/launch-room/images/abc123.jpg"}]}"#,
+        );
+
+        let parsed = registry
+            .detect_and_parse(&fixture)
+            .expect("weflow http api root should parse");
+        assert_eq!(parsed.platform, "wechat");
+        assert_eq!(parsed.chat_name, "launch-room@chatroom");
+        assert!(matches!(parsed.chat_type, super::ChatType::Group));
+        assert_eq!(parsed.messages.len(), 2);
+        assert_eq!(
+            parsed.messages[0].content,
+            "Launch readiness still looks good."
+        );
+        assert!(matches!(
+            parsed.messages[1].msg_type,
+            super::MessageType::Image
+        ));
+        let _ = std::fs::remove_file(&fixture);
     }
 }

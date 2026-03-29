@@ -642,12 +642,14 @@ async fn query_messages(
 
     if !keywords.is_empty() {
         qb.push(" AND (");
-        let mut separated = qb.separated(" OR ");
-        for keyword in keywords {
-            separated.push("LOWER(COALESCE(msg.content, '')) LIKE ");
-            separated.push_bind(format!("%{}%", keyword));
+        for (idx, keyword) in keywords.iter().enumerate() {
+            if idx > 0 {
+                qb.push(" OR ");
+            }
+            qb.push("LOWER(COALESCE(msg.content, '')) LIKE ")
+                .push_bind(format!("%{}%", keyword));
         }
-        separated.push_unseparated(")");
+        qb.push(")");
     }
 
     qb.push(" ORDER BY msg.ts ");

@@ -34,10 +34,6 @@ const newName = ref("");
 const renameInputRef = ref<HTMLInputElement | null>(null);
 
 // English engineering note.
-const showDeleteModal = ref(false);
-const deleteTarget = ref<AnalysisSession | null>(null);
-
-// English engineering note.
 const version = ref("");
 
 // English engineering note.
@@ -117,27 +113,6 @@ function closeRenameModal() {
 }
 
 // English engineering note.
-function openDeleteModal(session: AnalysisSession) {
-  deleteTarget.value = session;
-  showDeleteModal.value = true;
-}
-
-// English engineering note.
-async function confirmDelete() {
-  if (!deleteTarget.value) return;
-
-  await sessionStore.deleteSession(deleteTarget.value.id);
-  showDeleteModal.value = false;
-  deleteTarget.value = null;
-}
-
-// English engineering note.
-function closeDeleteModal() {
-  showDeleteModal.value = false;
-  deleteTarget.value = null;
-}
-
-// English engineering note.
 function getContextMenuItems(session: AnalysisSession) {
   const isPinned = sessionStore.isPinned(session.id);
   return [
@@ -153,12 +128,6 @@ function getContextMenuItems(session: AnalysisSession) {
         label: t("layout.contextMenu.rename"),
         class: "p-2",
         onSelect: () => openRenameModal(session),
-      },
-      {
-        label: t("layout.contextMenu.delete"),
-        color: "error" as const,
-        class: "p-2",
-        onSelect: () => openDeleteModal(session),
       },
     ],
   ];
@@ -455,29 +424,6 @@ function getSessionAvatar(session: AnalysisSession): string | null {
         </div>
       </template>
     </UModal>
-
-    <!-- Delete Confirmation Modal -->
-    <UModal v-model:open="showDeleteModal">
-      <template #content>
-        <div class="p-4">
-          <h3 class="mb-3 font-semibold text-gray-900 dark:text-white">
-            {{ t("layout.deleteModal.title") }}
-          </h3>
-          <p class="mb-4 text-sm text-gray-600 dark:text-gray-400">
-            {{ t("layout.deleteModal.message", { name: deleteTarget?.name }) }}
-          </p>
-          <div class="flex justify-end gap-2">
-            <UButton variant="soft" @click="closeDeleteModal">{{
-              t("common.cancel")
-            }}</UButton>
-            <UButton color="error" @click="confirmDelete">{{
-              t("common.delete")
-            }}</UButton>
-          </div>
-        </div>
-      </template>
-    </UModal>
-
     <!-- Footer -->
     <SidebarFooter />
   </div>
@@ -487,11 +433,13 @@ function getSessionAvatar(session: AnalysisSession): string | null {
 .xeno-sidebar-shell {
   position: relative;
   border-right: 1px solid var(--xeno-border-strong);
-  background: var(--xeno-sidebar-bg);
-  backdrop-filter: blur(16px) saturate(130%);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 18%),
+    var(--xeno-sidebar-bg);
+  backdrop-filter: none;
   box-shadow:
     inset -1px 0 0 rgba(255, 255, 255, 0.04),
-    18px 0 42px -34px rgba(2, 6, 23, 0.38);
+    18px 0 42px -34px rgba(2, 6, 23, 0.28);
   overflow: hidden;
 }
 
@@ -528,20 +476,20 @@ function getSessionAvatar(session: AnalysisSession): string | null {
 }
 
 .xeno-sidebar-home {
-  background: var(--xeno-surface-muted);
+  background: color-mix(in srgb, var(--xeno-surface-muted) 76%, transparent);
 }
 
 .xeno-sidebar-default {
-  background: var(--xeno-sidebar-bg);
+  background: color-mix(in srgb, var(--xeno-sidebar-bg) 82%, transparent);
 }
 
 .xeno-session-item {
   overflow: hidden;
   border: 1px solid transparent;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 130%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 130%),
     transparent;
-  backdrop-filter: blur(10px) saturate(122%);
+  backdrop-filter: none;
 }
 
 .xeno-sidebar-brand {
@@ -554,6 +502,7 @@ function getSessionAvatar(session: AnalysisSession): string | null {
   display: flex;
   align-items: center;
   gap: 0.6rem;
+  text-shadow: 0 2px 22px rgba(2, 6, 23, 0.44);
 }
 
 .xeno-sidebar-brand-dot {
@@ -578,7 +527,7 @@ function getSessionAvatar(session: AnalysisSession): string | null {
 .xeno-sidebar-version,
 .xeno-sidebar-count {
   border: 1px solid var(--xeno-border-soft);
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.05);
   border-radius: 9999px;
   padding: 0.1rem 0.48rem;
   font-size: 0.66rem;
@@ -634,18 +583,18 @@ function getSessionAvatar(session: AnalysisSession): string | null {
 .xeno-session-item-idle:hover {
   border-color: var(--xeno-border-soft);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 120%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 120%),
     var(--xeno-hover-bg);
 }
 
 .xeno-session-item-active {
   border-color: var(--xeno-active-border);
   background:
-    linear-gradient(180deg, rgba(56, 189, 248, 0.08), transparent 120%),
+    linear-gradient(180deg, rgba(56, 189, 248, 0.1), transparent 120%),
     var(--xeno-active-bg);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    0 14px 32px -26px rgba(14, 165, 233, 0.52);
+    0 14px 32px -26px rgba(14, 165, 233, 0.34);
 }
 
 .xeno-session-item:hover .xeno-session-item-rail,
@@ -655,6 +604,10 @@ function getSessionAvatar(session: AnalysisSession): string | null {
 }
 
 .xeno-sidebar-fade {
-  background: linear-gradient(180deg, transparent, var(--xeno-sidebar-bg));
+  background: linear-gradient(
+    180deg,
+    transparent,
+    color-mix(in srgb, var(--xeno-sidebar-bg) 82%, transparent)
+  );
 }
 </style>

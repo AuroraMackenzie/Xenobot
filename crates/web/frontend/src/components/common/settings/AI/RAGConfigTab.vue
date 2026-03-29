@@ -56,21 +56,6 @@ async function handleSetActive(id: string) {
   emit("config-changed");
 }
 
-async function handleDelete(config: EmbeddingServiceConfigDisplay) {
-  if (!confirm(t("settings.embedding.deleteConfirm", { name: config.name }))) {
-    return;
-  }
-  await embeddingStore.deleteConfig(config.id);
-  emit("config-changed");
-}
-
-async function handleClearVectorStore() {
-  if (!confirm(t("settings.embedding.clearVectorStoreConfirm"))) {
-    return;
-  }
-  await embeddingStore.clearVectorStore();
-}
-
 onMounted(() => {
   embeddingStore.init();
 });
@@ -195,15 +180,6 @@ onMounted(() => {
               :title="t('common.edit')"
               @click="openEditModal(config)"
             />
-            <!-- English UI note -->
-            <UButton
-              size="xs"
-              color="error"
-              variant="ghost"
-              icon="i-heroicons-trash"
-              :title="t('common.delete')"
-              @click="handleDelete(config)"
-            />
           </div>
         </div>
       </div>
@@ -249,15 +225,6 @@ onMounted(() => {
             {{ vectorStoreSizeFormatted }}</span
           >
         </div>
-        <UButton
-          v-if="(vectorStoreStats.count ?? 0) > 0"
-          size="xs"
-          color="error"
-          variant="soft"
-          @click="handleClearVectorStore"
-        >
-          {{ t("settings.embedding.clear") }}
-        </UButton>
       </div>
     </div>
   </div>

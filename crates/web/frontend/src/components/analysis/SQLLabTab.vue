@@ -84,12 +84,6 @@ function addToHistory(prompt: string, sqlStr: string, explanation: string) {
 }
 
 // English engineering note.
-function deleteHistory(id: string) {
-  aiHistory.value = aiHistory.value.filter((r) => r.id !== id);
-  saveHistory();
-}
-
-// English engineering note.
 async function executeSQL() {
   if (!sql.value.trim()) {
     error.value = t("ai.sqlLab.editor.errorEmptySQL");
@@ -250,7 +244,6 @@ onMounted(() => {
       v-model:open="showHistoryModal"
       :history="aiHistory"
       @execute="executeFromHistory"
-      @delete="deleteHistory"
     />
   </div>
 </template>

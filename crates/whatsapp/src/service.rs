@@ -130,7 +130,8 @@ impl WhatsAppService {
         I: IntoIterator<Item = P>,
         P: AsRef<Path>,
     {
-        paths.into_iter()
+        paths
+            .into_iter()
             .map(|path| {
                 let source_path = path.as_ref().to_path_buf();
                 let parsed = self.parse_authorized_export(&source_path)?;
@@ -283,9 +284,9 @@ mod tests {
 
     #[test]
     fn rejects_paths_outside_authorized_roots() {
-        let service = WhatsAppService::new(WhatsAppConfig::with_authorized_roots([
-            PathBuf::from("/tmp/allowed"),
-        ]));
+        let service = WhatsAppService::new(WhatsAppConfig::with_authorized_roots([PathBuf::from(
+            "/tmp/allowed",
+        )]));
 
         let err = service
             .parse_authorized_export(Path::new("/tmp/other/export.zip"))
@@ -305,8 +306,9 @@ mod tests {
         let asset = dir.path().join("voice.opus");
         fs::write(&asset, [1_u8, 2, 3]).expect("write test asset");
 
-        let service =
-            WhatsAppService::new(WhatsAppConfig::with_authorized_roots([dir.path().to_path_buf()]));
+        let service = WhatsAppService::new(WhatsAppConfig::with_authorized_roots([dir
+            .path()
+            .to_path_buf()]));
 
         let assets = service
             .collect_media_inventory([asset.as_path()])
@@ -319,8 +321,9 @@ mod tests {
     #[test]
     fn creates_monitor_for_authorized_directory() {
         let dir = tempdir().expect("tempdir");
-        let service =
-            WhatsAppService::new(WhatsAppConfig::with_authorized_roots([dir.path().to_path_buf()]));
+        let service = WhatsAppService::new(WhatsAppConfig::with_authorized_roots([dir
+            .path()
+            .to_path_buf()]));
 
         let monitor = service.create_export_monitor(dir.path());
         assert!(monitor.is_ok());
@@ -332,7 +335,9 @@ mod tests {
         let accounts = service.discover_accounts();
 
         assert!(!accounts.is_empty());
-        assert!(accounts.iter().all(|account| !account.name.trim().is_empty()));
+        assert!(accounts
+            .iter()
+            .all(|account| !account.name.trim().is_empty()));
     }
 
     #[test]
@@ -344,7 +349,6 @@ mod tests {
         assert_eq!(exposed, discovered);
     }
 
-
     #[test]
     fn build_authorized_workspace_rejects_unauthorized_media_paths() {
         let export_dir = tempdir().expect("tempdir");
@@ -354,8 +358,9 @@ mod tests {
         write_fixture(&export, r#"[01/02/2025, 10:20:30] Alice: hello whatsapp"#);
         std::fs::write(&media, [1_u8, 2, 3]).expect("media fixture");
 
-        let service =
-            WhatsAppService::new(WhatsAppConfig::with_authorized_roots([export_dir.path().to_path_buf()]));
+        let service = WhatsAppService::new(WhatsAppConfig::with_authorized_roots([export_dir
+            .path()
+            .to_path_buf()]));
 
         match service.build_authorized_workspace([export.as_path()], [media.as_path()]) {
             Err(WhatsAppError::UnauthorizedPath { path }) => assert_eq!(path, media),
@@ -363,17 +368,18 @@ mod tests {
         }
     }
 
-
-
     #[test]
     fn build_authorized_workspace_rejects_unauthorized_export_paths() {
         let export_dir = tempdir().expect("tempdir");
         let unauthorized_dir = tempdir().expect("tempdir");
-        let export = unauthorized_dir.path().join("whatsapp_unauthorized_fixture.dat");
+        let export = unauthorized_dir
+            .path()
+            .join("whatsapp_unauthorized_fixture.dat");
         std::fs::write(&export, [1_u8, 2, 3]).expect("export fixture");
 
-        let service =
-            WhatsAppService::new(WhatsAppConfig::with_authorized_roots([export_dir.path().to_path_buf()]));
+        let service = WhatsAppService::new(WhatsAppConfig::with_authorized_roots([export_dir
+            .path()
+            .to_path_buf()]));
 
         match service.build_authorized_workspace([export.as_path()], std::iter::empty::<&Path>()) {
             Err(WhatsAppError::UnauthorizedPath { path }) => assert_eq!(path, export),
@@ -390,8 +396,9 @@ mod tests {
         write_fixture(&export, "[01/02/2025, 10:20:30] Alice: hello whatsapp");
         fs::write(&asset, [1_u8, 2, 3]).expect("write media");
 
-        let service =
-            WhatsAppService::new(WhatsAppConfig::with_authorized_roots([dir.path().to_path_buf()]));
+        let service = WhatsAppService::new(WhatsAppConfig::with_authorized_roots([dir
+            .path()
+            .to_path_buf()]));
         let workspace = service
             .build_authorized_workspace([export.as_path()], [asset.as_path()])
             .expect("workspace should build");
@@ -411,8 +418,9 @@ mod tests {
         let export = dir.path().join("whatsapp_fixture.txt");
         write_fixture(&export, "[01/02/2025, 10:20:30] Alice: hello whatsapp");
 
-        let service =
-            WhatsAppService::new(WhatsAppConfig::with_authorized_roots([dir.path().to_path_buf()]));
+        let service = WhatsAppService::new(WhatsAppConfig::with_authorized_roots([dir
+            .path()
+            .to_path_buf()]));
         let (workspace, monitor) = service
             .prepare_authorized_workspace(
                 [export.as_path()],
@@ -434,8 +442,9 @@ mod tests {
         let export = input_dir.path().join("whatsapp_fixture.txt");
         write_fixture(&export, "[01/02/2025, 10:20:30] Alice: hello whatsapp");
 
-        let service =
-            WhatsAppService::new(WhatsAppConfig::with_authorized_roots([input_dir.path().to_path_buf()]));
+        let service = WhatsAppService::new(WhatsAppConfig::with_authorized_roots([input_dir
+            .path()
+            .to_path_buf()]));
         match service.prepare_authorized_workspace(
             [export.as_path()],
             std::iter::empty::<&Path>(),
@@ -457,7 +466,9 @@ mod tests {
         let output = output_dir.path().join("voice.mp3");
         fs::write(&input, [1_u8, 2, 3]).expect("write input");
 
-        let service = WhatsAppService::new(WhatsAppConfig::with_authorized_roots([input_dir.path().to_path_buf()]));
+        let service = WhatsAppService::new(WhatsAppConfig::with_authorized_roots([input_dir
+            .path()
+            .to_path_buf()]));
         let error = service
             .transcode_audio_asset_to_mp3(&input, &output, &AudioTranscodeOptions::default())
             .expect_err("unauthorized output directory should fail");
@@ -478,8 +489,9 @@ mod tests {
         let output = output_dir.path().join("voice.mp3");
         fs::write(&input, [1_u8, 2, 3]).expect("write input");
 
-        let service =
-            WhatsAppService::new(WhatsAppConfig::with_authorized_roots([output_dir.path().to_path_buf()]));
+        let service = WhatsAppService::new(WhatsAppConfig::with_authorized_roots([output_dir
+            .path()
+            .to_path_buf()]));
         let error = service
             .transcode_audio_asset_to_mp3(&input, &output, &AudioTranscodeOptions::default())
             .expect_err("unauthorized input path should fail");
@@ -496,8 +508,9 @@ mod tests {
     fn add_authorized_root_allows_runtime_monitor_creation() {
         let dir = tempdir().expect("tempdir");
         let other_dir = tempdir().expect("tempdir");
-        let mut service =
-            WhatsAppService::new(WhatsAppConfig::with_authorized_roots([other_dir.path().to_path_buf()]));
+        let mut service = WhatsAppService::new(WhatsAppConfig::with_authorized_roots([other_dir
+            .path()
+            .to_path_buf()]));
         assert!(service.create_export_monitor(dir.path()).is_err());
 
         service.add_authorized_root(dir.path().to_path_buf());
@@ -511,9 +524,9 @@ mod tests {
         let asset = dir.path().join("photo.jpg");
         fs::write(&asset, [1_u8, 2, 3]).expect("write asset");
 
-        let service = WhatsAppService::new(WhatsAppConfig::with_authorized_roots([
-            other_dir.path().to_path_buf(),
-        ]));
+        let service = WhatsAppService::new(WhatsAppConfig::with_authorized_roots([other_dir
+            .path()
+            .to_path_buf()]));
         let error = service
             .collect_media_inventory([asset.as_path()])
             .expect_err("unauthorized media asset should be rejected");
@@ -531,9 +544,9 @@ mod tests {
         let export = dir.path().join("whatsapp_fixture.txt");
         write_fixture(&export, "[01/02/2025, 10:20:30] Alice: hello whatsapp");
 
-        let mut service = WhatsAppService::new(WhatsAppConfig::with_authorized_roots([
-            other_dir.path().to_path_buf(),
-        ]));
+        let mut service = WhatsAppService::new(WhatsAppConfig::with_authorized_roots([other_dir
+            .path()
+            .to_path_buf()]));
         assert!(matches!(
             service.prepare_authorized_workspace(
                 [export.as_path()],
@@ -567,8 +580,9 @@ mod tests {
         write_fixture(&export, "[01/02/2025, 10:20:30] Alice: hello whatsapp");
         fs::write(&asset, [1_u8, 2, 3]).expect("media fixture");
 
-        let mut service =
-            WhatsAppService::new(WhatsAppConfig::with_authorized_roots([other_dir.path().to_path_buf()]));
+        let mut service = WhatsAppService::new(WhatsAppConfig::with_authorized_roots([other_dir
+            .path()
+            .to_path_buf()]));
         assert!(matches!(
             service.build_authorized_workspace([export.as_path()], [asset.as_path()]),
             Err(WhatsAppError::UnauthorizedPath { .. })
@@ -591,8 +605,9 @@ mod tests {
         let export = dir.path().join("whatsapp_fixture.txt");
         write_fixture(&export, "[01/02/2025, 10:20:30] Alice: hello whatsapp");
 
-        let mut service =
-            WhatsAppService::new(WhatsAppConfig::with_authorized_roots([other_dir.path().to_path_buf()]));
+        let mut service = WhatsAppService::new(WhatsAppConfig::with_authorized_roots([other_dir
+            .path()
+            .to_path_buf()]));
         assert!(matches!(
             service.parse_authorized_export(&export),
             Err(WhatsAppError::UnauthorizedPath { .. })
@@ -613,8 +628,9 @@ mod tests {
         let export = dir.path().join("whatsapp_fixture.txt");
         write_fixture(&export, "[01/02/2025, 10:20:30] Alice: hello whatsapp");
 
-        let mut service =
-            WhatsAppService::new(WhatsAppConfig::with_authorized_roots([other_dir.path().to_path_buf()]));
+        let mut service = WhatsAppService::new(WhatsAppConfig::with_authorized_roots([other_dir
+            .path()
+            .to_path_buf()]));
         assert!(matches!(
             service.stage_authorized_exports([export.as_path()]),
             Err(WhatsAppError::UnauthorizedPath { .. })
@@ -635,8 +651,9 @@ mod tests {
         let output = other_dir.path().join("voice.mp3");
         fs::write(&input, []).expect("write empty input");
 
-        let mut service =
-            WhatsAppService::new(WhatsAppConfig::with_authorized_roots([other_dir.path().to_path_buf()]));
+        let mut service = WhatsAppService::new(WhatsAppConfig::with_authorized_roots([other_dir
+            .path()
+            .to_path_buf()]));
         assert!(matches!(
             service.transcode_audio_asset_to_mp3(
                 &input,
@@ -647,14 +664,16 @@ mod tests {
         ));
 
         service.add_authorized_root(input_dir.path().to_path_buf());
-        let result =
-            service.transcode_audio_asset_to_mp3(&input, &output, &AudioTranscodeOptions::default());
+        let result = service.transcode_audio_asset_to_mp3(
+            &input,
+            &output,
+            &AudioTranscodeOptions::default(),
+        );
         assert!(
             !matches!(result, Err(WhatsAppError::UnauthorizedPath { .. })),
             "runtime authorization should move audio validation beyond authorization checks"
         );
     }
-
 
     #[test]
     fn add_authorized_root_allows_runtime_media_inventory_collection() {
@@ -663,9 +682,9 @@ mod tests {
         let asset = dir.path().join("voice.opus");
         fs::write(&asset, [1_u8, 2, 3]).expect("write asset");
 
-        let mut service = WhatsAppService::new(WhatsAppConfig::with_authorized_roots([
-            other_dir.path().to_path_buf(),
-        ]));
+        let mut service = WhatsAppService::new(WhatsAppConfig::with_authorized_roots([other_dir
+            .path()
+            .to_path_buf()]));
         assert!(matches!(
             service.collect_media_inventory([asset.as_path()]),
             Err(WhatsAppError::UnauthorizedPath { .. })
@@ -687,24 +706,29 @@ mod tests {
         let output = output_dir.path().join("voice.mp3");
         fs::write(&input, []).expect("audio input");
 
-        let mut service = WhatsAppService::new(WhatsAppConfig::with_authorized_roots([
-            input_dir.path().to_path_buf(),
-        ]));
+        let mut service = WhatsAppService::new(WhatsAppConfig::with_authorized_roots([input_dir
+            .path()
+            .to_path_buf()]));
         assert!(matches!(
-            service.transcode_audio_asset_to_mp3(&input, &output, &AudioTranscodeOptions::default()),
+            service.transcode_audio_asset_to_mp3(
+                &input,
+                &output,
+                &AudioTranscodeOptions::default()
+            ),
             Err(WhatsAppError::UnauthorizedPath { .. })
         ));
 
         service.add_authorized_root(output_dir.path().to_path_buf());
-        let result =
-            service.transcode_audio_asset_to_mp3(&input, &output, &AudioTranscodeOptions::default());
+        let result = service.transcode_audio_asset_to_mp3(
+            &input,
+            &output,
+            &AudioTranscodeOptions::default(),
+        );
         assert!(
             !matches!(result, Err(WhatsAppError::UnauthorizedPath { .. })),
             "runtime authorization should move audio validation beyond output authorization checks"
         );
     }
-
-
 
     #[test]
     fn export_only_workspace_is_not_empty_and_preserves_account_views() {
@@ -712,7 +736,9 @@ mod tests {
         let export = dir.path().join("whatsapp_fixture.txt");
         write_fixture(&export, "[01/02/2025, 10:20:30] Alice: hello whatsapp");
 
-        let service = WhatsAppService::new(WhatsAppConfig::with_authorized_roots([dir.path().to_path_buf()]));
+        let service = WhatsAppService::new(WhatsAppConfig::with_authorized_roots([dir
+            .path()
+            .to_path_buf()]));
         let workspace = service
             .build_authorized_workspace([export.as_path()], std::iter::empty::<&Path>())
             .expect("export-only workspace should build");
@@ -730,7 +756,9 @@ mod tests {
         let asset = dir.path().join("photo.jpg");
         fs::write(&asset, [1_u8, 2, 3]).expect("write media");
 
-        let service = WhatsAppService::new(WhatsAppConfig::with_authorized_roots([dir.path().to_path_buf()]));
+        let service = WhatsAppService::new(WhatsAppConfig::with_authorized_roots([dir
+            .path()
+            .to_path_buf()]));
         let workspace = service
             .build_authorized_workspace(std::iter::empty::<&Path>(), [asset.as_path()])
             .expect("media-only workspace should build");
@@ -815,8 +843,6 @@ mod tests {
         }
     }
 
-
-
     #[test]
     fn prepared_workspace_with_monitor_preserves_export_and_media_counts() {
         let dir = tempdir().expect("tempdir");
@@ -825,7 +851,9 @@ mod tests {
         write_fixture(&export, "[01/02/2025, 10:20:30] Alice: hello whatsapp");
         fs::write(&asset, [1_u8, 2, 3]).expect("write media");
 
-        let service = WhatsAppService::new(WhatsAppConfig::with_authorized_roots([dir.path().to_path_buf()]));
+        let service = WhatsAppService::new(WhatsAppConfig::with_authorized_roots([dir
+            .path()
+            .to_path_buf()]));
         let (workspace, monitor) = service
             .prepare_authorized_workspace([export.as_path()], [asset.as_path()], Some(dir.path()))
             .expect("workspace and monitor should build");
@@ -842,13 +870,19 @@ mod tests {
     fn authorized_roots_include_runtime_root_after_addition() {
         let dir = tempdir().expect("tempdir");
         let other_dir = tempdir().expect("tempdir");
-        let mut service = WhatsAppService::new(WhatsAppConfig::with_authorized_roots([
-            other_dir.path().to_path_buf(),
-        ]));
+        let mut service = WhatsAppService::new(WhatsAppConfig::with_authorized_roots([other_dir
+            .path()
+            .to_path_buf()]));
 
-        assert!(!service.authorized_roots().iter().any(|path| path == dir.path()));
+        assert!(!service
+            .authorized_roots()
+            .iter()
+            .any(|path| path == dir.path()));
         service.add_authorized_root(dir.path().to_path_buf());
-        assert!(service.authorized_roots().iter().any(|path| path == dir.path()));
+        assert!(service
+            .authorized_roots()
+            .iter()
+            .any(|path| path == dir.path()));
     }
 
     #[test]
@@ -858,9 +892,9 @@ mod tests {
         let export = unauthorized_dir.path().join("whatsapp_fixture.txt");
         write_fixture(&export, r#"[01/02/2025, 10:20:30] Alice: hello whatsapp"#);
 
-        let service = WhatsAppService::new(WhatsAppConfig::with_authorized_roots([
-            authorized_dir.path().to_path_buf(),
-        ]));
+        let service = WhatsAppService::new(WhatsAppConfig::with_authorized_roots([authorized_dir
+            .path()
+            .to_path_buf()]));
 
         match service.stage_authorized_exports([export.as_path()]) {
             Err(WhatsAppError::UnauthorizedPath { path }) => assert_eq!(path, export),
@@ -875,7 +909,9 @@ mod tests {
         let export = dir.path().join("whatsapp_fixture.txt");
         write_fixture(&export, r#"[01/02/2025, 10:20:30] Alice: hello whatsapp"#);
 
-        let service = WhatsAppService::new(WhatsAppConfig::with_authorized_roots([dir.path().to_path_buf()]));
+        let service = WhatsAppService::new(WhatsAppConfig::with_authorized_roots([dir
+            .path()
+            .to_path_buf()]));
         let staged = service
             .stage_authorized_exports([export.as_path()])
             .expect("authorized export should stage");
@@ -889,9 +925,9 @@ mod tests {
     fn create_export_monitor_rejects_unauthorized_directory() {
         let authorized_dir = tempdir().expect("tempdir");
         let unauthorized_dir = tempdir().expect("tempdir");
-        let service = WhatsAppService::new(WhatsAppConfig::with_authorized_roots([
-            authorized_dir.path().to_path_buf(),
-        ]));
+        let service = WhatsAppService::new(WhatsAppConfig::with_authorized_roots([authorized_dir
+            .path()
+            .to_path_buf()]));
 
         match service.create_export_monitor(unauthorized_dir.path()) {
             Err(WhatsAppError::UnauthorizedPath { path }) => {
@@ -901,5 +937,4 @@ mod tests {
             Ok(_) => panic!("unauthorized watch directory should fail"),
         }
     }
-
 }

@@ -45,7 +45,10 @@ pub fn transcode_audio_to_mp3(
     if !input_path.exists() {
         return Err(IMessageError::Io(std::io::Error::new(
             std::io::ErrorKind::NotFound,
-            format!("input audio file not found: {}", input_path.to_string_lossy()),
+            format!(
+                "input audio file not found: {}",
+                input_path.to_string_lossy()
+            ),
         )));
     }
 
@@ -62,7 +65,9 @@ pub fn transcode_audio_to_mp3(
     let output = Command::new(binary)
         .args(build_ffmpeg_args(input_path, output_path, options))
         .output()
-        .map_err(|error| IMessageError::Internal(anyhow::anyhow!("failed to start ffmpeg: {}", error)))?;
+        .map_err(|error| {
+            IMessageError::Internal(anyhow::anyhow!("failed to start ffmpeg: {}", error))
+        })?;
 
     if output.status.success() {
         return Ok(());
@@ -71,7 +76,11 @@ pub fn transcode_audio_to_mp3(
     let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
     Err(IMessageError::Internal(anyhow::anyhow!(
         "ffmpeg transcoding failed (status: {}): {}",
-        output.status.code().map(|code| code.to_string()).unwrap_or_else(|| "signal".to_string()),
+        output
+            .status
+            .code()
+            .map(|code| code.to_string())
+            .unwrap_or_else(|| "signal".to_string()),
         stderr
     )))
 }
@@ -83,7 +92,9 @@ pub fn transcode_audio_bytes_to_mp3(
     options: &AudioTranscodeOptions,
 ) -> IMessageResult<Vec<u8>> {
     if input_bytes.is_empty() {
-        return Err(IMessageError::Internal(anyhow::anyhow!("input audio payload is empty")));
+        return Err(IMessageError::Internal(anyhow::anyhow!(
+            "input audio payload is empty"
+        )));
     }
 
     let binary = options
@@ -93,12 +104,17 @@ pub fn transcode_audio_bytes_to_mp3(
         .unwrap_or_else(|| std::ffi::OsStr::new("ffmpeg"));
 
     let mut child = Command::new(binary)
-        .args(build_ffmpeg_pipe_args(normalize_input_format(input_format), options))
+        .args(build_ffmpeg_pipe_args(
+            normalize_input_format(input_format),
+            options,
+        ))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|error| IMessageError::Internal(anyhow::anyhow!("failed to start ffmpeg: {}", error)))?;
+        .map_err(|error| {
+            IMessageError::Internal(anyhow::anyhow!("failed to start ffmpeg: {}", error))
+        })?;
 
     if let Some(mut stdin) = child.stdin.take() {
         stdin.write_all(input_bytes).map_err(|error| {
@@ -122,7 +138,11 @@ pub fn transcode_audio_bytes_to_mp3(
     let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
     Err(IMessageError::Internal(anyhow::anyhow!(
         "ffmpeg in-memory transcoding failed (status: {}): {}",
-        output.status.code().map(|code| code.to_string()).unwrap_or_else(|| "signal".to_string()),
+        output
+            .status
+            .code()
+            .map(|code| code.to_string())
+            .unwrap_or_else(|| "signal".to_string()),
         stderr
     )))
 }
@@ -146,7 +166,11 @@ fn build_ffmpeg_args(
         "-hide_banner".to_string(),
         "-loglevel".to_string(),
         "error".to_string(),
-        if options.overwrite { "-y".to_string() } else { "-n".to_string() },
+        if options.overwrite {
+            "-y".to_string()
+        } else {
+            "-n".to_string()
+        },
         "-i".to_string(),
         input_path.to_string_lossy().to_string(),
         "-ac".to_string(),
@@ -294,5 +318,4 @@ mod tests {
             other => panic!("expected Internal error, got {other:?}"),
         }
     }
-
 }

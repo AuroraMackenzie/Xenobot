@@ -167,7 +167,11 @@ mod tests {
     #[test]
     fn deduplicates_accounts_by_root_path() {
         let candidates = vec![
-            source(SourceKind::ExportDirectory, "Downloads export", "/tmp/wechat"),
+            source(
+                SourceKind::ExportDirectory,
+                "Downloads export",
+                "/tmp/wechat",
+            ),
             source(SourceKind::AppContainer, "Sandbox", "/tmp/wechat"),
         ];
 
@@ -179,7 +183,11 @@ mod tests {
     #[test]
     fn picks_primary_account_preferring_current() {
         let candidates = vec![
-            source(SourceKind::ExportDirectory, "Downloads export", "/tmp/export"),
+            source(
+                SourceKind::ExportDirectory,
+                "Downloads export",
+                "/tmp/export",
+            ),
             source(SourceKind::AppContainer, "Sandbox", "/tmp/app"),
         ];
 

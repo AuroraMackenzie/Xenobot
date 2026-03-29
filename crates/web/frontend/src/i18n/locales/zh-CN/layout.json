@@ -10,20 +10,20 @@
     "rename": "重命名",
     "pin": "置顶",
     "unpin": "取消置顶",
-    "delete": "删除"
+    "delete": "受保护"
   },
   "renameModal": {
     "title": "重命名",
     "placeholder": "请输入新名称"
   },
   "deleteModal": {
-    "title": "确认删除",
-    "message": "确定要删除聊天记录 \"{name}\" 吗？此操作无法撤销。"
+    "title": "受保护操作",
+    "message": "安全模式下已禁用聊天记录「{name}」的破坏性移除操作。"
   },
   "tooltip": {
     "expand": "展开侧边栏",
     "collapse": "收起侧边栏",
-    "hint": "右键可删除或重命名聊天记录",
+    "hint": "右键可重命名或置顶聊天记录",
     "search": "搜索聊天记录"
   },
   "sessionInfo": "{count} 条消息 · {time}",

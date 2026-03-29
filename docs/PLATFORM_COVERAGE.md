@@ -16,6 +16,26 @@ Explicitly excluded implementation styles:
 - Windows-only key extraction helpers
 - reference-project UI/asset reuse
 
+## Machine-Readable Truth Source
+
+The canonical machine-readable view now lives in:
+
+- `GET /core/platform-capabilities`
+
+As of the current backend audit:
+
+- platforms listed in the matrix: `17`
+- platforms at the current WeChat reference depth: `1`
+- platforms below the current WeChat reference depth: `16`
+- platforms with a platform-specific runtime detector layer: `1`
+- platforms with a platform-specific legal-safe decrypt path: `1`
+- platforms at the full planned end state: `0`
+
+Important interpretation rule:
+
+- shared downstream analysis/API availability means a platform's records can be queried after successful normalized import
+- it does **not** mean that the platform's native export/runtime workflow is already complete to the full target depth
+
 ## Covered Platforms (17)
 
 1. WeChat (`xenobot-wechat`)

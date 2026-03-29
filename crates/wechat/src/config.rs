@@ -87,7 +87,9 @@ impl WeChatConfig {
             return true;
         }
 
-        self.authorized_roots.iter().any(|root| path.starts_with(root))
+        self.authorized_roots
+            .iter()
+            .any(|root| path.starts_with(root))
     }
 }
 

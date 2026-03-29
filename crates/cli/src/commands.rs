@@ -178,6 +178,10 @@ pub struct MonitorArgs {
     #[arg(long, default_value_t = true)]
     pub start: bool,
 
+    /// Run a single bootstrap scan over current files and exit
+    #[arg(long, default_value_t = false)]
+    pub once: bool,
+
     /// Watch interval in seconds
     #[arg(long, default_value_t = 5)]
     pub interval: u64,
@@ -221,6 +225,112 @@ pub enum SourceCommand {
         /// Output format
         #[arg(short, long, default_value_t = OutputFormat::Text)]
         format_out: OutputFormat,
+    },
+    /// Diagnose whether local platform sources are ready for authorized real-data import tests
+    Doctor {
+        /// Optional platform filters; defaults to WeChat, QQ, and Discord
+        #[arg(long = "format", value_enum)]
+        formats: Vec<PlatformFormat>,
+
+        /// Optional SQLite database path for checking completed import/monitor checkpoints
+        #[arg(long, env = "XENOBOT_DB_PATH")]
+        db_path: Option<PathBuf>,
+
+        /// Output format
+        #[arg(short, long, default_value_t = OutputFormat::Text)]
+        format_out: OutputFormat,
+    },
+    /// Stage likely export-like runtime artifacts into authorized export roots for the priority trio or selected platforms
+    StageRuntimeReady {
+        /// Optional platform filters; defaults to WeChat, QQ, and Discord
+        #[arg(long = "format", value_enum)]
+        formats: Vec<PlatformFormat>,
+
+        /// Actually copy the detected runtime artifacts into the authorized export roots
+        #[arg(long, default_value_t = false)]
+        apply: bool,
+    },
+    /// Prepare a manual-review fallback workspace when platform-native export is unavailable
+    PrepareManualReview {
+        /// Optional platform filters; defaults to WeChat, QQ, and Discord
+        #[arg(long = "format", value_enum)]
+        formats: Vec<PlatformFormat>,
+
+        /// Overwrite an existing manual-review template
+        #[arg(long, default_value_t = false)]
+        overwrite: bool,
+    },
+    /// Build a starter selection.json from files already dropped into a manual-review workspace
+    BuildManualReviewPack {
+        /// Optional platform filters; defaults to WeChat, QQ, and Discord
+        #[arg(long = "format", value_enum)]
+        formats: Vec<PlatformFormat>,
+
+        /// Overwrite an existing selection.json
+        #[arg(long, default_value_t = false)]
+        overwrite: bool,
+    },
+    /// Import all currently ready authorized export roots for the priority trio or selected platforms
+    ImportReady {
+        /// Optional platform filters; defaults to WeChat, QQ, and Discord
+        #[arg(long = "format", value_enum)]
+        formats: Vec<PlatformFormat>,
+
+        /// Optional SQLite database path for persisted imports
+        #[arg(long, env = "XENOBOT_DB_PATH")]
+        db_path: Option<PathBuf>,
+
+        /// Import as incremental update
+        #[arg(long, default_value_t = true)]
+        incremental: bool,
+
+        /// Merge multi-file imports per platform into a single session when writing DB
+        #[arg(long, default_value_t = false)]
+        merge: bool,
+    },
+    /// Run runtime staging + import-ready + one-shot monitor bootstrap + doctor recheck as a single trio sync flow
+    SyncReady {
+        /// Optional platform filters; defaults to WeChat, QQ, and Discord
+        #[arg(long = "format", value_enum)]
+        formats: Vec<PlatformFormat>,
+
+        /// Optional SQLite database path for persisted imports and checkpoints
+        #[arg(long, env = "XENOBOT_DB_PATH")]
+        db_path: Option<PathBuf>,
+
+        /// Watch interval in seconds for the monitor bootstrap phase
+        #[arg(long, default_value_t = 5)]
+        interval: u64,
+
+        /// Import as incremental update
+        #[arg(long, default_value_t = true)]
+        incremental: bool,
+
+        /// Merge multi-file imports per platform into a single session when writing DB
+        #[arg(long, default_value_t = false)]
+        merge: bool,
+    },
+    /// Start or plan monitors for all currently ready authorized export roots in the priority trio or selected platforms
+    MonitorReady {
+        /// Optional platform filters; defaults to WeChat, QQ, and Discord
+        #[arg(long = "format", value_enum)]
+        formats: Vec<PlatformFormat>,
+
+        /// Optional SQLite database path for persisted monitor checkpoints
+        #[arg(long, env = "XENOBOT_DB_PATH")]
+        db_path: Option<PathBuf>,
+
+        /// Watch interval in seconds
+        #[arg(long, default_value_t = 5)]
+        interval: u64,
+
+        /// Start monitoring immediately; omit this flag for planning-only output
+        #[arg(long, default_value_t = false)]
+        start: bool,
+
+        /// Run a single bootstrap scan over current files and exit
+        #[arg(long, default_value_t = false)]
+        once: bool,
     },
 }
 

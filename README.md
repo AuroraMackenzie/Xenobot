@@ -1,28 +1,54 @@
-# Xenobot
+<div align="center">
+  <img src="docs/assets/xenobot.png" width="260" alt="Xenobot">
 
-### Don’t Lose Memories, Xenobot Keeps Them
-```
-```
+  <h1>Xenobot</h1>
+  <p><strong>Don’t Lose Memories, Xenobot Keeps Them</strong></p>
+  <p>Rust-native chat data engineering for authorized exports, incremental database ingestion, analytics, and LLM-assisted workflows.</p>
+
+  <p>
+    <a href="#english">Overview</a>
+    ·
+    <a href="#current-capabilities">Capabilities</a>
+    ·
+    <a href="#quick-start">Quick Start</a>
+    ·
+    <a href="#wrapper-commands-recommended">Commands</a>
+    ·
+    <a href="#troubleshooting">Troubleshooting</a>
+    ·
+    <a href="#metalmps-benchmark-baseline-apple-silicon">Metal/MPS</a>
+  </p>
+</div>
+
+---
+
 ## English
 
 ### Scope
 Xenobot is a Rust-native chat data engineering project for authorized exports, incremental database ingestion, analytics, and LLM-assisted workflows.
 
 ### Documentation
-- API reference: `docs/API.md`
-- User guide: `docs/USER_GUIDE.md`
-- Quality gate: `docs/QUALITY_GATE.md`
-- Operations runbook: `docs/OPERATIONS_RUNBOOK.md`
+
+| Document | Path |
+| :-- | :-- |
+| API reference | `docs/API.md` |
+| User guide | `docs/USER_GUIDE.md` |
+| Quality gate | `docs/QUALITY_GATE.md` |
+| Operations runbook | `docs/OPERATIONS_RUNBOOK.md` |
 
 ### Reference Boundaries
 - ChatLab, chatlog, and CipherTalk are treated as reference projects only.
 - Xenobot does not directly reuse their licensed UI assets, icons, page structure, or source code.
 - Windows-only DLL, memory-scan, and process-hook workflows from reference projects are intentionally excluded from Xenobot.
 
+---
+
 ### Legal and Safe Defaults
 - Authorized export files and user-accessible local directories only.
 - No process-memory key extraction, decryption bypass, or offensive capability.
 - Principle of least privilege and local-first processing.
+
+---
 
 ### Current Capabilities
 - Multi-platform parser registry and format sniffing.
@@ -50,6 +76,8 @@ The frontend settings surface now exposes:
 - No process-memory key extraction or decryption bypass logic.
 - Authorized export and local user-accessible data workflows only.
 - Platform adapters keep legal-safe behavior explicit in runtime responses.
+
+---
 
 ### Sandbox Coexist Mode (No TCP/UDS Requirement)
 ```bash
@@ -80,7 +108,7 @@ export DATABASE_URL="sqlite://$(pwd)/test.db"
 cargo test -p xenobot-api -p xenobot-cli --features "api,analysis" --offline
 cargo run -p xenobot-cli --features "api,analysis" -- api smoke
 ```
-`api smoke` now validates three contracts in-process: `GET /health`, `POST /chat/sessions/:id/generate-sql` (session-scoped SQL), and `POST /chat/sessions/:id/execute-sql`.
+`api smoke` now runs the full in-process backend workflow across `wechat`, `qq`, and `discord`: `GET /health`, `POST /chat/import`, session generation, member activity, summary persistence, memory recall, keyword search, semantic search, SQL generation, and SQL execution. It also fails if `detectedPlatform` or `payloadPlatform` drift away from the expected platform fixture.
 
 ### Wrapper Commands (Recommended)
 ```bash

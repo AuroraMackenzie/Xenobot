@@ -21,6 +21,7 @@ pub fn build_router(config: &ApiConfig) -> Router {
 
     // Media routes are useful for chat/AI UIs and do not depend on frontend runtime.
     router = router.nest("/media", crate::media::router());
+    router = router.nest("/memory", crate::memory::router());
 
     if config.features.enable_merge {
         router = router.nest("/merge", crate::merge::router());
@@ -93,6 +94,7 @@ async fn api_index() -> Json<serde_json::Value> {
         "endpoints": [
             "/chat",
             "/media",
+            "/memory",
             "/merge",
             "/ai",
             "/llm",

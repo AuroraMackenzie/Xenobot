@@ -22,18 +22,33 @@
 
 :root {
   --xeno-font-sans:
-    'Sora',
-    'Avenir Next',
-    'Avenir',
-    'PingFang SC',
+    'Inter',
     'SF Pro Text',
+    'Avenir Next',
+    'SF Pro Text',
+    'PingFang SC',
     'Segoe UI',
     sans-serif;
+  --xeno-font-display:
+    'Space Grotesk',
+    'Inter',
+    'Avenir Next',
+    'SF Pro Display',
+    sans-serif;
+  --xeno-font-mono:
+    'JetBrains Mono',
+    'SF Mono',
+    'Menlo',
+    monospace;
 
-  --xeno-bg-base: #f2f6fb;
-  --xeno-bg-overlay-a: rgba(6, 182, 212, 0.16);
-  --xeno-bg-overlay-b: rgba(14, 165, 233, 0.12);
-  --xeno-bg-overlay-c: rgba(251, 146, 60, 0.08);
+  --xeno-bg-base: #eef4fb;
+  --xeno-bg-overlay-a: rgba(7, 89, 133, 0.16);
+  --xeno-bg-overlay-b: rgba(14, 165, 233, 0.1);
+  --xeno-bg-overlay-c: rgba(245, 158, 11, 0.06);
+  --xeno-cosmos-cyan: rgba(45, 212, 191, 0.18);
+  --xeno-cosmos-blue: rgba(14, 165, 233, 0.18);
+  --xeno-cosmos-amber: rgba(245, 158, 11, 0.12);
+  --xeno-shell-glow: rgba(8, 145, 178, 0.14);
 
   --xeno-grid-color: rgba(8, 47, 73, 0.07);
   --xeno-noise-color: rgba(2, 6, 23, 0.035);
@@ -44,10 +59,16 @@
   --xeno-border-soft: rgba(148, 163, 184, 0.34);
   --xeno-border-strong: rgba(148, 163, 184, 0.48);
 
-  --xeno-surface-main: rgba(255, 255, 255, 0.78);
-  --xeno-surface-muted: rgba(255, 255, 255, 0.62);
-  --xeno-surface-emphasis: rgba(255, 255, 255, 0.9);
-  --xeno-sidebar-bg: rgba(248, 251, 255, 0.82);
+  --xeno-surface-main: rgba(255, 255, 255, 0.03);
+  --xeno-surface-muted: rgba(255, 255, 255, 0.015);
+  --xeno-surface-emphasis: rgba(255, 255, 255, 0.055);
+  --xeno-sidebar-bg: rgba(248, 251, 255, 0.022);
+  --xeno-surface-hairline: rgba(255, 255, 255, 0.34);
+  --xeno-stage-shell-bg:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.055), transparent 74%),
+    linear-gradient(180deg, rgba(226, 232, 240, 0.028), rgba(226, 232, 240, 0.008));
+  --xeno-stage-inner-bg:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.044), rgba(255, 255, 255, 0.008));
 
   --xeno-hover-bg: rgba(15, 23, 42, 0.05);
   --xeno-active-bg: rgba(8, 145, 178, 0.14);
@@ -59,16 +80,24 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.68);
 
   --xeno-focus-ring: rgba(14, 165, 233, 0.45);
+  --xeno-accent-private: #22d3ee;
+  --xeno-accent-private-strong: #0f8fb3;
+  --xeno-accent-group: #60a5fa;
+  --xeno-accent-group-strong: #2563eb;
 
   --titlebar-area-height: 1rem; /* 16px on macOS */
 }
 
 :root.dark,
 .dark {
-  --xeno-bg-base: #070b14;
+  --xeno-bg-base: #060a13;
   --xeno-bg-overlay-a: rgba(6, 182, 212, 0.16);
-  --xeno-bg-overlay-b: rgba(14, 165, 233, 0.12);
-  --xeno-bg-overlay-c: rgba(148, 163, 184, 0.08);
+  --xeno-bg-overlay-b: rgba(14, 165, 233, 0.1);
+  --xeno-bg-overlay-c: rgba(245, 158, 11, 0.06);
+  --xeno-cosmos-cyan: rgba(45, 212, 191, 0.16);
+  --xeno-cosmos-blue: rgba(56, 189, 248, 0.14);
+  --xeno-cosmos-amber: rgba(251, 191, 36, 0.08);
+  --xeno-shell-glow: rgba(14, 165, 233, 0.14);
 
   --xeno-grid-color: rgba(56, 189, 248, 0.1);
   --xeno-noise-color: rgba(148, 163, 184, 0.055);
@@ -79,10 +108,17 @@
   --xeno-border-soft: rgba(71, 85, 105, 0.48);
   --xeno-border-strong: rgba(71, 85, 105, 0.72);
 
-  --xeno-surface-main: rgba(15, 23, 42, 0.72);
-  --xeno-surface-muted: rgba(15, 23, 42, 0.56);
-  --xeno-surface-emphasis: rgba(15, 23, 42, 0.86);
-  --xeno-sidebar-bg: rgba(8, 15, 28, 0.84);
+  --xeno-surface-main: rgba(9, 16, 29, 0.032);
+  --xeno-surface-muted: rgba(9, 16, 29, 0.016);
+  --xeno-surface-emphasis: rgba(9, 16, 29, 0.052);
+  --xeno-sidebar-bg: rgba(6, 12, 24, 0.024);
+  --xeno-surface-hairline: rgba(148, 163, 184, 0.08);
+  --xeno-stage-shell-bg:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.022), transparent 80%),
+    linear-gradient(180deg, rgba(8, 12, 20, 0.11), rgba(3, 7, 15, 0.045));
+  --xeno-stage-inner-bg:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.014), transparent 80%),
+    linear-gradient(180deg, rgba(8, 12, 20, 0.072), rgba(3, 7, 15, 0.03));
 
   --xeno-hover-bg: rgba(148, 163, 184, 0.1);
   --xeno-active-bg: rgba(6, 182, 212, 0.2);
@@ -94,6 +130,10 @@
     inset 0 1px 0 rgba(148, 163, 184, 0.12);
 
   --xeno-focus-ring: rgba(56, 189, 248, 0.42);
+  --xeno-accent-private: #67e8f9;
+  --xeno-accent-private-strong: #0891b2;
+  --xeno-accent-group: #93c5fd;
+  --xeno-accent-group-strong: #3b82f6;
 }
 
 html,
@@ -101,13 +141,14 @@ body {
   min-height: 100%;
   font-family: var(--xeno-font-sans);
   color: var(--xeno-text-main);
+  letter-spacing: -0.01em;
 }
 
 body {
   background:
-    radial-gradient(circle at 14% 10%, var(--xeno-bg-overlay-a), transparent 36%),
-    radial-gradient(circle at 88% 12%, var(--xeno-bg-overlay-b), transparent 34%),
-    radial-gradient(circle at 72% 86%, var(--xeno-bg-overlay-c), transparent 28%),
+    radial-gradient(circle at 14% 10%, var(--xeno-bg-overlay-a), transparent 34%),
+    radial-gradient(circle at 88% 12%, var(--xeno-bg-overlay-b), transparent 32%),
+    radial-gradient(circle at 72% 86%, var(--xeno-bg-overlay-c), transparent 26%),
     linear-gradient(180deg, var(--xeno-bg-base), var(--xeno-bg-base));
   transition:
     background-color 220ms ease,
@@ -124,7 +165,7 @@ body::before {
     linear-gradient(var(--xeno-grid-color) 1px, transparent 1px),
     linear-gradient(90deg, var(--xeno-grid-color) 1px, transparent 1px);
   background-size: 28px 28px;
-  opacity: 0.4;
+  opacity: 0.24;
 }
 
 body::after {
@@ -133,7 +174,7 @@ body::after {
   inset: 0;
   pointer-events: none;
   z-index: -1;
-  opacity: 0.22;
+  opacity: 0.12;
   background-image: radial-gradient(var(--xeno-noise-color) 1px, transparent 1px);
   background-size: 3px 3px;
 }
@@ -145,36 +186,431 @@ body::after {
 
 /* Shared shell and panel surfaces for original Xenobot visual language. */
 .xeno-app-shell {
-  background: linear-gradient(180deg, var(--xeno-surface-muted), transparent 80%);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 16%),
+    radial-gradient(circle at 0% 18%, var(--xeno-cosmos-blue), transparent 18%),
+    radial-gradient(circle at 100% 82%, var(--xeno-cosmos-amber), transparent 16%);
 }
 
 .xeno-page-content {
-  background: transparent;
+  background:
+    radial-gradient(circle at 100% 0%, var(--xeno-shell-glow), transparent 18%),
+    radial-gradient(circle at 14% 92%, var(--xeno-cosmos-cyan), transparent 18%);
 }
 
 .xeno-panel {
   border: 1px solid var(--xeno-border-soft);
-  background: var(--xeno-surface-main);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 130%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.04), transparent 52%),
+    var(--xeno-surface-main);
   box-shadow: var(--xeno-shadow-panel);
-  backdrop-filter: blur(16px) saturate(130%);
+  backdrop-filter: none;
+  position: relative;
+  overflow: hidden;
+}
+
+.xeno-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  box-shadow: inset 0 1px 0 var(--xeno-surface-hairline);
 }
 
 .xeno-panel-muted {
   border: 1px solid var(--xeno-border-soft);
-  background: var(--xeno-surface-muted);
-  backdrop-filter: blur(14px) saturate(122%);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 140%),
+    var(--xeno-surface-muted);
+  backdrop-filter: none;
 }
 
 .xeno-panel-emphasis {
   border: 1px solid var(--xeno-border-strong);
-  background: var(--xeno-surface-emphasis);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.12), transparent 120%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.06), transparent 50%),
+    var(--xeno-surface-emphasis);
   box-shadow: var(--xeno-shadow-soft);
-  backdrop-filter: blur(18px) saturate(130%);
+  backdrop-filter: none;
+  position: relative;
+  overflow: hidden;
+}
+
+.xeno-panel-emphasis::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  box-shadow: inset 0 1px 0 var(--xeno-surface-hairline);
+}
+
+.xeno-panel::after,
+.xeno-panel-emphasis::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      120deg,
+      transparent 18%,
+      rgba(255, 255, 255, 0.08) 34%,
+      transparent 48%
+    );
+  mix-blend-mode: screen;
+  opacity: 0.42;
 }
 
 .xeno-focus-ring:focus-visible {
   outline: 2px solid var(--xeno-focus-ring);
   outline-offset: 2px;
+}
+
+.xeno-session-badge-private,
+.xeno-session-badge-group {
+  color: white !important;
+  border-color: transparent !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 14px 30px -20px rgba(2, 6, 23, 0.55);
+}
+
+.xeno-session-badge-private {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.14), transparent 120%),
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--xeno-accent-private) 76%, white 10%),
+      var(--xeno-accent-private-strong)
+    ) !important;
+}
+
+.xeno-session-badge-group {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.14), transparent 120%),
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--xeno-accent-group) 72%, white 12%),
+      var(--xeno-accent-group-strong)
+    ) !important;
+}
+
+.xeno-analysis-tabrail {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.32rem;
+  border: 1px solid var(--xeno-border-soft);
+  border-radius: 9999px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 140%),
+    var(--xeno-surface-muted);
+  box-shadow: var(--xeno-shadow-soft);
+  backdrop-filter: none;
+}
+
+.xeno-analysis-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.35rem;
+  padding: 0.58rem 0.9rem;
+  border: 1px solid transparent;
+  border-radius: 0.9rem;
+  color: var(--xeno-text-secondary);
+  background: transparent;
+  transition:
+    color 160ms ease,
+    border-color 160ms ease,
+    background-color 160ms ease,
+    transform 160ms ease;
+}
+
+.xeno-analysis-tab:hover {
+  color: var(--xeno-text-main);
+  background: var(--xeno-hover-bg);
+}
+
+.xeno-analysis-tab--active {
+  color: var(--xeno-text-main);
+  border-color: var(--xeno-active-border);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 16px 30px -24px rgba(2, 6, 23, 0.72);
+}
+
+.xeno-analysis-tab--private.xeno-analysis-tab--active {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 150%),
+    color-mix(in srgb, var(--xeno-accent-private) 15%, var(--xeno-surface-emphasis));
+}
+
+.xeno-analysis-tab--group.xeno-analysis-tab--active {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 150%),
+    color-mix(in srgb, var(--xeno-accent-group) 16%, var(--xeno-surface-emphasis));
+}
+
+.xeno-analysis-empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+  padding: 1.5rem;
+}
+
+.xeno-analysis-empty-panel {
+  width: min(100%, 44rem);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2.5rem 1.5rem;
+  border: 1px dashed var(--xeno-border-strong);
+  border-radius: 1.4rem;
+  background:
+    radial-gradient(circle at top, var(--xeno-shell-glow), transparent 42%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 130%),
+    var(--xeno-stage-shell-bg),
+    var(--xeno-surface-main);
+  box-shadow: var(--xeno-shadow-soft);
+  backdrop-filter: none;
+}
+
+.xeno-analysis-empty-icon {
+  color: color-mix(in srgb, var(--xeno-text-secondary) 72%, white 6%);
+}
+
+.xeno-analysis-empty-title {
+  color: var(--xeno-text-main);
+}
+
+.xeno-analysis-empty-copy {
+  color: var(--xeno-text-secondary);
+}
+
+.xeno-overview-shell--private {
+  background:
+    radial-gradient(
+      circle at top right,
+      color-mix(in srgb, var(--xeno-accent-private) 12%, transparent),
+      transparent 26%
+    ),
+    radial-gradient(
+      circle at left center,
+      color-mix(in srgb, var(--xeno-accent-group) 10%, transparent),
+      transparent 24%
+    );
+}
+
+.xeno-overview-shell--group {
+  background:
+    radial-gradient(
+      circle at top right,
+      color-mix(in srgb, var(--xeno-accent-group) 12%, transparent),
+      transparent 26%
+    ),
+    radial-gradient(
+      circle at left center,
+      color-mix(in srgb, var(--xeno-accent-private) 10%, transparent),
+      transparent 24%
+    );
+}
+
+.xeno-comparison-layout {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+}
+
+.xeno-comparison-participant {
+  flex: 1;
+  text-align: center;
+}
+
+.xeno-comparison-orb {
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 4.1rem;
+  height: 4.1rem;
+  border-radius: 1.25rem;
+  border: 1px solid var(--xeno-border-soft);
+  box-shadow: var(--xeno-shadow-soft);
+  backdrop-filter: none;
+}
+
+.xeno-comparison-orb--private {
+  background:
+    radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.2), transparent 42%),
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--xeno-accent-private) 30%, transparent),
+      color-mix(in srgb, var(--xeno-accent-private-strong) 20%, var(--xeno-surface-main))
+    );
+}
+
+.xeno-comparison-orb--group {
+  background:
+    radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.2), transparent 42%),
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--xeno-accent-group) 30%, transparent),
+      color-mix(in srgb, var(--xeno-accent-group-strong) 20%, var(--xeno-surface-main))
+    );
+}
+
+.xeno-comparison-initial {
+  font-family: var(--xeno-font-display);
+  font-size: 1.45rem;
+  font-weight: 700;
+}
+
+.xeno-comparison-initial--private,
+.xeno-comparison-ratio--private {
+  color: var(--xeno-accent-private);
+}
+
+.xeno-comparison-initial--group,
+.xeno-comparison-ratio--group {
+  color: var(--xeno-accent-group);
+}
+
+.xeno-comparison-name {
+  margin-top: 0.65rem;
+  color: var(--xeno-text-main);
+}
+
+.xeno-comparison-ratio {
+  font-family: var(--xeno-font-display);
+  font-size: 1.9rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.xeno-comparison-copy,
+.xeno-comparison-scale {
+  color: var(--xeno-text-secondary);
+}
+
+.xeno-comparison-track {
+  position: relative;
+  flex: 1;
+  height: 2.2rem;
+  overflow: hidden;
+  border: 1px solid var(--xeno-border-soft);
+  border-radius: 9999px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 150%),
+    color-mix(in srgb, var(--xeno-surface-muted) 88%, transparent);
+}
+
+.xeno-comparison-segment {
+  position: absolute;
+  top: 0;
+  height: 100%;
+}
+
+.xeno-comparison-segment--private {
+  left: 0;
+  border-radius: 9999px 0 0 9999px;
+  background: linear-gradient(
+    90deg,
+    var(--xeno-accent-private),
+    var(--xeno-accent-private-strong)
+  );
+}
+
+.xeno-comparison-segment--group {
+  right: 0;
+  border-radius: 0 9999px 9999px 0;
+  background: linear-gradient(
+    90deg,
+    var(--xeno-accent-group),
+    var(--xeno-accent-group-strong)
+  );
+}
+
+.xeno-member-shell {
+  max-width: 72rem;
+  padding: 1.5rem;
+}
+
+.xeno-member-title {
+  font-family: var(--xeno-font-display);
+  color: var(--xeno-text-main);
+}
+
+.xeno-member-subtitle,
+.xeno-member-meta,
+.xeno-member-label,
+.xeno-member-percent,
+.xeno-member-empty-copy {
+  color: var(--xeno-text-secondary);
+}
+
+.xeno-member-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--xeno-border-soft);
+  background:
+    radial-gradient(
+      circle at top right,
+      color-mix(in srgb, var(--xeno-accent-group) 16%, transparent),
+      transparent 24%
+    ),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 135%),
+    var(--xeno-surface-main);
+  box-shadow: var(--xeno-shadow-panel);
+  backdrop-filter: none;
+}
+
+.xeno-member-avatar-fallback {
+  background: linear-gradient(
+    135deg,
+    var(--xeno-accent-private),
+    var(--xeno-accent-private-strong)
+  );
+}
+
+.xeno-member-name,
+.xeno-member-value,
+.xeno-member-tip-title {
+  color: var(--xeno-text-main);
+}
+
+.xeno-member-progress-track {
+  background: color-mix(in srgb, var(--xeno-text-secondary) 18%, transparent);
+}
+
+.xeno-member-progress-fill {
+  background: linear-gradient(
+    90deg,
+    var(--xeno-accent-private),
+    var(--xeno-accent-private-strong)
+  );
+}
+
+.xeno-member-section {
+  border-top: 1px solid var(--xeno-border-soft);
+}
+
+.xeno-member-tip {
+  border: 1px solid var(--xeno-border-soft);
+  background:
+    radial-gradient(
+      circle at top left,
+      color-mix(in srgb, var(--xeno-accent-group) 22%, transparent),
+      transparent 32%
+    ),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 140%),
+    var(--xeno-surface-main);
+  box-shadow: var(--xeno-shadow-soft);
 }
 
 /* Scrollbar uses hover-reveal style to keep dense UI clean. */

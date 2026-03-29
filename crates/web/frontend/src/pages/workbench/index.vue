@@ -1,9 +1,39 @@
 <script setup lang="ts">
+import { computed } from "vue";
+import { storeToRefs } from "pinia";
 import { useI18n } from "vue-i18n";
-import BatchManageTab from "./components/BatchManageTab.vue";
 import PageHeader from "@/components/layout/PageHeader.vue";
+import { useSessionStore } from "@/stores/session";
 
 const { t } = useI18n();
+const sessionStore = useSessionStore();
+const { sessions } = storeToRefs(sessionStore);
+
+const workbenchMetrics = computed(() => {
+  const totalSessions = sessions.value.length;
+  const totalMessages = sessions.value.reduce(
+    (sum, session) => sum + session.messageCount,
+    0,
+  );
+  const activePlatforms = new Set(
+    sessions.value.map((session) => session.platform),
+  ).size;
+
+  return [
+    {
+      label: "Imported Sessions",
+      value: totalSessions.toLocaleString(),
+    },
+    {
+      label: "Message Volume",
+      value: totalMessages.toLocaleString(),
+    },
+    {
+      label: "Active Platforms",
+      value: activePlatforms.toLocaleString(),
+    },
+  ];
+});
 </script>
 
 <template>
@@ -27,10 +57,28 @@ const { t } = useI18n();
             Manage imported sessions, review merge readiness, and enforce
             cleanup from one controlled workspace.
           </div>
+          <div class="xeno-workbench-metrics">
+            <article
+              v-for="metric in workbenchMetrics"
+              :key="metric.label"
+              class="xeno-workbench-metric"
+            >
+              <div class="xeno-workbench-metric-label">{{ metric.label }}</div>
+              <div class="xeno-workbench-metric-value">{{ metric.value }}</div>
+            </article>
+          </div>
         </div>
 
         <div class="xeno-panel xeno-workbench-panel rounded-2xl p-4 sm:p-5">
-          <BatchManageTab />
+          <div class="xeno-workbench-safe-panel">
+            <div class="xeno-workbench-safe-badge">SAFE MODE</div>
+            <h3 class="xeno-workbench-safe-title">Destructive controls removed</h3>
+            <p class="xeno-workbench-safe-copy">
+              Session deletion and cleanup actions are no longer exposed in the
+              frontend. This surface is now limited to read-only operational
+              review while import, monitor, analysis, and export flows remain available.
+            </p>
+          </div>
         </div>
       </div>
     </div>
@@ -83,9 +131,82 @@ const { t } = useI18n();
   color: var(--xeno-text-secondary);
 }
 
+.xeno-workbench-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.9rem;
+}
+
+.xeno-workbench-metric {
+  border: 1px solid var(--xeno-border-soft);
+  border-radius: 1rem;
+  padding: 0.85rem 0.95rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 120%),
+    rgba(7, 18, 29, 0.72);
+}
+
+.xeno-workbench-metric-label {
+  font-family: var(--xeno-font-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #78daf5;
+}
+
+.xeno-workbench-metric-value {
+  margin-top: 0.35rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--xeno-text-main);
+}
+
 .xeno-workbench-panel {
   position: relative;
   overflow: hidden;
+}
+
+.xeno-workbench-safe-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  border: 1px solid var(--xeno-border-soft);
+  border-radius: 1rem;
+  padding: 1rem 1.05rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 120%),
+    rgba(7, 18, 29, 0.72);
+}
+
+.xeno-workbench-safe-badge {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  border-radius: 9999px;
+  padding: 0.2rem 0.55rem;
+  font-family: var(--xeno-font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: #78daf5;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.xeno-workbench-safe-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--xeno-text-main);
+}
+
+.xeno-workbench-safe-copy {
+  max-width: 54rem;
+  font-size: 0.92rem;
+  line-height: 1.6;
+  color: var(--xeno-text-secondary);
 }
 
 .xeno-workbench-panel::before {
@@ -103,5 +224,11 @@ const { t } = useI18n();
   );
   opacity: 0.78;
   pointer-events: none;
+}
+
+@media (max-width: 900px) {
+  .xeno-workbench-metrics {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

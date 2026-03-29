@@ -90,16 +90,12 @@ const activeSubTab = ref("wordcloud");
 }
 
 .xeno-quotes-stage {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: linear-gradient(
-    180deg,
-    rgba(15, 23, 42, 0.76),
-    rgba(15, 23, 42, 0.62)
-  );
+  border: 1px solid var(--xeno-border-soft);
+  background: var(--xeno-stage-shell-bg);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 18px 38px rgba(2, 6, 23, 0.18);
-  backdrop-filter: blur(18px);
+    inset 0 1px 0 var(--xeno-surface-hairline),
+    0 18px 38px rgba(2, 6, 23, 0.14);
+  backdrop-filter: none;
 }
 
 .fade-enter-active,

@@ -99,15 +99,15 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="main-content max-w-4xl p-6">
+  <div class="xeno-member-shell main-content">
     <!-- English UI note -->
     <div class="mb-6">
       <div class="flex items-center gap-3">
         <div>
-          <h2 class="text-xl font-bold text-gray-900 dark:text-white">
+          <h2 class="xeno-member-title text-xl font-bold">
             {{ t("members.private.title") }}
           </h2>
-          <p class="text-sm text-gray-500 dark:text-gray-400">
+          <p class="xeno-member-subtitle text-sm">
             {{ t("members.private.description", { count: members.length }) }}
           </p>
         </div>
@@ -149,21 +149,17 @@ onMounted(() => {
           />
           <div
             v-else
-            class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-pink-400 to-pink-600 text-lg font-medium text-white"
+            class="xeno-member-avatar-fallback flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-medium text-white"
           >
             {{ getFirstChar(member) }}
           </div>
 
           <!-- English UI note -->
           <div class="flex-1 min-w-0">
-            <h3
-              class="text-lg font-semibold text-gray-900 dark:text-white truncate"
-            >
+            <h3 class="xeno-member-name truncate text-lg font-semibold">
               {{ getDisplayName(member) }}
             </h3>
-            <p class="text-sm text-gray-500 dark:text-gray-400">
-              ID: {{ member.platformId }}
-            </p>
+            <p class="xeno-member-meta text-sm">ID: {{ member.platformId }}</p>
           </div>
         </div>
 
@@ -171,23 +167,23 @@ onMounted(() => {
         <div class="mt-4 flex items-center gap-4">
           <div class="flex-1">
             <div class="flex items-baseline justify-between">
-              <span class="text-sm text-gray-500 dark:text-gray-400">{{
-                t("members.private.messageCount")
-              }}</span>
-              <span class="text-lg font-bold text-gray-900 dark:text-white">
+              <span class="xeno-member-label text-sm">
+                {{ t("members.private.messageCount") }}
+              </span>
+              <span class="xeno-member-value text-lg font-bold">
                 {{ member.messageCount.toLocaleString() }}
               </span>
             </div>
             <!-- English UI note -->
             <div
-              class="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800"
+              class="xeno-member-progress-track mt-2 h-2 w-full overflow-hidden rounded-full"
             >
               <div
-                class="h-full rounded-full bg-gradient-to-r from-pink-400 to-pink-600 transition-all duration-500"
+                class="xeno-member-progress-fill h-full rounded-full transition-all duration-500"
                 :style="{ width: `${getPercentage(member.messageCount)}%` }"
               />
             </div>
-            <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">
+            <p class="xeno-member-percent mt-1 text-xs">
               {{
                 t("members.private.percentage", {
                   value: getPercentage(member.messageCount),
@@ -198,10 +194,8 @@ onMounted(() => {
         </div>
 
         <!-- English UI note -->
-        <div class="mt-4 border-t border-gray-100 pt-4 dark:border-gray-800">
-          <label
-            class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
-          >
+        <div class="xeno-member-section mt-4 pt-4">
+          <label class="xeno-member-label mb-2 block text-sm font-medium">
             {{ t("members.private.customAlias") }}
           </label>
           <div class="relative">
@@ -233,9 +227,9 @@ onMounted(() => {
     >
       <UIcon
         name="i-heroicons-user-group"
-        class="mb-3 h-12 w-12 text-gray-300 dark:text-gray-600"
+        class="xeno-analysis-empty-icon mb-3 h-12 w-12"
       />
-      <p class="text-gray-500 dark:text-gray-400">
+      <p class="xeno-member-empty-copy">
         {{ t("members.private.empty") }}
       </p>
     </div>
@@ -247,42 +241,16 @@ onMounted(() => {
     >
       <UIcon
         name="i-heroicons-information-circle"
-        class="mt-0.5 h-5 w-5 shrink-0 text-blue-500"
+        class="mt-0.5 h-5 w-5 shrink-0 text-[var(--xeno-accent-group)]"
       />
       <div>
-        <p class="text-sm font-medium text-blue-800 dark:text-blue-200">
+        <p class="xeno-member-tip-title text-sm font-medium">
           {{ t("members.private.tipTitle") }}
         </p>
-        <p class="mt-1 text-sm text-blue-700 dark:text-blue-300">
+        <p class="xeno-member-subtitle mt-1 text-sm">
           {{ t("members.private.tipContent") }}
         </p>
       </div>
     </div>
   </div>
 </template>
-
-<style scoped>
-.xeno-member-card,
-.xeno-member-tip {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background:
-    radial-gradient(
-      circle at top right,
-      rgba(59, 130, 246, 0.08),
-      transparent 24%
-    ),
-    linear-gradient(180deg, rgba(15, 23, 42, 0.74), rgba(15, 23, 42, 0.62));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 16px 34px rgba(2, 6, 23, 0.16);
-  backdrop-filter: blur(18px);
-}
-
-.xeno-member-tip {
-  background: linear-gradient(
-    180deg,
-    rgba(30, 64, 175, 0.18),
-    rgba(15, 23, 42, 0.62)
-  );
-}
-</style>

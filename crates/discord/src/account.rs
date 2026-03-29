@@ -139,7 +139,11 @@ mod tests {
     #[test]
     fn deduplicates_accounts_by_root_path() {
         let candidates = vec![
-            source(SourceKind::ExportDirectory, "Downloads export", "/tmp/discord"),
+            source(
+                SourceKind::ExportDirectory,
+                "Downloads export",
+                "/tmp/discord",
+            ),
             source(SourceKind::AppContainer, "App data", "/tmp/discord"),
         ];
 
@@ -151,7 +155,11 @@ mod tests {
     #[test]
     fn picks_primary_account_preferring_current() {
         let candidates = vec![
-            source(SourceKind::ExportDirectory, "Downloads export", "/tmp/export"),
+            source(
+                SourceKind::ExportDirectory,
+                "Downloads export",
+                "/tmp/export",
+            ),
             source(SourceKind::AppContainer, "App data", "/tmp/app"),
         ];
 
@@ -174,5 +182,4 @@ mod tests {
 
         assert_eq!(account.root_path(), Path::new("/tmp/discord-root"));
     }
-
 }

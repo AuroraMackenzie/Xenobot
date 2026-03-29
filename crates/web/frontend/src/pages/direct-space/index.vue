@@ -246,7 +246,7 @@ onMounted(() => {
         "
         :avatar="otherMemberAvatar"
         icon="i-heroicons-user"
-        icon-class="bg-pink-600 text-white dark:bg-pink-500 dark:text-white"
+        icon-class="xeno-session-badge-private"
       >
         <template #actions>
           <UButton
@@ -280,17 +280,15 @@ onMounted(() => {
         </template>
         <!-- Tabs -->
         <div class="mt-4 flex items-center justify-between gap-4">
-          <div
-            class="flex shrink-0 items-center gap-1 overflow-x-auto scrollbar-hide"
-          >
+          <div class="xeno-analysis-tabrail overflow-x-auto scrollbar-hide">
             <button
               v-for="tab in tabs"
               :key="tab.id"
-              class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all"
+              class="xeno-analysis-tab"
               :class="[
                 activeTab === tab.id
-                  ? 'bg-pink-500 text-white dark:bg-pink-900/30 dark:text-pink-300'
-                  : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800',
+                  ? 'xeno-analysis-tab--active xeno-analysis-tab--private'
+                  : '',
               ]"
               @click="activeTab = tab.id"
             >
@@ -360,8 +358,12 @@ onMounted(() => {
     </template>
 
     <!-- Empty State -->
-    <div v-else class="flex h-full items-center justify-center">
-      <p class="text-gray-500">{{ t("analysis.privateChat.loadError") }}</p>
+    <div v-else class="xeno-analysis-empty-state">
+      <div class="xeno-analysis-empty-panel">
+        <p class="xeno-analysis-empty-copy">
+          {{ t("analysis.privateChat.loadError") }}
+        </p>
+      </div>
     </div>
 
     <!-- English UI note -->

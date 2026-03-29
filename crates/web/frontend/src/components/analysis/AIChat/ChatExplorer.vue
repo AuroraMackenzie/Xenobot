@@ -222,14 +222,6 @@ function handleCreateConversation() {
 }
 
 // English engineering note.
-function handleDeleteConversation(convId: string) {
-  // English engineering note.
-  if (currentConversationId.value === convId) {
-    startNewConversation(generateWelcomeMessage());
-  }
-}
-
-// English engineering note.
 onMounted(async () => {
   await checkLLMConfig();
   await updateMaxMessages();
@@ -303,7 +295,6 @@ watch(
       class="h-full shrink-0"
       @select="handleSelectConversation"
       @create="handleCreateConversation"
-      @delete="handleDeleteConversation"
     />
 
     <!-- English UI note -->

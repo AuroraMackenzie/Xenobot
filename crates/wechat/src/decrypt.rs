@@ -84,9 +84,7 @@ pub fn decrypt_v4_database(
 
         // Read page
         let mut page = vec![0u8; page_len];
-        input_file
-            .read_exact(&mut page)
-            .map_err(WeChatError::Io)?;
+        input_file.read_exact(&mut page).map_err(WeChatError::Io)?;
 
         // Process page
         let processed_page = process_v4_page(&page, page_number, &enc_key, &mac_key, params)
@@ -188,8 +186,7 @@ pub fn extract_v4_salt(file_path: &Path) -> WeChatResult<Vec<u8>> {
     let mut file = File::open(file_path).map_err(WeChatError::Io)?;
 
     let mut header = [0u8; 16];
-    file.read_exact(&mut header)
-        .map_err(WeChatError::Io)?;
+    file.read_exact(&mut header).map_err(WeChatError::Io)?;
 
     Ok(header.to_vec())
 }
@@ -204,8 +201,7 @@ pub fn validate_v4_key(file_path: &Path, data_key: &[u8], img_key: &[u8]) -> WeC
 
     let page_size = params.page_size;
     let mut first_page = vec![0u8; page_size];
-    file.read_exact(&mut first_page)
-        .map_err(WeChatError::Io)?;
+    file.read_exact(&mut first_page).map_err(WeChatError::Io)?;
 
     let enc_key = params.derive_encryption_key();
     let mac_key = params.derive_mac_key(&enc_key);
@@ -230,8 +226,8 @@ mod tests {
             (0u8..32).collect(),
             (0u8..16).collect(),
             vec![
-                0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc,
-                0xdd, 0xee, 0xff,
+                0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd,
+                0xee, 0xff,
             ],
         )
     }

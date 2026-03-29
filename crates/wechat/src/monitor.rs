@@ -9,7 +9,7 @@ use tokio::sync::mpsc;
 use tokio::time::{Duration, Instant};
 
 /// File system event types.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FileEvent {
     /// New file created.
     Created(PathBuf),
@@ -50,8 +50,7 @@ impl Default for FileMonitorConfig {
 pub struct FileMonitor {
     config: FileMonitorConfig,
     watcher: RecommendedWatcher,
-    event_tx: mpsc::Sender<FileEvent>,
-    event_rx: mpsc::Receiver<FileEvent>,
+    event_rx: DebouncedEventStream,
 }
 
 impl FileMonitor {
@@ -70,10 +69,9 @@ impl FileMonitor {
         .map_err(WeChatError::FileMonitor)?;
 
         Ok(Self {
+            event_rx: DebouncedEventStream::new(event_rx, config.debounce_ms, config.max_wait_ms),
             config,
             watcher,
-            event_tx,
-            event_rx,
         })
     }
 
@@ -100,7 +98,7 @@ impl FileMonitor {
 
     /// Get next file event with debouncing.
     pub async fn next_event(&mut self) -> Option<FileEvent> {
-        self.event_rx.recv().await
+        self.event_rx.next().await
     }
 
     /// Handle raw filesystem event.
@@ -160,7 +158,9 @@ pub struct DebouncedEventStream {
     inner: mpsc::Receiver<FileEvent>,
     debounce_interval: Duration,
     max_wait: Duration,
-    last_event: Option<(Instant, FileEvent)>,
+    pending_event: Option<FileEvent>,
+    pending_started_at: Option<Instant>,
+    pending_last_update_at: Option<Instant>,
 }
 
 impl DebouncedEventStream {
@@ -170,47 +170,150 @@ impl DebouncedEventStream {
             inner,
             debounce_interval: Duration::from_millis(debounce_ms),
             max_wait: Duration::from_millis(max_wait_ms),
-            last_event: None,
+            pending_event: None,
+            pending_started_at: None,
+            pending_last_update_at: None,
         }
     }
 
     /// Get next debounced event.
     pub async fn next(&mut self) -> Option<FileEvent> {
-        let start = Instant::now();
-
         loop {
-            let timeout = if let Some((last_time, _)) = &self.last_event {
-                let elapsed = last_time.elapsed();
-                if elapsed >= self.max_wait {
-                    // Max wait reached, emit event
-                    return self.take_event();
-                }
-                self.debounce_interval.saturating_sub(elapsed)
-            } else {
-                self.debounce_interval
-            };
-
-            tokio::select! {
-                event = self.inner.recv() => {
-                    if let Some(event) = event {
-                        self.last_event = Some((Instant::now(), event));
-                    } else {
-                        return self.take_event();
+            if self.pending_event.is_none() {
+                match self.inner.recv().await {
+                    Some(event) => {
+                        let now = Instant::now();
+                        self.pending_event = Some(event);
+                        self.pending_started_at = Some(now);
+                        self.pending_last_update_at = Some(now);
+                        continue;
                     }
-                }
-                _ = tokio::time::sleep(timeout) => {
-                    return self.take_event();
+                    None => return None,
                 }
             }
 
-            if start.elapsed() >= self.max_wait {
+            let started_at = self
+                .pending_started_at
+                .expect("pending event should have a batch start");
+            let last_update_at = self
+                .pending_last_update_at
+                .expect("pending event should have a last-update timestamp");
+
+            if started_at.elapsed() >= self.max_wait
+                || last_update_at.elapsed() >= self.debounce_interval
+            {
                 return self.take_event();
+            }
+
+            let wait_until_emit = last_update_at + self.debounce_interval;
+            let wait_until_max = started_at + self.max_wait;
+            let sleep_until = wait_until_emit.min(wait_until_max);
+
+            tokio::select! {
+                event = self.inner.recv() => {
+                    match event {
+                        Some(event) => {
+                            self.pending_event = Some(event);
+                            self.pending_last_update_at = Some(Instant::now());
+                        }
+                        None => return self.take_event(),
+                    }
+                }
+                _ = tokio::time::sleep_until(sleep_until) => {
+                    return self.take_event();
+                }
             }
         }
     }
 
     /// Take the pending event.
     fn take_event(&mut self) -> Option<FileEvent> {
-        self.last_event.take().map(|(_, event)| event)
+        self.pending_started_at = None;
+        self.pending_last_update_at = None;
+        self.pending_event.take()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::time::timeout;
+
+    #[tokio::test]
+    async fn debounced_stream_blocks_while_idle() {
+        let (_tx, rx) = mpsc::channel(8);
+        let mut stream = DebouncedEventStream::new(rx, 10, 50);
+
+        let result = timeout(Duration::from_millis(20), stream.next()).await;
+        assert!(
+            result.is_err(),
+            "idle stream should keep waiting for events"
+        );
+    }
+
+    #[tokio::test]
+    async fn debounced_stream_coalesces_burst_to_latest_event() {
+        let (tx, rx) = mpsc::channel(8);
+        let mut stream = DebouncedEventStream::new(rx, 20, 100);
+        let path = PathBuf::from("/tmp/wechat-message.db");
+
+        tx.send(FileEvent::Created(path.clone()))
+            .await
+            .expect("send create");
+        tokio::time::sleep(Duration::from_millis(5)).await;
+        tx.send(FileEvent::Modified(path.clone()))
+            .await
+            .expect("send modify");
+
+        let event = stream.next().await.expect("debounced event");
+        assert_eq!(event, FileEvent::Modified(path));
+    }
+
+    #[tokio::test]
+    async fn debounced_stream_flushes_pending_event_when_sender_closes() {
+        let (tx, rx) = mpsc::channel(8);
+        let mut stream = DebouncedEventStream::new(rx, 50, 200);
+        let path = PathBuf::from("/tmp/wechat-session.db");
+
+        tx.send(FileEvent::Created(path.clone()))
+            .await
+            .expect("send event");
+        drop(tx);
+
+        let event = stream.next().await.expect("flushed event");
+        assert_eq!(event, FileEvent::Created(path));
+        assert!(
+            stream.next().await.is_none(),
+            "closed stream should then finish"
+        );
+    }
+
+    #[tokio::test]
+    async fn debounced_stream_flushes_after_max_wait_under_event_storm() {
+        let (tx, rx) = mpsc::channel(16);
+        let mut stream = DebouncedEventStream::new(rx, 40, 70);
+        let path = PathBuf::from("/tmp/wechat-chat.db");
+
+        tx.send(FileEvent::Created(path.clone()))
+            .await
+            .expect("send initial event");
+        tokio::time::sleep(Duration::from_millis(25)).await;
+        tx.send(FileEvent::Modified(path.clone()))
+            .await
+            .expect("send update");
+        tokio::time::sleep(Duration::from_millis(25)).await;
+        tx.send(FileEvent::Modified(path.clone()))
+            .await
+            .expect("send second update");
+
+        let started = Instant::now();
+        let event = stream.next().await.expect("event after max wait");
+        let elapsed = started.elapsed();
+
+        assert_eq!(event, FileEvent::Modified(path));
+        assert!(
+            elapsed < Duration::from_millis(90),
+            "max wait should prevent unbounded burst delays"
+        );
     }
 }

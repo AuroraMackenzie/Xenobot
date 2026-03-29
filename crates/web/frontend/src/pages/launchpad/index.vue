@@ -28,19 +28,34 @@ const features = computed(() => [
     icon: "i-heroicons-shield-check",
     title: t("home.features.privacy.title"),
     description: t("home.features.privacy.description"),
-    color: "from-cyan-500 to-sky-500",
+    tone: "xeno-feature-tone--secure",
   },
   {
     icon: "i-heroicons-chart-bar",
     title: t("home.features.analysis.title"),
     description: t("home.features.analysis.description"),
-    color: "from-orange-400 to-amber-500",
+    tone: "xeno-feature-tone--analysis",
   },
   {
     icon: "i-heroicons-sparkles",
     title: t("home.features.ai.title"),
     description: t("home.features.ai.description"),
-    color: "from-teal-500 to-cyan-600",
+    tone: "xeno-feature-tone--ai",
+  },
+]);
+
+const operationalMarkers = computed(() => [
+  {
+    label: "Authorized Intake",
+    value: "Export-only ingestion surface",
+  },
+  {
+    label: "Execution Route",
+    value: "Sandbox-aware local pipeline",
+  },
+  {
+    label: "Adapter Coverage",
+    value: "17 aligned platform contracts",
   },
 ]);
 </script>
@@ -63,7 +78,9 @@ const features = computed(() => [
         />
 
         <div class="w-full max-w-6xl">
-          <div class="xeno-hero-panel xeno-reveal xeno-reveal-1">
+          <div
+            class="xeno-hero-panel xeno-panel-emphasis xeno-reveal xeno-reveal-1"
+          >
             <div
               class="xeno-hero-kicker mb-4 inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-semibold backdrop-blur-sm"
             >
@@ -74,18 +91,18 @@ const features = computed(() => [
             <div class="xeno-hero-layout">
               <div class="xeno-hero-copy">
                 <h1
-                  class="select-none text-4xl font-black tracking-tight text-slate-900 sm:text-5xl lg:text-6xl dark:text-slate-100"
+                  class="xeno-hero-title select-none text-4xl font-black tracking-tight sm:text-5xl lg:text-6xl"
                 >
                   {{ t("home.title") }}
                 </h1>
                 <p
-                  class="mt-3 max-w-2xl text-base text-slate-600 sm:text-lg dark:text-slate-300"
+                  class="xeno-hero-subtitle mt-3 max-w-2xl text-base sm:text-lg"
                 >
                   {{ t("home.subtitle") }}
                 </p>
               </div>
 
-              <div class="xeno-hero-signal">
+              <div class="xeno-hero-signal xeno-panel-muted">
                 <div class="xeno-hero-signal-label">SYSTEM SIGNAL</div>
                 <div class="xeno-hero-signal-value">
                   Rust-first surface, original local workflow.
@@ -97,6 +114,17 @@ const features = computed(() => [
               </div>
             </div>
 
+            <div class="xeno-hero-metrics mt-6">
+              <article
+                v-for="marker in operationalMarkers"
+                :key="marker.label"
+                class="xeno-hero-metric"
+              >
+                <div class="xeno-hero-metric-label">{{ marker.label }}</div>
+                <div class="xeno-hero-metric-value">{{ marker.value }}</div>
+              </article>
+            </div>
+
             <div class="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-3">
               <article
                 v-for="(feature, idx) in features"
@@ -105,19 +133,15 @@ const features = computed(() => [
                 :style="{ '--xeno-card-delay': `${120 + idx * 80}ms` }"
               >
                 <div
-                  class="mb-3 inline-flex h-9 w-9 items-center justify-center rounded-xl bg-linear-to-br text-white"
-                  :class="feature.color"
+                  class="xeno-feature-icon mb-3 inline-flex h-9 w-9 items-center justify-center rounded-xl text-white"
+                  :class="feature.tone"
                 >
                   <UIcon :name="feature.icon" class="h-4.5 w-4.5" />
                 </div>
-                <h3
-                  class="text-sm font-semibold text-slate-800 dark:text-slate-100"
-                >
+                <h3 class="xeno-feature-title text-sm font-semibold">
                   {{ feature.title }}
                 </h3>
-                <p
-                  class="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-400"
-                >
+                <p class="xeno-feature-copy mt-1 text-xs leading-relaxed">
                   {{ feature.description }}
                 </p>
               </article>
@@ -128,6 +152,13 @@ const features = computed(() => [
         <div
           class="xeno-import-shell mt-8 xeno-reveal xeno-reveal-2 w-full max-w-6xl px-4 py-6 sm:px-6"
         >
+          <div class="xeno-import-shell-head mb-5">
+            <div class="xeno-import-shell-kicker">INGEST WORKSPACE</div>
+            <div class="xeno-import-shell-copy">
+              Stage authorized exports, inspect parser progress, and route new
+              sessions into the operational graph without leaving the launchpad.
+            </div>
+          </div>
           <ImportArea />
         </div>
       </div>
@@ -145,16 +176,20 @@ const features = computed(() => [
 .xeno-hero-panel {
   position: relative;
   border: 1px solid var(--xeno-border-strong);
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.84),
-    rgba(255, 255, 255, 0.58)
-  );
+  background:
+    radial-gradient(
+      circle at 72% 56%,
+      rgba(56, 189, 248, 0.08),
+      transparent 28%
+    ),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 120%),
+    var(--xeno-stage-shell-bg);
   border-radius: 1.5rem;
   padding: 1.25rem;
   box-shadow:
-    0 22px 60px -38px rgba(15, 23, 42, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+    0 22px 60px -38px rgba(15, 23, 42, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  backdrop-filter: none;
   overflow: hidden;
 }
 
@@ -177,8 +212,8 @@ const features = computed(() => [
   border: 1px solid rgba(103, 211, 255, 0.28);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 120%),
-    rgba(9, 27, 40, 0.08);
-  color: #0f6f8d;
+    color-mix(in srgb, var(--xeno-surface-main) 92%, transparent);
+  color: #74dcf8;
 }
 
 .xeno-hero-layout {
@@ -192,14 +227,20 @@ const features = computed(() => [
   min-width: 0;
 }
 
+.xeno-hero-title {
+  color: var(--xeno-text-main);
+  text-shadow: 0 2px 24px rgba(2, 6, 23, 0.34);
+}
+
+.xeno-hero-subtitle {
+  color: var(--xeno-text-secondary);
+  text-shadow: 0 2px 18px rgba(2, 6, 23, 0.24);
+}
+
 .xeno-hero-signal {
-  border: 1px solid var(--xeno-border-soft);
   border-radius: 1.25rem;
   padding: 1rem;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 120%),
-    var(--xeno-surface-main);
-  box-shadow: var(--xeno-shadow-soft);
+  min-width: 0;
 }
 
 .xeno-hero-signal-label {
@@ -207,7 +248,7 @@ const features = computed(() => [
   font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.08em;
-  color: #2b89a8;
+  color: #74ddf7;
 }
 
 .xeno-hero-signal-value {
@@ -226,14 +267,84 @@ const features = computed(() => [
   color: var(--xeno-text-secondary);
 }
 
-.xeno-feature-card {
+.xeno-hero-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.xeno-hero-metric {
   border: 1px solid var(--xeno-border-soft);
+  border-radius: 1rem;
+  padding: 0.85rem 0.95rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 120%),
+    var(--xeno-stage-inner-bg);
+  backdrop-filter: none;
+}
+
+.xeno-hero-metric-label {
+  font-family: var(--xeno-font-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7dddf6;
+}
+
+.xeno-hero-metric-value {
+  margin-top: 0.4rem;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: var(--xeno-text-secondary);
+}
+
+.xeno-feature-card {
+  border: 1px solid rgba(102, 191, 220, 0.16);
   border-radius: 1.25rem;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 120%),
-    var(--xeno-surface-main);
+    var(--xeno-stage-inner-bg);
   box-shadow: var(--xeno-shadow-soft);
-  backdrop-filter: blur(12px) saturate(124%);
+  backdrop-filter: none;
+}
+
+.xeno-feature-icon {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 12px 28px rgba(5, 14, 24, 0.24);
+}
+
+.xeno-feature-tone--secure {
+  background: linear-gradient(
+    135deg,
+    rgba(34, 211, 238, 0.96),
+    rgba(14, 165, 233, 0.82)
+  );
+}
+
+.xeno-feature-tone--analysis {
+  background: linear-gradient(
+    135deg,
+    rgba(45, 212, 191, 0.94),
+    rgba(59, 130, 246, 0.82)
+  );
+}
+
+.xeno-feature-tone--ai {
+  background: linear-gradient(
+    135deg,
+    rgba(20, 184, 166, 0.94),
+    rgba(8, 145, 178, 0.82)
+  );
+}
+
+.xeno-feature-title {
+  color: var(--xeno-text-main);
+}
+
+.xeno-feature-copy {
+  color: var(--xeno-text-secondary);
 }
 
 .xeno-import-shell {
@@ -241,9 +352,37 @@ const features = computed(() => [
   border-radius: 1.5rem;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 120%),
-    var(--xeno-surface-main);
+    var(--xeno-stage-shell-bg);
   box-shadow: var(--xeno-shadow-panel);
-  backdrop-filter: blur(14px) saturate(126%);
+  backdrop-filter: none;
+}
+
+.xeno-import-shell-head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.xeno-import-shell-kicker {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  border: 1px solid var(--xeno-border-soft);
+  border-radius: 9999px;
+  padding: 0.2rem 0.6rem;
+  font-family: var(--xeno-font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: #77d8f3;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.xeno-import-shell-copy {
+  max-width: 54rem;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: var(--xeno-text-secondary);
 }
 
 @media (min-width: 640px) {
@@ -256,22 +395,10 @@ const features = computed(() => [
   .xeno-hero-layout {
     grid-template-columns: 1fr;
   }
-}
 
-:root.dark .xeno-hero-panel {
-  border-color: rgba(71, 85, 105, 0.62);
-  background: linear-gradient(
-    135deg,
-    rgba(15, 23, 42, 0.82),
-    rgba(15, 23, 42, 0.62)
-  );
-  box-shadow:
-    0 30px 70px -42px rgba(2, 6, 23, 0.72),
-    inset 0 1px 0 rgba(148, 163, 184, 0.18);
-}
-
-:root.dark .xeno-hero-kicker {
-  color: #7edcff;
+  .xeno-hero-metrics {
+    grid-template-columns: 1fr;
+  }
 }
 
 .xeno-orb {

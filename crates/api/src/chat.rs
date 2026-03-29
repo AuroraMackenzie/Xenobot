@@ -16,7 +16,7 @@ use sqlx::{
     Column, Row,
 };
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     convert::Infallible,
     fs,
     path::{Path as FsPath, PathBuf},
@@ -325,10 +325,18 @@ struct ParsedMessage {
 }
 
 #[derive(Debug, Clone)]
+struct ParsedMemberProfile {
+    platform_id: String,
+    account_name: Option<String>,
+    group_nickname: Option<String>,
+}
+
+#[derive(Debug, Clone)]
 struct ParsedChatPayload {
     name: String,
     platform: String,
     chat_type: String,
+    members: Vec<ParsedMemberProfile>,
     messages: Vec<ParsedMessage>,
 }
 
@@ -357,6 +365,7 @@ const WEBHOOK_REQUEST_TIMEOUT_MS_DEFAULT: u64 = 8_000;
 const WEBHOOK_FLUSH_INTERVAL_MS_DEFAULT: u64 = 1_200;
 const WEBHOOK_RETRY_ATTEMPTS_DEFAULT: u32 = 3;
 const WEBHOOK_RETRY_BASE_DELAY_MS_DEFAULT: u64 = 150;
+const SYSTEM_MEMBER_LABEL: &str = "系统消息";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ApiWebhookItem {
@@ -1072,6 +1081,13 @@ fn parse_message_from_object(
     }
 
     let msg_type = extract_message_type_from_object(obj, stats);
+    let sender_platform_id = sender_id.unwrap_or_else(|| "unknown".to_string());
+    let (_, normalized_sender_name) = canonicalize_member_names(
+        &sender_platform_id,
+        sender_name.clone(),
+        sender_name.clone(),
+        Some(msg_type),
+    );
     let content = obj
         .get("content")
         .or_else(|| obj.get("text"))
@@ -1087,8 +1103,8 @@ fn parse_message_from_object(
         .and_then(as_string);
 
     Some(ParsedMessage {
-        sender_platform_id: sender_id.unwrap_or_else(|| "unknown".to_string()),
-        sender_name,
+        sender_platform_id,
+        sender_name: normalized_sender_name,
         ts,
         msg_type,
         content,
@@ -1138,6 +1154,7 @@ fn parse_chat_payload_from_json(
             name,
             platform: detected.platform.clone(),
             chat_type: classify_chat_type(raw_type),
+            members: vec![],
             messages,
         });
     }
@@ -1166,6 +1183,7 @@ fn parse_chat_payload_from_json(
                 name,
                 platform: detected.platform.clone(),
                 chat_type: classify_chat_type(raw_type),
+                members: vec![],
                 messages,
             });
         }
@@ -1187,6 +1205,7 @@ fn parse_chat_payload_from_json(
             name: file_stem_name(file_path),
             platform: detected.platform.clone(),
             chat_type: "group".to_string(),
+            members: vec![],
             messages,
         });
     }
@@ -1223,6 +1242,7 @@ fn parse_chat_payload_from_text(
         name: file_stem_name(file_path),
         platform: detected.platform.clone(),
         chat_type: "group".to_string(),
+        members: vec![],
         messages,
     }
 }
@@ -1260,6 +1280,7 @@ fn parse_chat_payload_from_jsonl(
         name: file_stem_name(file_path),
         platform: detected.platform.clone(),
         chat_type: "group".to_string(),
+        members: vec![],
         messages,
     }
 }
@@ -1285,6 +1306,124 @@ fn analysis_chat_type_to_text(chat_type: &AnalysisChatType) -> String {
     }
 }
 
+fn normalize_member_name(value: Option<String>) -> Option<String> {
+    value.and_then(|inner| {
+        let trimmed = inner.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    })
+}
+
+fn is_system_member_marker(value: &str) -> bool {
+    let normalized = value.trim().to_ascii_lowercase();
+    matches!(
+        normalized.as_str(),
+        "system" | "system message" | "system_message" | "系统消息" | "系统"
+    )
+}
+
+fn canonicalize_member_names(
+    platform_id: &str,
+    account_name: Option<String>,
+    group_nickname: Option<String>,
+    msg_type: Option<i64>,
+) -> (Option<String>, Option<String>) {
+    let normalized_account_name = normalize_member_name(account_name);
+    let normalized_group_nickname = normalize_member_name(group_nickname);
+    let force_system = msg_type == Some(7)
+        || platform_id
+            .rsplit(':')
+            .next()
+            .is_some_and(is_system_member_marker)
+        || normalized_account_name
+            .as_deref()
+            .is_some_and(is_system_member_marker)
+        || normalized_group_nickname
+            .as_deref()
+            .is_some_and(is_system_member_marker);
+
+    if force_system {
+        (
+            Some(SYSTEM_MEMBER_LABEL.to_string()),
+            Some(SYSTEM_MEMBER_LABEL.to_string()),
+        )
+    } else {
+        (normalized_account_name, normalized_group_nickname)
+    }
+}
+
+fn upsert_parsed_member_profile(
+    members: &mut BTreeMap<String, ParsedMemberProfile>,
+    platform_id: String,
+    account_name: Option<String>,
+    group_nickname: Option<String>,
+    msg_type: Option<i64>,
+) {
+    let (normalized_account_name, normalized_group_nickname) =
+        canonicalize_member_names(&platform_id, account_name, group_nickname, msg_type);
+
+    members
+        .entry(platform_id.clone())
+        .and_modify(|existing| {
+            if existing.account_name.is_none() {
+                existing.account_name = normalized_account_name.clone();
+            }
+            if let Some(new_group_nickname) = normalized_group_nickname.clone() {
+                let should_replace_group_nickname = match existing.group_nickname.as_deref() {
+                    None => true,
+                    Some(existing_group_nickname) => existing
+                        .account_name
+                        .as_deref()
+                        .is_some_and(|account_name| existing_group_nickname == account_name),
+                };
+                if should_replace_group_nickname {
+                    existing.group_nickname = Some(new_group_nickname);
+                }
+            }
+        })
+        .or_insert(ParsedMemberProfile {
+            platform_id,
+            account_name: normalized_account_name,
+            group_nickname: normalized_group_nickname,
+        });
+}
+
+async fn ensure_member_profile_and_history(
+    repo: &crate::database::Repository,
+    profile: &ParsedMemberProfile,
+    start_ts: i64,
+) -> Result<i64, ApiError> {
+    let member_id = repo
+        .get_or_create_member_profile(
+            &profile.platform_id,
+            profile.account_name.as_deref(),
+            profile.group_nickname.as_deref(),
+        )
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?;
+
+    if let Some(account_name) = profile.account_name.as_deref() {
+        repo.ensure_member_name_history_entry(member_id, "account_name", account_name, start_ts)
+            .await
+            .map_err(|e| ApiError::Database(e.to_string()))?;
+    }
+    if let Some(group_nickname) = profile.group_nickname.as_deref() {
+        repo.ensure_member_name_history_entry(
+            member_id,
+            "group_nickname",
+            group_nickname,
+            start_ts,
+        )
+        .await
+        .map_err(|e| ApiError::Database(e.to_string()))?;
+    }
+
+    Ok(member_id)
+}
+
 async fn parse_with_analysis_registry(
     file_path: &str,
 ) -> Option<(DetectedFormat, ParsedChatPayload, ImportParseStats)> {
@@ -1305,9 +1444,26 @@ async fn parse_with_analysis_registry(
     } else {
         parsed_chat.platform.to_ascii_lowercase()
     };
+    let analysis_chat_name = parsed_chat.chat_name.clone();
+    let analysis_chat_type = analysis_chat_type_to_text(&parsed_chat.chat_type);
 
     let mut stats = ImportParseStats::default();
     stats.messages_received = parsed_chat.messages.len();
+
+    let mut members = BTreeMap::new();
+    for member in &parsed_chat.members {
+        let raw_member_id = member.id.trim();
+        if raw_member_id.is_empty() {
+            continue;
+        }
+        upsert_parsed_member_profile(
+            &mut members,
+            format!("{}:{}", platform, raw_member_id),
+            member.name.clone(),
+            member.display_name.clone().or(member.name.clone()),
+            None,
+        );
+    }
 
     let mut messages = Vec::with_capacity(parsed_chat.messages.len());
     for msg in parsed_chat.messages {
@@ -1332,11 +1488,26 @@ async fn parse_with_analysis_registry(
             stats.messages_skipped = stats.messages_skipped.saturating_add(1);
             continue;
         }
+        let sender_platform_id = format!("{}:{}", platform, sender);
+        let msg_type_code = analysis_message_type_to_code(&msg.msg_type);
+        let (_, normalized_sender_name) = canonicalize_member_names(
+            &sender_platform_id,
+            msg.sender_name.clone(),
+            msg.sender_name.clone(),
+            Some(msg_type_code),
+        );
+        upsert_parsed_member_profile(
+            &mut members,
+            sender_platform_id.clone(),
+            normalized_sender_name.clone(),
+            normalized_sender_name.clone(),
+            Some(msg_type_code),
+        );
         messages.push(ParsedMessage {
-            sender_platform_id: format!("{}:{}", platform, sender),
-            sender_name: msg.sender_name.clone(),
+            sender_platform_id,
+            sender_name: normalized_sender_name,
             ts: msg.timestamp,
-            msg_type: analysis_message_type_to_code(&msg.msg_type),
+            msg_type: msg_type_code,
             content: Some(content.to_string()),
             platform_message_id: None,
         });
@@ -1354,9 +1525,10 @@ async fn parse_with_analysis_registry(
             confidence: 0.99,
         },
         ParsedChatPayload {
-            name: parsed_chat.chat_name,
+            name: analysis_chat_name,
             platform,
-            chat_type: analysis_chat_type_to_text(&parsed_chat.chat_type),
+            chat_type: analysis_chat_type,
+            members: members.into_values().collect(),
             messages,
         },
         stats,
@@ -1708,6 +1880,7 @@ async fn run_import_with_chat_index(
             .await;
     let payload_platform = payload.platform.clone();
     let payload_name = payload.name.clone();
+    let payload_members = payload.members;
     let payload_messages = payload.messages;
 
     let meta_id = repo
@@ -1745,11 +1918,25 @@ async fn run_import_with_chat_index(
 
     let mut processed: i32 = 0;
     let write_result = async {
+        let mut member_cache: HashMap<String, i64> = HashMap::new();
+        for member in &payload_members {
+            let member_id = ensure_member_profile_and_history(&repo, member, started_at).await?;
+            member_cache.insert(member.platform_id.clone(), member_id);
+        }
+
         for msg in payload_messages {
-            let sender_id = repo
-                .get_or_create_member(&msg.sender_platform_id, msg.sender_name.as_deref())
-                .await
-                .map_err(|e| ApiError::Database(e.to_string()))?;
+            let sender_id = if let Some(existing) = member_cache.get(&msg.sender_platform_id) {
+                *existing
+            } else {
+                let profile = ParsedMemberProfile {
+                    platform_id: msg.sender_platform_id.clone(),
+                    account_name: msg.sender_name.clone(),
+                    group_nickname: msg.sender_name.clone(),
+                };
+                let created = ensure_member_profile_and_history(&repo, &profile, msg.ts).await?;
+                member_cache.insert(profile.platform_id, created);
+                created
+            };
 
             let inserted_message_id = repo
                 .create_message(&Message {
@@ -1863,6 +2050,9 @@ async fn run_import_with_chat_index(
     Ok(serde_json::json!({
         "success": true,
         "sessionId": meta_id.to_string(),
+        "detectedPlatform": detected.platform,
+        "payloadPlatform": payload_platform,
+        "sessionName": payload_name,
         "diagnostics": import_diagnostics_json(&detected.id, &stats),
         "webhookSummary": webhook_stats
     }))
@@ -3413,7 +3603,9 @@ async fn get_cluster_graph(
         SELECT COUNT(DISTINCT m.id)
         FROM member m
         INNER JOIN message msg ON m.id = msg.sender_id
-        WHERE msg.meta_id = ?1 AND COALESCE(m.account_name, '') != '系统消息'
+        WHERE msg.meta_id = ?1
+          AND msg.msg_type != 7
+          AND COALESCE(m.account_name, '') != '系统消息'
         "#,
     )
     .bind(meta_id)
@@ -3911,6 +4103,7 @@ async fn get_night_owl_analysis(
         FROM message msg
         JOIN member m ON msg.sender_id = m.id
         WHERE msg.meta_id = ?1
+          AND msg.msg_type != 7
           AND COALESCE(m.account_name, '') != '系统消息'
         "#,
     );
@@ -4022,6 +4215,7 @@ async fn get_dragon_king_analysis(
         FROM message msg
         JOIN member m ON msg.sender_id = m.id
         WHERE msg.meta_id = ?1
+          AND msg.msg_type != 7
           AND COALESCE(m.account_name, '') != '系统消息'
         "#,
     );
@@ -4123,6 +4317,7 @@ async fn get_lurker_analysis(
         FROM message msg
         JOIN member m ON msg.sender_id = m.id
         WHERE msg.meta_id = ?1
+          AND msg.msg_type != 7
           AND COALESCE(m.account_name, '') != '系统消息'
         "#,
     );
@@ -4253,6 +4448,7 @@ async fn get_checkin_analysis(
         FROM message msg
         JOIN member m ON msg.sender_id = m.id
         WHERE msg.meta_id = ?1
+          AND msg.msg_type != 7
           AND COALESCE(m.account_name, '') != '系统消息'
         "#,
     );
@@ -4322,6 +4518,7 @@ async fn get_checkin_analysis(
         FROM message msg
         JOIN member m ON msg.sender_id = m.id
         WHERE msg.meta_id = ?1
+          AND msg.msg_type != 7
           AND COALESCE(m.account_name, '') != '系统消息'
         "#,
     );
@@ -4610,7 +4807,9 @@ async fn get_members(
             m.roles
         FROM member m
         INNER JOIN message msg ON m.id = msg.sender_id
-        WHERE msg.meta_id = ?1 AND COALESCE(m.account_name, '') != '系统消息'
+        WHERE msg.meta_id = ?1
+          AND msg.msg_type != 7
+          AND COALESCE(m.account_name, '') != '系统消息'
         ORDER BY m.id
     "#;
 
@@ -4696,6 +4895,7 @@ async fn get_members_paginated(
             SELECT m.id FROM member m
             INNER JOIN message msg ON m.id = msg.sender_id AND msg.meta_id = ?1
             WHERE COALESCE(m.group_nickname, m.account_name, m.platform_id) != '系统消息'
+              AND msg.msg_type != 7
             {}
             GROUP BY m.id
         )",
@@ -4716,6 +4916,7 @@ async fn get_members_paginated(
         FROM member m
         INNER JOIN message msg ON m.id = msg.sender_id AND msg.meta_id = ?1
         WHERE COALESCE(m.group_nickname, m.account_name, m.platform_id) != '系统消息'
+          AND msg.msg_type != 7
         {}
         GROUP BY m.id
         ORDER BY message_count {} 
@@ -6251,6 +6452,7 @@ async fn incremental_import(
         })));
     }
 
+    let started_at = now_ts();
     let progress_id = repo
         .create_import_progress(&ImportProgress {
             id: 0,
@@ -6258,7 +6460,7 @@ async fn incremental_import(
             total_messages: Some(0),
             processed_messages: Some(0),
             status: Some("detecting".to_string()),
-            started_at: Some(now_ts()),
+            started_at: Some(started_at),
             completed_at: None,
             error_message: None,
         })
@@ -6328,6 +6530,7 @@ async fn incremental_import(
             .await;
     let payload_platform = payload.platform.clone();
     let payload_name = payload.name.clone();
+    let payload_members = payload.members;
     let payload_messages = payload.messages;
 
     #[derive(Debug, sqlx::FromRow)]
@@ -6382,11 +6585,25 @@ async fn incremental_import(
     let mut duplicate_count = 0usize;
     let mut new_count = 0usize;
     let write_result = async {
+        let mut member_cache: HashMap<String, i64> = HashMap::new();
+        for member in &payload_members {
+            let member_id = ensure_member_profile_and_history(&repo, member, started_at).await?;
+            member_cache.insert(member.platform_id.clone(), member_id);
+        }
+
         for msg in payload_messages {
-            let sender_id = repo
-                .get_or_create_member(&msg.sender_platform_id, msg.sender_name.as_deref())
-                .await
-                .map_err(|e| ApiError::Database(e.to_string()))?;
+            let sender_id = if let Some(existing) = member_cache.get(&msg.sender_platform_id) {
+                *existing
+            } else {
+                let profile = ParsedMemberProfile {
+                    platform_id: msg.sender_platform_id.clone(),
+                    account_name: msg.sender_name.clone(),
+                    group_nickname: msg.sender_name.clone(),
+                };
+                let created = ensure_member_profile_and_history(&repo, &profile, msg.ts).await?;
+                member_cache.insert(profile.platform_id, created);
+                created
+            };
 
             let signature = signature_by_sender_id_with_message_id(
                 sender_id,

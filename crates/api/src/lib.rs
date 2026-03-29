@@ -25,6 +25,7 @@ pub mod embedding;
 pub mod events;
 pub mod llm;
 pub mod media;
+pub mod memory;
 pub mod merge;
 pub mod network;
 pub mod nlp;

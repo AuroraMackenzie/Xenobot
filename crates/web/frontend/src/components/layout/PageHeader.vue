@@ -83,10 +83,10 @@ defineProps<{
   border-bottom: 1px solid var(--xeno-border-soft);
   background: linear-gradient(
     180deg,
-    var(--xeno-surface-muted),
+    color-mix(in srgb, var(--xeno-surface-muted) 78%, transparent),
     transparent 78%
   );
-  backdrop-filter: blur(12px) saturate(126%);
+  backdrop-filter: none;
 }
 
 .xeno-page-header-atmosphere {
@@ -107,6 +107,7 @@ defineProps<{
       rgba(255, 255, 255, 0.02)
     );
   opacity: 0.82;
+  mix-blend-mode: screen;
 }
 
 .xeno-page-header-shell {
@@ -141,10 +142,10 @@ defineProps<{
   border-radius: 1rem;
   border: 1px solid var(--xeno-border-soft);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 120%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.1), transparent 120%),
     var(--xeno-surface-main);
   box-shadow: var(--xeno-shadow-soft);
-  backdrop-filter: blur(14px) saturate(126%);
+  backdrop-filter: none;
 }
 
 .xeno-page-header-copy {
@@ -153,14 +154,19 @@ defineProps<{
   gap: 0.2rem;
 }
 
+.xeno-page-header-copy h1,
+.xeno-page-header-copy p {
+  text-shadow: 0 2px 18px rgba(2, 6, 23, 0.28);
+}
+
 .xeno-page-header-actions {
   padding: 0.35rem 0.45rem;
   border: 1px solid var(--xeno-border-soft);
   border-radius: 9999px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 120%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.1), transparent 120%),
     var(--xeno-surface-main);
   box-shadow: var(--xeno-shadow-soft);
-  backdrop-filter: blur(14px) saturate(124%);
+  backdrop-filter: none;
 }
 </style>

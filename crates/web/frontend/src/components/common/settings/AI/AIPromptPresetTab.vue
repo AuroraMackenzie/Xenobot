@@ -56,12 +56,6 @@ function duplicatePreset(presetId: string) {
 }
 
 // English engineering note.
-function deletePreset(presetId: string) {
-  promptStore.removePromptPreset(presetId);
-  emit("config-changed");
-}
-
-// English engineering note.
 function isActivePreset(presetId: string): boolean {
   return aiPromptSettings.value.activePresetId === presetId;
 }
@@ -186,14 +180,6 @@ function handleImportPresetAdded() {
             size="xs"
             icon="i-heroicons-document-duplicate"
             @click="duplicatePreset(preset.id)"
-          />
-          <UButton
-            v-if="!preset.isBuiltIn"
-            color="error"
-            variant="ghost"
-            size="xs"
-            icon="i-heroicons-trash"
-            @click="deletePreset(preset.id)"
           />
         </div>
       </div>

@@ -137,6 +137,21 @@ pub struct AnalysisCache {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct MemoryEntry {
+    pub id: i64,
+    pub meta_id: i64,
+    pub chat_session_id: Option<i64>,
+    pub memory_kind: String,
+    pub title: Option<String>,
+    pub content: String,
+    pub tags: String,
+    pub source_label: Option<String>,
+    pub importance: i64,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct Sessions {
     pub id: i64,
     pub meta_id: i64,
@@ -585,6 +600,111 @@ impl Repository {
         Ok(result.last_insert_rowid())
     }
 
+    pub async fn get_or_create_member_profile(
+        &self,
+        platform_id: &str,
+        account_name: Option<&str>,
+        group_nickname: Option<&str>,
+    ) -> SqlxResult<i64> {
+        let normalized_account_name = account_name
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string);
+        let normalized_group_nickname = group_nickname
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string);
+
+        if let Some(mut member) = self.get_member_by_platform_id(platform_id).await? {
+            let mut changed = false;
+            let incoming_is_system = normalized_account_name.as_deref() == Some("系统消息");
+
+            if (member.account_name.is_none() && normalized_account_name.is_some())
+                || (incoming_is_system && member.account_name.as_deref() != Some("系统消息"))
+            {
+                member.account_name = normalized_account_name.clone();
+                changed = true;
+            }
+
+            if normalized_group_nickname.is_some()
+                && member.group_nickname != normalized_group_nickname
+            {
+                member.group_nickname = normalized_group_nickname.clone();
+                changed = true;
+            }
+
+            if changed {
+                self.update_member(&member).await?;
+            }
+
+            return Ok(member.id);
+        }
+
+        let result = sqlx::query!(
+            "INSERT INTO member (platform_id, account_name, group_nickname, aliases, roles) VALUES (?1, ?2, ?3, '[]', '[]')",
+            platform_id,
+            normalized_account_name,
+            normalized_group_nickname
+        )
+        .execute(&*self.pool)
+        .await?;
+
+        Ok(result.last_insert_rowid())
+    }
+
+    pub async fn ensure_member_name_history_entry(
+        &self,
+        member_id: i64,
+        name_type: &str,
+        name: &str,
+        start_ts: i64,
+    ) -> SqlxResult<()> {
+        let trimmed = name.trim();
+        if trimmed.is_empty() {
+            return Ok(());
+        }
+
+        let active = sqlx::query_as::<_, MemberNameHistory>(
+            r#"
+            SELECT id, member_id, name_type, name, start_ts, end_ts
+            FROM member_name_history
+            WHERE member_id = ?1 AND name_type = ?2 AND end_ts IS NULL
+            ORDER BY start_ts DESC, id DESC
+            LIMIT 1
+            "#,
+        )
+        .bind(member_id)
+        .bind(name_type)
+        .fetch_optional(&*self.pool)
+        .await?;
+
+        if let Some(current) = active {
+            if current.name == trimmed {
+                return Ok(());
+            }
+
+            let safe_end_ts = if start_ts > current.start_ts {
+                start_ts
+            } else {
+                current.start_ts
+            };
+            self.update_member_name_history_end_ts(current.id, safe_end_ts)
+                .await?;
+        }
+
+        self.create_member_name_history(&MemberNameHistory {
+            id: 0,
+            member_id,
+            name_type: name_type.to_string(),
+            name: trimmed.to_string(),
+            start_ts,
+            end_ts: None,
+        })
+        .await?;
+
+        Ok(())
+    }
+
     // Message methods
     pub async fn create_message(&self, msg: &Message) -> SqlxResult<i64> {
         let result = sqlx::query!(
@@ -833,7 +953,8 @@ impl Repository {
 
     /// English documentation note.
     fn build_system_message_filter(&self, existing_clause: &str) -> String {
-        let system_filter = "COALESCE(m.account_name, '') != '系统消息'".to_string();
+        let system_filter =
+            "COALESCE(m.account_name, '') != '系统消息' AND msg.msg_type != 7".to_string();
         if existing_clause.contains("WHERE") {
             format!("{} AND {}", existing_clause, system_filter)
         } else {
@@ -1007,6 +1128,94 @@ impl Repository {
         .bind(offset)
         .fetch_all(&*self.pool)
         .await
+    }
+
+    pub async fn upsert_session_memory_entry(
+        &self,
+        meta_id: i64,
+        chat_session_id: i64,
+        memory_kind: &str,
+        title: Option<&str>,
+        content: &str,
+        tags: &str,
+        source_label: Option<&str>,
+        importance: i64,
+        now_ts: i64,
+    ) -> SqlxResult<()> {
+        sqlx::query(
+            r#"
+            INSERT INTO memory_entry (
+                meta_id,
+                chat_session_id,
+                memory_kind,
+                title,
+                content,
+                tags,
+                source_label,
+                importance,
+                created_at,
+                updated_at
+            )
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+            ON CONFLICT(memory_kind, meta_id, chat_session_id) DO UPDATE SET
+                title = excluded.title,
+                content = excluded.content,
+                tags = excluded.tags,
+                source_label = excluded.source_label,
+                importance = excluded.importance,
+                updated_at = excluded.updated_at
+            "#,
+        )
+        .bind(meta_id)
+        .bind(chat_session_id)
+        .bind(memory_kind)
+        .bind(title)
+        .bind(content)
+        .bind(tags)
+        .bind(source_label)
+        .bind(importance)
+        .bind(now_ts)
+        .bind(now_ts)
+        .execute(&*self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn list_memory_entries(
+        &self,
+        meta_id: i64,
+        memory_kind: Option<&str>,
+        limit: i32,
+        offset: i32,
+    ) -> SqlxResult<Vec<MemoryEntry>> {
+        let mut query = String::from(
+            r#"
+            SELECT
+                id,
+                meta_id,
+                chat_session_id,
+                memory_kind,
+                title,
+                content,
+                tags,
+                source_label,
+                importance,
+                created_at,
+                updated_at
+            FROM memory_entry
+            WHERE meta_id = ?
+            "#,
+        );
+        if memory_kind.is_some() {
+            query.push_str(" AND memory_kind = ?");
+        }
+        query.push_str(" ORDER BY updated_at DESC, id DESC LIMIT ? OFFSET ?");
+
+        let mut built = sqlx::query_as::<_, MemoryEntry>(&query).bind(meta_id);
+        if let Some(kind) = memory_kind {
+            built = built.bind(kind);
+        }
+        built.bind(limit).bind(offset).fetch_all(&*self.pool).await
     }
 
     // MemberNameHistory methods
@@ -1420,7 +1629,12 @@ impl Repository {
             SELECT m.id, m.platform_id, m.account_name, m.group_nickname, 
                    COALESCE((SELECT GROUP_CONCAT(name) FROM member_name_history WHERE member_id = m.id), "") as history_names
             FROM member m
-            WHERE EXISTS (SELECT 1 FROM message msg WHERE msg.sender_id = m.id AND msg.meta_id = ?1)
+            WHERE EXISTS (
+                SELECT 1 FROM message msg
+                WHERE msg.sender_id = m.id
+                  AND msg.meta_id = ?1
+                  AND msg.msg_type != 7
+            )
             AND COALESCE(m.account_name, "") != "系统消息"
         "#;
 
@@ -2851,7 +3065,9 @@ impl Repository {
             SELECT DISTINCT CAST(strftime('%Y', msg.ts, 'unixepoch', 'localtime') AS INTEGER) as year
             FROM message msg
             JOIN member m ON msg.sender_id = m.id
-            WHERE msg.meta_id = ?1 AND COALESCE(m.account_name, '') != '系统消息'
+            WHERE msg.meta_id = ?1
+              AND msg.msg_type != 7
+              AND COALESCE(m.account_name, '') != '系统消息'
             ORDER BY year
         "#;
 

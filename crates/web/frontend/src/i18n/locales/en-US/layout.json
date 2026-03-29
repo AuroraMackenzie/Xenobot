@@ -10,20 +10,20 @@
     "rename": "Rename",
     "pin": "Pin",
     "unpin": "Unpin",
-    "delete": "Delete"
+    "delete": "Protected"
   },
   "renameModal": {
     "title": "Rename",
     "placeholder": "Enter new name"
   },
   "deleteModal": {
-    "title": "Confirm Delete",
-    "message": "Are you sure you want to delete \"{name}\"? This action cannot be undone."
+    "title": "Protected Action",
+    "message": "Destructive session removal is disabled in safe mode for \"{name}\"."
   },
   "tooltip": {
     "expand": "Expand sidebar",
     "collapse": "Collapse sidebar",
-    "hint": "Right-click to rename or delete",
+    "hint": "Right-click to rename or pin",
     "search": "Search chat records"
   },
   "sessionInfo": "{count} messages · {time}",

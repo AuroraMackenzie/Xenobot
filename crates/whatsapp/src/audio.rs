@@ -104,7 +104,10 @@ pub fn transcode_audio_bytes_to_mp3(
         .unwrap_or_else(|| std::ffi::OsStr::new("ffmpeg"));
 
     let mut child = Command::new(binary)
-        .args(build_ffmpeg_pipe_args(normalize_input_format(input_format), options))
+        .args(build_ffmpeg_pipe_args(
+            normalize_input_format(input_format),
+            options,
+        ))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -253,7 +256,8 @@ mod tests {
         let options = AudioTranscodeOptions::default();
         let input_path = Path::new("/tmp/whatsapp-missing-input.ogg");
         let output_path = Path::new("/tmp/whatsapp-missing-output.mp3");
-        let error = transcode_audio_to_mp3(input_path, output_path, &options).expect_err("missing input should fail");
+        let error = transcode_audio_to_mp3(input_path, output_path, &options)
+            .expect_err("missing input should fail");
 
         match error {
             WhatsAppError::Io(inner) => assert_eq!(inner.kind(), std::io::ErrorKind::NotFound),
@@ -314,5 +318,4 @@ mod tests {
             other => panic!("expected Internal error, got {other:?}"),
         }
     }
-
 }

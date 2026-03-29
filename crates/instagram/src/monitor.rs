@@ -89,13 +89,16 @@ impl FileMonitor {
         &self,
         timeout: Duration,
     ) -> Result<Option<FileEvent>, std::sync::mpsc::RecvTimeoutError> {
-        self.event_rx.recv_timeout(timeout).map(Some).or_else(|err| {
-            if matches!(err, std::sync::mpsc::RecvTimeoutError::Timeout) {
-                Ok(None)
-            } else {
-                Err(err)
-            }
-        })
+        self.event_rx
+            .recv_timeout(timeout)
+            .map(Some)
+            .or_else(|err| {
+                if matches!(err, std::sync::mpsc::RecvTimeoutError::Timeout) {
+                    Ok(None)
+                } else {
+                    Err(err)
+                }
+            })
     }
 
     fn handle_event(event: &Event, config: &FileMonitorConfig, event_tx: &mpsc::Sender<FileEvent>) {
@@ -155,21 +158,30 @@ mod tests {
         let export_path = Path::new("/tmp/Export/messages.json");
         let image_path = Path::new("/tmp/Media/story.jpg");
 
-        assert!(patterns.iter().any(|pattern| pattern.is_match(&export_path.to_string_lossy())));
-        assert!(patterns.iter().any(|pattern| pattern.is_match(&image_path.to_string_lossy())));
+        assert!(patterns
+            .iter()
+            .any(|pattern| pattern.is_match(&export_path.to_string_lossy())));
+        assert!(patterns
+            .iter()
+            .any(|pattern| pattern.is_match(&image_path.to_string_lossy())));
     }
     #[test]
     fn export_patterns_do_not_match_unrelated_assets() {
         let patterns = FileMonitor::instagram_export_patterns();
         let unrelated_path = Path::new("/tmp/Media/readme.exe");
 
-        assert!(!patterns.iter().any(|pattern| pattern.is_match(&unrelated_path.to_string_lossy())));
+        assert!(!patterns
+            .iter()
+            .any(|pattern| pattern.is_match(&unrelated_path.to_string_lossy())));
     }
 
     #[test]
     fn empty_pattern_configuration_matches_any_path() {
         let config = FileMonitorConfig::default();
-        assert!(FileMonitor::matches_pattern(Path::new("/tmp/random.asset"), &config));
+        assert!(FileMonitor::matches_pattern(
+            Path::new("/tmp/random.asset"),
+            &config
+        ));
     }
 
     #[test]
@@ -193,7 +205,10 @@ mod tests {
             attrs: Default::default(),
         };
         FileMonitor::handle_event(&create, &config, &tx);
-        assert_eq!(rx.recv().expect("create event"), FileEvent::Created(path.clone()));
+        assert_eq!(
+            rx.recv().expect("create event"),
+            FileEvent::Created(path.clone())
+        );
 
         let modify = Event {
             kind: EventKind::Modify(ModifyKind::Data(notify::event::DataChange::Any)),
@@ -201,7 +216,10 @@ mod tests {
             attrs: Default::default(),
         };
         FileMonitor::handle_event(&modify, &config, &tx);
-        assert_eq!(rx.recv().expect("modify event"), FileEvent::Modified(path.clone()));
+        assert_eq!(
+            rx.recv().expect("modify event"),
+            FileEvent::Modified(path.clone())
+        );
 
         let remove = Event {
             kind: EventKind::Remove(RemoveKind::File),
@@ -228,5 +246,4 @@ mod tests {
         FileMonitor::handle_event(&event, &config, &tx);
         assert!(rx.try_recv().is_err());
     }
-
 }

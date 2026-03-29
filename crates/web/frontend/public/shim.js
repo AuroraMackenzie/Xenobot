@@ -1867,8 +1867,36 @@
       setAnalyticsEnabled: (enabled) =>
         httpRequest("POST", "/core/app/analytics-enabled", { enabled }),
       checkUpdate: () => httpRequest("POST", "/core/app/check-update"),
-      fetchRemoteConfig: (url) =>
-        httpRequest("POST", "/core/app/fetch-remote-config", { url }),
+      fetchRemoteConfig: async (url) => {
+        const target = String(url || "").trim();
+        if (!/^https?:\/\//i.test(target)) {
+          return { success: false, error: "invalid_remote_config_url" };
+        }
+        // Browser-dev shim must not emit cross-origin console noise while the
+        // desktop runtime bridge is absent. Real Electron builds do not depend
+        // on this browser-only fallback path.
+        if (window.location.protocol.startsWith("http")) {
+          return { success: false, error: "remote_config_unavailable" };
+        }
+        try {
+          const response = await fetch(target, {
+            method: "GET",
+            headers: {
+              Accept: "application/json",
+            },
+          });
+          if (!response.ok) {
+            return {
+              success: false,
+              error: `HTTP ${response.status}`,
+            };
+          }
+          const data = await response.json();
+          return { success: true, data };
+        } catch (_) {
+          return { success: false, error: "remote_config_unavailable" };
+        }
+      },
       relaunch: () => httpRequest("POST", "/core/app/relaunch"),
     },
     setThemeSource: (mode) => httpRequest("POST", "/core/theme", { mode }),

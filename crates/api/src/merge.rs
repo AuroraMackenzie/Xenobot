@@ -966,14 +966,34 @@ async fn merge_into_database(
 
     let mut member_id_map: HashMap<String, i64> = HashMap::new();
     for member in members {
-        let account_name = member
-            .account_name
-            .as_deref()
-            .or(member.group_nickname.as_deref());
         let member_id = repo
-            .get_or_create_member(&member.platform_id, account_name)
+            .get_or_create_member_profile(
+                &member.platform_id,
+                member.account_name.as_deref(),
+                member.group_nickname.as_deref(),
+            )
             .await
             .map_err(|e| ApiError::Database(e.to_string()))?;
+        if let Some(account_name) = member.account_name.as_deref() {
+            repo.ensure_member_name_history_entry(
+                member_id,
+                "account_name",
+                account_name,
+                imported_at,
+            )
+            .await
+            .map_err(|e| ApiError::Database(e.to_string()))?;
+        }
+        if let Some(group_nickname) = member.group_nickname.as_deref() {
+            repo.ensure_member_name_history_entry(
+                member_id,
+                "group_nickname",
+                group_nickname,
+                imported_at,
+            )
+            .await
+            .map_err(|e| ApiError::Database(e.to_string()))?;
+        }
         member_id_map.insert(member.platform_id.clone(), member_id);
     }
 
@@ -982,9 +1002,27 @@ async fn merge_into_database(
             *id
         } else {
             let created = repo
-                .get_or_create_member(&msg.sender_platform_id, msg.sender_name.as_deref())
+                .get_or_create_member_profile(
+                    &msg.sender_platform_id,
+                    msg.sender_name.as_deref(),
+                    msg.sender_name.as_deref(),
+                )
                 .await
                 .map_err(|e| ApiError::Database(e.to_string()))?;
+            if let Some(sender_name) = msg.sender_name.as_deref() {
+                repo.ensure_member_name_history_entry(
+                    created,
+                    "group_nickname",
+                    sender_name,
+                    if msg.ts > 0 {
+                        msg.ts
+                    } else {
+                        imported_at + idx as i64
+                    },
+                )
+                .await
+                .map_err(|e| ApiError::Database(e.to_string()))?;
+            }
             member_id_map.insert(msg.sender_platform_id.clone(), created);
             created
         };

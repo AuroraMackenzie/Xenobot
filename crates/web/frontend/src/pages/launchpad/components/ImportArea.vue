@@ -39,7 +39,7 @@ async function autoGenerateSessionIndex(sessionId: string) {
     const gapThreshold = savedThreshold ? parseInt(savedThreshold, 10) : 1800;
     await window.sessionApi.generate(sessionId, gapThreshold);
   } catch (error) {
-    console.error("自动生成会话索引失败:", error);
+    console.error("Failed to generate the session index automatically:", error);
   }
 }
 
@@ -409,25 +409,41 @@ function getProgressDetail(): string {
 
 // English engineering note.
 const STATUS_CONFIG: Record<string, { icon: string; class: string }> = {
-  pending: { icon: "i-heroicons-clock", class: "text-gray-400" },
+  pending: {
+    icon: "i-heroicons-clock",
+    class: "xeno-import-status xeno-import-status--pending",
+  },
   importing: {
     icon: "i-heroicons-arrow-path",
-    class: "text-pink-500 animate-spin",
+    class: "xeno-import-status xeno-import-status--active animate-spin",
   },
   parsing: {
     icon: "i-heroicons-arrow-path",
-    class: "text-pink-500 animate-spin",
+    class: "xeno-import-status xeno-import-status--active animate-spin",
   },
-  success: { icon: "i-heroicons-check-circle", class: "text-green-500" },
-  done: { icon: "i-heroicons-check-circle", class: "text-green-500" },
-  failed: { icon: "i-heroicons-x-circle", class: "text-red-500" },
-  cancelled: { icon: "i-heroicons-minus-circle", class: "text-gray-400" },
+  success: {
+    icon: "i-heroicons-check-circle",
+    class: "xeno-import-status xeno-import-status--success",
+  },
+  done: {
+    icon: "i-heroicons-check-circle",
+    class: "xeno-import-status xeno-import-status--success",
+  },
+  failed: {
+    icon: "i-heroicons-x-circle",
+    class: "xeno-import-status xeno-import-status--danger",
+  },
+  cancelled: {
+    icon: "i-heroicons-minus-circle",
+    class: "xeno-import-status xeno-import-status--muted",
+  },
 };
 
 const getStatusIcon = (status: string) =>
   STATUS_CONFIG[status]?.icon ?? "i-heroicons-question-mark-circle";
 const getStatusClass = (status: string) =>
-  STATUS_CONFIG[status]?.class ?? "text-gray-400";
+  STATUS_CONFIG[status]?.class ??
+  "xeno-import-status xeno-import-status--muted";
 
 // English engineering note.
 function getBatchFileProgressText(file: BatchFileInfo): string {
@@ -463,24 +479,24 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
     <!-- English UI note -->
     <div
       v-if="isBatchImporting && batchFiles.length > 0"
-      class="xeno-import-state-card w-full max-w-4xl rounded-3xl border border-gray-200/50 bg-gray-100/50 px-8 py-6 backdrop-blur-md dark:border-white/10 dark:bg-gray-800/40"
+      class="xeno-import-state-card w-full max-w-4xl rounded-3xl px-8 py-6"
     >
       <!-- English UI note -->
       <div class="mb-4 flex items-center justify-between">
         <div class="flex items-center gap-3">
           <div
-            class="flex h-10 w-10 items-center justify-center rounded-xl bg-pink-50 dark:bg-pink-500/10"
+            class="xeno-import-state-orb xeno-import-state-orb--active flex h-10 w-10 items-center justify-center rounded-xl"
           >
             <UIcon
               name="i-heroicons-arrow-path"
-              class="h-5 w-5 animate-spin text-pink-600 dark:text-pink-400"
+              class="xeno-import-status xeno-import-status--active h-5 w-5 animate-spin"
             />
           </div>
           <div>
-            <p class="text-lg font-semibold text-gray-900 dark:text-white">
+            <p class="xeno-import-title text-lg font-semibold">
               {{ t("home.import.batch.importing") }}
             </p>
-            <p class="text-sm text-gray-500 dark:text-gray-400">
+            <p class="xeno-import-copy text-sm">
               {{
                 t("home.import.batch.progressCount", {
                   current: (batchProgress?.completed || 0) + 1,
@@ -520,34 +536,39 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
     <!-- English UI note -->
     <div
       v-else-if="isMergeImporting && mergeStage !== 'done'"
-      class="xeno-import-state-card w-full max-w-4xl rounded-3xl border border-gray-200/50 bg-gray-100/50 px-8 py-6 backdrop-blur-md dark:border-white/10 dark:bg-gray-800/40"
+      class="xeno-import-state-card w-full max-w-4xl rounded-3xl px-8 py-6"
     >
       <!-- English UI note -->
       <div class="mb-4 flex items-center justify-between">
         <div class="flex items-center gap-3">
           <div
-            class="flex h-10 w-10 items-center justify-center rounded-xl bg-pink-50 dark:bg-pink-500/10"
+            class="xeno-import-state-orb flex h-10 w-10 items-center justify-center rounded-xl"
+            :class="
+              mergeStage === 'error'
+                ? 'xeno-import-state-orb--danger'
+                : 'xeno-import-state-orb--active'
+            "
           >
             <UIcon
               v-if="mergeStage !== 'error'"
               name="i-heroicons-arrow-path"
-              class="h-5 w-5 animate-spin text-pink-600 dark:text-pink-400"
+              class="xeno-import-status xeno-import-status--active h-5 w-5 animate-spin"
             />
             <UIcon
               v-else
               name="i-heroicons-x-circle"
-              class="h-5 w-5 text-red-600 dark:text-red-400"
+              class="xeno-import-status xeno-import-status--danger h-5 w-5"
             />
           </div>
           <div>
-            <p class="text-lg font-semibold text-gray-900 dark:text-white">
+            <p class="xeno-import-title text-lg font-semibold">
               {{
                 mergeStage === "error"
                   ? t("home.import.merge.failed")
                   : t("home.import.merge.importing")
               }}
             </p>
-            <p class="text-sm text-gray-500 dark:text-gray-400">
+            <p class="xeno-import-copy text-sm">
               {{
                 mergeStage === "parsing" ? t("home.import.merge.parsing") : ""
               }}
@@ -587,23 +608,23 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
     <!-- English UI note -->
     <div
       v-else-if="isMergeImporting && mergeStage === 'done' && mergeResult"
-      class="xeno-import-state-card w-full max-w-4xl rounded-3xl border border-gray-200/50 bg-gray-100/50 px-8 py-6 backdrop-blur-md dark:border-white/10 dark:bg-gray-800/40"
+      class="xeno-import-state-card w-full max-w-4xl rounded-3xl px-8 py-6"
     >
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">
           <div
-            class="flex h-10 w-10 items-center justify-center rounded-xl bg-green-50 dark:bg-green-500/10"
+            class="xeno-import-state-orb xeno-import-state-orb--success flex h-10 w-10 items-center justify-center rounded-xl"
           >
             <UIcon
               name="i-heroicons-check-circle"
-              class="h-5 w-5 text-green-600 dark:text-green-400"
+              class="xeno-import-status xeno-import-status--success h-5 w-5"
             />
           </div>
           <div>
-            <p class="text-lg font-semibold text-gray-900 dark:text-white">
+            <p class="xeno-import-title text-lg font-semibold">
               {{ t("home.import.merge.completed") }}
             </p>
-            <p class="text-sm text-gray-500 dark:text-gray-400">
+            <p class="xeno-import-copy text-sm">
               {{
                 t("home.import.merge.completedHint", {
                   count: mergeFiles.length,
@@ -630,7 +651,7 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
     <!-- English UI note -->
     <div
       v-else-if="batchImportResult"
-      class="xeno-import-state-card w-full max-w-4xl rounded-3xl border border-gray-200/50 bg-gray-100/50 px-8 py-6 backdrop-blur-md dark:border-white/10 dark:bg-gray-800/40"
+      class="xeno-import-state-card w-full max-w-4xl rounded-3xl px-8 py-6"
     >
       <!-- English UI note -->
       <div class="mb-4 flex items-center justify-between">
@@ -639,8 +660,8 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
             class="flex h-10 w-10 items-center justify-center rounded-xl"
             :class="
               batchImportResult.failed === 0
-                ? 'bg-green-50 dark:bg-green-500/10'
-                : 'bg-amber-50 dark:bg-amber-500/10'
+                ? 'xeno-import-state-orb xeno-import-state-orb--success'
+                : 'xeno-import-state-orb xeno-import-state-orb--warning'
             "
           >
             <UIcon
@@ -652,16 +673,16 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
               class="h-5 w-5"
               :class="
                 batchImportResult.failed === 0
-                  ? 'text-green-600 dark:text-green-400'
-                  : 'text-amber-600 dark:text-amber-400'
+                  ? 'xeno-import-status xeno-import-status--success'
+                  : 'xeno-import-status xeno-import-status--warning'
               "
             />
           </div>
           <div>
-            <p class="text-lg font-semibold text-gray-900 dark:text-white">
+            <p class="xeno-import-title text-lg font-semibold">
               {{ t("home.import.batch.completed") }}
             </p>
-            <p class="text-sm text-gray-500 dark:text-gray-400">
+            <p class="xeno-import-copy text-sm">
               {{
                 t("home.import.batch.summary", {
                   success: batchImportResult.success,
@@ -693,12 +714,15 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
           :total="batchImportResult.files.length"
         >
           <template #extra>
-            <p v-if="file.status === 'failed'" class="text-xs text-red-500">
+            <p
+              v-if="file.status === 'failed'"
+              class="xeno-import-error-copy text-xs"
+            >
               {{ translateError(file.error || "error.import_failed") }}
             </p>
             <p
               v-else-if="file.status === 'cancelled'"
-              class="text-xs text-gray-500"
+              class="xeno-import-note text-xs"
             >
               {{ t("home.import.batch.skipped") }}
             </p>
@@ -727,10 +751,9 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
     >
       <template #default="{ isDragOver }">
         <div
-          class="xeno-import-dropzone group relative flex w-full cursor-pointer flex-col items-center justify-center rounded-3xl border border-gray-200/50 bg-gray-100/50 px-8 py-4 backdrop-blur-md transition-all duration-300 hover:border-pink-500/30 hover:bg-gray-100/80 hover:shadow-2xl hover:shadow-pink-500/10 focus:outline-none focus:ring-4 focus:ring-pink-500/20 sm:px-12 sm:py-6 dark:border-white/10 dark:bg-gray-800/40 dark:hover:border-pink-500/30 dark:hover:bg-gray-800/60"
+          class="xeno-import-dropzone group relative flex w-full cursor-pointer flex-col items-center justify-center rounded-3xl px-8 py-4 transition-all duration-300 focus:outline-none sm:px-12 sm:py-6"
           :class="{
-            'border-pink-500/50 bg-pink-50/50 dark:border-pink-400/50 dark:bg-pink-500/10':
-              isDragOver && !isAnyImporting,
+            'xeno-import-dropzone-active': isDragOver && !isAnyImporting,
             'cursor-not-allowed opacity-70': isAnyImporting,
           }"
           @click="!isAnyImporting && handleClickImport()"
@@ -746,41 +769,39 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
             <UIcon
               v-if="!isImporting"
               name="i-heroicons-arrow-up-tray"
-              class="h-8 w-8 text-pink-600 transition-transform duration-200 group-hover:-translate-y-1 dark:text-pink-400"
+              class="xeno-import-status xeno-import-status--active h-8 w-8 transition-transform duration-200 group-hover:-translate-y-1"
             />
             <UIcon
               v-else
               name="i-heroicons-arrow-path"
-              class="h-8 w-8 animate-spin text-pink-600 dark:text-pink-400"
+              class="xeno-import-status xeno-import-status--active h-8 w-8 animate-spin"
             />
           </div>
 
           <!-- Text -->
-          <div class="w-full min-w-80 text-center">
+          <div class="w-full min-w-0 text-center">
             <template v-if="isImporting && importProgress">
               <!-- English UI note -->
-              <p
-                class="mb-4 text-lg font-semibold text-gray-900 dark:text-white"
-              >
+              <p class="xeno-import-title mb-4 text-lg font-semibold">
                 {{ getProgressText() }}
               </p>
               <div class="mx-auto w-full max-w-md">
                 <UProgress v-model="importProgress.progress" size="md" />
               </div>
-              <p class="mt-3 text-sm text-gray-500 dark:text-gray-400">
+              <p class="xeno-import-copy mt-3 text-sm">
                 {{ getProgressDetail() }}
               </p>
             </template>
             <template v-else>
               <!-- English UI note -->
-              <p class="text-lg font-semibold text-gray-900 dark:text-white">
+              <p class="xeno-import-title text-lg font-semibold">
                 {{
                   isDragOver
                     ? t("home.import.dropHint")
                     : t("home.import.clickHint")
                 }}
               </p>
-              <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+              <p class="xeno-import-copy mt-2 text-sm">
                 {{ t("home.import.multipleHint") }}
               </p>
             </template>
@@ -800,17 +821,15 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
           :label="t('home.import.options.mergeImport')"
           input-class="h-4 w-4"
           size="sm"
-          label-class="text-sm font-medium text-gray-600 dark:text-gray-300"
+          label-class="xeno-import-toggle-label text-sm font-medium"
         />
         <UPopover mode="hover">
           <UIcon
             name="i-heroicons-question-mark-circle"
-            class="h-4 w-4 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+            class="xeno-import-toggle-help h-4 w-4"
           />
           <template #content>
-            <div
-              class="max-w-xs px-3 py-2 text-xs text-gray-600 dark:text-gray-300"
-            >
+            <div class="xeno-import-tooltip max-w-xs px-3 py-2 text-xs">
               {{ t("home.import.options.mergeImportHint") }}
             </div>
           </template>
@@ -821,18 +840,16 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
     <!-- Error Message -->
     <div
       v-if="importError"
-      class="xeno-import-error-card flex max-w-lg flex-col items-center gap-3 rounded-lg bg-red-50 px-4 py-4 dark:bg-red-900/20"
+      class="xeno-import-error-card flex max-w-lg flex-col items-center gap-3 rounded-lg px-4 py-4"
     >
-      <div
-        class="flex items-center gap-2 text-sm text-red-600 dark:text-red-400"
-      >
+      <div class="xeno-import-error-line flex items-center gap-2 text-sm">
         <UIcon name="i-heroicons-exclamation-circle" class="h-5 w-5 shrink-0" />
         <span>{{ importError }}</span>
       </div>
       <!-- English UI note -->
       <div
         v-if="importDiagnostics"
-        class="w-full rounded-md bg-gray-100 px-3 py-2 text-xs text-gray-700 dark:bg-gray-800 dark:text-gray-300"
+        class="xeno-import-diagnostics w-full rounded-md px-3 py-2 text-xs"
       >
         <div class="flex items-start gap-2">
           <UIcon name="i-heroicons-chart-bar" class="mt-0.5 h-4 w-4 shrink-0" />
@@ -855,7 +872,7 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
       <!-- English UI note -->
       <div
         v-if="diagnosisSuggestion"
-        class="w-full rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-200"
+        class="xeno-import-suggestion w-full rounded-md px-3 py-2 text-sm"
       >
         <div class="flex items-start gap-2">
           <UIcon
@@ -898,11 +915,100 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
 .xeno-import-error-card {
   border-color: var(--xeno-border-soft);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 120%),
-    var(--xeno-surface-muted);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 120%),
+    rgba(7, 19, 31, 0.78);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.06),
     0 24px 60px rgba(2, 8, 19, 0.22);
+}
+
+.xeno-import-title {
+  color: var(--xeno-text-main);
+}
+
+.xeno-import-copy,
+.xeno-import-toggle-label {
+  color: var(--xeno-text-secondary);
+}
+
+.xeno-import-note {
+  color: var(--xeno-text-secondary);
+}
+
+.xeno-import-error-copy {
+  color: rgb(252 165 165);
+}
+
+.xeno-import-error-line {
+  color: rgb(252 165 165);
+}
+
+.xeno-import-status--pending,
+.xeno-import-status--muted {
+  color: rgb(148 163 184);
+}
+
+.xeno-import-status--active {
+  color: rgb(103 232 249);
+}
+
+.xeno-import-status--success {
+  color: rgb(110 231 183);
+}
+
+.xeno-import-status--warning {
+  color: rgb(252 211 77);
+}
+
+.xeno-import-status--danger {
+  color: rgb(252 165 165);
+}
+
+.xeno-import-state-orb {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 120%),
+    rgba(7, 20, 32, 0.82);
+}
+
+.xeno-import-state-orb--active {
+  background:
+    radial-gradient(
+      circle at 30% 30%,
+      rgba(87, 214, 255, 0.16),
+      transparent 60%
+    ),
+    rgba(7, 20, 32, 0.82);
+}
+
+.xeno-import-state-orb--success {
+  background:
+    radial-gradient(
+      circle at 30% 30%,
+      rgba(56, 189, 124, 0.18),
+      transparent 60%
+    ),
+    rgba(7, 20, 32, 0.82);
+}
+
+.xeno-import-state-orb--warning {
+  background:
+    radial-gradient(
+      circle at 30% 30%,
+      rgba(245, 158, 11, 0.2),
+      transparent 60%
+    ),
+    rgba(7, 20, 32, 0.82);
+}
+
+.xeno-import-state-orb--danger {
+  background:
+    radial-gradient(
+      circle at 30% 30%,
+      rgba(248, 113, 113, 0.18),
+      transparent 60%
+    ),
+    rgba(7, 20, 32, 0.82);
 }
 
 .xeno-import-state-card,
@@ -931,17 +1037,45 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
 .xeno-import-dropzone::after {
   content: "";
   position: absolute;
-  inset: 14% 18% auto;
-  height: 140px;
+  inset: 12% 12% auto;
+  height: 160px;
   border-radius: 9999px;
   background: radial-gradient(
     circle,
-    rgba(87, 214, 255, 0.16),
+    rgba(87, 214, 255, 0.14),
     transparent 72%
   );
-  filter: blur(34px);
-  opacity: 0.72;
+  filter: blur(40px);
+  opacity: 0.64;
   pointer-events: none;
+}
+
+.xeno-import-dropzone {
+  border: 1px solid var(--xeno-border-soft);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 120%),
+    rgba(7, 19, 31, 0.78);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 24px 60px rgba(2, 8, 19, 0.22);
+}
+
+.xeno-import-dropzone:hover {
+  border-color: rgba(14, 165, 233, 0.34);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 120%),
+    rgba(8, 22, 34, 0.88);
+}
+
+.xeno-import-dropzone-active {
+  border-color: rgba(56, 189, 248, 0.48);
+  background:
+    radial-gradient(
+      circle at 50% 24%,
+      rgba(14, 165, 233, 0.12),
+      transparent 42%
+    ),
+    rgba(8, 24, 37, 0.9);
 }
 
 .xeno-import-dropzone-icon {
@@ -968,10 +1102,45 @@ const getMergeFileProgressText = (file: MergeFileInfo) =>
   padding: 0.5rem 0.9rem;
 }
 
+.xeno-import-toggle-help {
+  color: var(--xeno-text-secondary);
+}
+
+.xeno-import-toggle-help:hover {
+  color: var(--xeno-text-main);
+}
+
+.xeno-import-tooltip {
+  color: var(--xeno-text-secondary);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 120%),
+    rgba(6, 18, 28, 0.92);
+}
+
 .xeno-import-error-card {
   border: 1px solid rgba(255, 126, 148, 0.2);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 120%),
     rgba(74, 16, 28, 0.34);
+}
+
+.xeno-import-diagnostics {
+  color: var(--xeno-text-secondary);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 120%),
+    rgba(8, 20, 31, 0.76);
+}
+
+.xeno-import-suggestion {
+  color: rgb(253 230 138);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 120%),
+    rgba(85, 46, 4, 0.42);
+}
+
+:deep(.xeno-import-state-card p),
+:deep(.xeno-import-dropzone p),
+:deep(.xeno-import-error-card span) {
+  word-break: break-word;
 }
 </style>

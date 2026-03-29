@@ -151,7 +151,11 @@ mod tests {
     #[test]
     fn picks_primary_account_preferring_current() {
         let candidates = vec![
-            source(SourceKind::ExportDirectory, "Downloads export", "/tmp/export"),
+            source(
+                SourceKind::ExportDirectory,
+                "Downloads export",
+                "/tmp/export",
+            ),
             source(SourceKind::AppContainer, "Desktop data", "/tmp/app"),
         ];
 
@@ -174,5 +178,4 @@ mod tests {
 
         assert_eq!(account.root_path(), Path::new("/tmp/telegram-root"));
     }
-
 }

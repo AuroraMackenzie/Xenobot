@@ -19,17 +19,18 @@ use std::collections::VecDeque;
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
-use xenobot_core::webhook::{
-    WebhookDeadLetterEntry, overwrite_dead_letter_entries, read_dead_letter_entries,
-};
 #[cfg(all(feature = "analysis", feature = "api"))]
 use xenobot_core::webhook::{
-    WebhookDispatchStats, WebhookMessageCreatedEvent, WebhookRule, append_dead_letter_entry,
-    build_dead_letter_entry, merge_webhook_dispatch_stats, webhook_rule_matches_event,
+    append_dead_letter_entry, build_dead_letter_entry, merge_webhook_dispatch_stats,
+    webhook_rule_matches_event, WebhookDispatchStats, WebhookMessageCreatedEvent, WebhookRule,
+};
+use xenobot_core::webhook::{
+    overwrite_dead_letter_entries, read_dead_letter_entries, WebhookDeadLetterEntry,
 };
 use xenobot_core::{
-    Platform as RuntimePlatform, SourceCandidate, discover_sources_for_all_platforms,
-    discover_sources_for_platform, legal_safe_runtime_platforms, platform_id as core_platform_id,
+    discover_sources_for_all_platforms, discover_sources_for_platform,
+    legal_safe_runtime_platforms, platform_id as core_platform_id, Platform as RuntimePlatform,
+    SourceCandidate, SourceKind,
 };
 
 /// Configuration for the CLI application.
@@ -310,6 +311,7 @@ impl App {
         println!("work dir: {}", args.work_dir.to_string_lossy());
         println!("interval seconds: {}", args.interval);
         println!("start immediately: {}", args.start);
+        println!("once: {}", args.once);
         println!("write_db: {}", args.write_db);
         if let Some(path) = args.db_path.as_ref() {
             println!("db path: {}", path.display());
@@ -318,6 +320,12 @@ impl App {
         println!("data key: {}", mask_secret(&data_key));
         println!("image key: {}", mask_secret(&image_key));
         println!("mode: legal-safe incremental monitor");
+
+        if args.once && !args.start {
+            return Err(CliError::Argument(
+                "--once requires --start for monitor".to_string(),
+            ));
+        }
 
         if !args.start {
             return Ok(());
@@ -329,10 +337,12 @@ impl App {
             return run_legal_safe_monitor_loop(
                 &runtime_platform,
                 &target_data_dir,
+                &args.work_dir,
                 args.interval,
                 args.write_db,
                 args.db_path.clone(),
                 args.format,
+                args.once,
             );
         }
 
@@ -353,7 +363,7 @@ impl App {
             .data_dir
             .as_ref()
             .cloned()
-            .or_else(|| first_existing_path(&hints))
+            .or_else(|| preferred_authorized_source_path(&hints, true))
             .unwrap_or_else(|| PathBuf::from("."));
 
         println!("decrypt plan generated (legal-safe mode)");
@@ -380,7 +390,7 @@ impl App {
             .data_dir
             .as_ref()
             .cloned()
-            .or_else(|| first_existing_path(&hints))
+            .or_else(|| preferred_authorized_source_path(&hints, true))
             .unwrap_or_else(|| PathBuf::from("."));
 
         println!("monitor plan generated (legal-safe mode)");
@@ -389,6 +399,7 @@ impl App {
         println!("work dir: {}", args.work_dir.to_string_lossy());
         println!("interval seconds: {}", args.interval);
         println!("start immediately: {}", args.start);
+        println!("once: {}", args.once);
         println!("write_db: {}", args.write_db);
         if let Some(path) = args.db_path.as_ref() {
             println!("db path: {}", path.display());
@@ -399,8 +410,25 @@ impl App {
 
         print_source_candidates(&hints, false, &OutputFormat::Text)?;
 
+        if args.once && !args.start {
+            return Err(CliError::Argument(
+                "--once requires --start for monitor".to_string(),
+            ));
+        }
+
         if !args.start {
             return Ok(());
+        }
+
+        if !selected.exists() {
+            if selected.extension().is_some() {
+                return Err(CliError::Argument(format!(
+                    "monitor target does not exist and does not look like a directory: {}",
+                    selected.display()
+                )));
+            }
+            fs::create_dir_all(&selected)?;
+            println!("created watch dir: {}", selected.display());
         }
 
         #[cfg(feature = "analysis")]
@@ -409,10 +437,12 @@ impl App {
             return run_legal_safe_monitor_loop(
                 &runtime_platform,
                 &selected,
+                &args.work_dir,
                 args.interval,
                 args.write_db,
                 args.db_path.clone(),
                 args.format,
+                args.once,
             );
         }
 
@@ -441,6 +471,56 @@ impl App {
                 print_source_candidates(&items, *existing_only, format_out)
             }
             SourceCommand::Matrix { format_out } => print_source_platform_matrix(format_out),
+            SourceCommand::Doctor {
+                formats,
+                db_path,
+                format_out,
+            } => print_source_doctor(formats, db_path.as_deref(), format_out),
+            SourceCommand::StageRuntimeReady { formats, apply } => {
+                handle_source_stage_runtime_ready(formats, *apply)
+            }
+            SourceCommand::PrepareManualReview { formats, overwrite } => {
+                handle_source_prepare_manual_review(formats, *overwrite)
+            }
+            SourceCommand::BuildManualReviewPack { formats, overwrite } => {
+                handle_source_build_manual_review_pack(formats, *overwrite)
+            }
+            SourceCommand::ImportReady {
+                formats,
+                db_path,
+                incremental,
+                merge,
+            } => {
+                handle_source_import_ready(self, formats, db_path.as_deref(), *incremental, *merge)
+            }
+            SourceCommand::SyncReady {
+                formats,
+                db_path,
+                interval,
+                incremental,
+                merge,
+            } => handle_source_sync_ready(
+                self,
+                formats,
+                db_path.as_deref(),
+                *interval,
+                *incremental,
+                *merge,
+            ),
+            SourceCommand::MonitorReady {
+                formats,
+                db_path,
+                interval,
+                start,
+                once,
+            } => handle_source_monitor_ready(
+                self,
+                formats,
+                db_path.as_deref(),
+                *interval,
+                *start,
+                *once,
+            ),
         }
     }
 
@@ -706,11 +786,7 @@ impl App {
             let mut parse_failed = 0usize;
             let mut parsed_chats = Vec::new();
 
-            let candidates = if args.input.is_file() {
-                vec![args.input.clone()]
-            } else {
-                collect_candidate_chat_files(&args.input)?
-            };
+            let candidates = collect_candidate_import_inputs(&args.input, &self.config.work_dir)?;
 
             for path in &candidates {
                 total += 1;
@@ -1356,31 +1432,34 @@ impl App {
                 Ok(())
             }
             AccountCommand::Switch { account_id } => {
-                let mut store = read_account_store()?;
                 let target = account_id.trim();
                 if target.is_empty() {
                     return Err(CliError::Argument("account id cannot be empty".to_string()));
                 }
 
-                let Some(item) = store.items.iter_mut().find(|item| item.id == target) else {
-                    let known = store
-                        .items
-                        .iter()
-                        .map(|item| item.id.as_str())
-                        .collect::<Vec<_>>()
-                        .join(", ");
-                    return Err(CliError::Argument(format!(
-                        "account id not found: {} (known: [{}])",
-                        target, known
-                    )));
-                };
+                let (switched_id, switched_name, switched_platform) =
+                    with_locked_account_store(|store| {
+                        let Some(item) = store.items.iter_mut().find(|item| item.id == target)
+                        else {
+                            let known = store
+                                .items
+                                .iter()
+                                .map(|item| item.id.as_str())
+                                .collect::<Vec<_>>()
+                                .join(", ");
+                            return Err(CliError::Argument(format!(
+                                "account id not found: {} (known: [{}])",
+                                target, known
+                            )));
+                        };
 
-                item.updated_at = chrono::Utc::now().to_rfc3339();
-                let switched_id = item.id.clone();
-                let switched_name = item.name.clone();
-                let switched_platform = item.platform.clone();
-                store.active_account_id = Some(switched_id.clone());
-                write_account_store(&store)?;
+                        item.updated_at = chrono::Utc::now().to_rfc3339();
+                        let switched_id = item.id.clone();
+                        let switched_name = item.name.clone();
+                        let switched_platform = item.platform.clone();
+                        store.active_account_id = Some(switched_id.clone());
+                        Ok((switched_id, switched_name, switched_platform))
+                    })?;
 
                 println!("active account switched");
                 println!("id: {}", switched_id);
@@ -1394,34 +1473,39 @@ impl App {
                 format,
                 wechat_version,
             } => {
-                let mut store = read_account_store()?;
                 let runtime_platform = runtime_platform_from_format(*format);
                 let platform = platform_format_id(*format).to_string();
-                let existing_ids = store
-                    .items
-                    .iter()
-                    .map(|item| item.id.clone())
-                    .collect::<std::collections::HashSet<_>>();
-                let account_id = allocate_account_id(&platform, name, &existing_ids)?;
+                let discovered_sources = discover_sources_for_platform(&runtime_platform);
                 let resolved_data_dir = data_dir.as_ref().cloned().or_else(|| {
-                    first_existing_path(&discover_sources_for_platform(&runtime_platform))
+                    preferred_runtime_profile_path(&runtime_platform, &discovered_sources).or_else(
+                        || preferred_runtime_path(&runtime_platform, &discovered_sources, false),
+                    )
                 });
-                let now = chrono::Utc::now().to_rfc3339();
-                let profile = StoredAccountProfile {
-                    id: account_id.clone(),
-                    name: name.trim().to_string(),
-                    platform: platform.clone(),
-                    data_dir: resolved_data_dir,
-                    wechat_version: wechat_version.to_string(),
-                    created_at: now.clone(),
-                    updated_at: now,
-                };
+                let (profile, active_account_id) = with_locked_account_store(|store| {
+                    let existing_ids = store
+                        .items
+                        .iter()
+                        .map(|item| item.id.clone())
+                        .collect::<std::collections::HashSet<_>>();
+                    let account_id = allocate_account_id(&platform, name, &existing_ids)?;
+                    let now = chrono::Utc::now().to_rfc3339();
+                    let profile = StoredAccountProfile {
+                        id: account_id.clone(),
+                        name: name.trim().to_string(),
+                        platform: platform.clone(),
+                        data_dir: resolved_data_dir.clone(),
+                        wechat_version: wechat_version.to_string(),
+                        created_at: now.clone(),
+                        updated_at: now,
+                    };
 
-                store.items.push(profile.clone());
-                if store.active_account_id.is_none() {
-                    store.active_account_id = Some(account_id.clone());
-                }
-                write_account_store(&store)?;
+                    store.items.push(profile.clone());
+                    if store.active_account_id.is_none() {
+                        store.active_account_id = Some(account_id);
+                    }
+
+                    Ok((profile, store.active_account_id.clone()))
+                })?;
 
                 println!("account registered");
                 println!("id: {}", profile.id);
@@ -1438,7 +1522,7 @@ impl App {
                 );
                 println!(
                     "active account: {}",
-                    store.active_account_id.as_deref().unwrap_or("none")
+                    active_account_id.as_deref().unwrap_or("none")
                 );
                 Ok(())
             }
@@ -2162,6 +2246,10 @@ fn account_store_path() -> Result<PathBuf> {
 
 fn read_account_store() -> Result<AccountStore> {
     let path = account_store_path()?;
+    read_account_store_at(&path)
+}
+
+fn read_account_store_at(path: &Path) -> Result<AccountStore> {
     if !path.exists() {
         return Ok(AccountStore::default());
     }
@@ -2172,11 +2260,94 @@ fn read_account_store() -> Result<AccountStore> {
     serde_json::from_str(&raw).map_err(|e| CliError::Parse(e.to_string()))
 }
 
-fn write_account_store(store: &AccountStore) -> Result<()> {
-    let path = account_store_path()?;
+fn write_account_store_at(path: &Path, store: &AccountStore) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
     let raw = serde_json::to_string_pretty(store).map_err(|e| CliError::Parse(e.to_string()))?;
-    fs::write(path, raw)?;
+    write_text_atomically(path, &raw)?;
     Ok(())
+}
+
+fn write_text_atomically(path: &Path, raw: &str) -> Result<()> {
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    fs::create_dir_all(parent)?;
+    let file_name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("xenobot-store");
+    let temp_path = parent.join(format!(
+        ".{}.{}.{}.tmp",
+        file_name,
+        std::process::id(),
+        chrono::Utc::now().timestamp_micros()
+    ));
+    fs::write(&temp_path, raw)?;
+    fs::rename(&temp_path, path)?;
+    Ok(())
+}
+
+struct StoreFileLock {
+    path: PathBuf,
+}
+
+impl Drop for StoreFileLock {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.path);
+    }
+}
+
+fn account_store_lock_path(path: &Path) -> PathBuf {
+    let file_name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("accounts.json");
+    path.with_file_name(format!("{}.lock", file_name))
+}
+
+fn acquire_store_file_lock(path: &Path, label: &str) -> Result<StoreFileLock> {
+    let lock_path = account_store_lock_path(path);
+    let start = std::time::Instant::now();
+    let timeout = std::time::Duration::from_secs(5);
+    let poll = std::time::Duration::from_millis(40);
+
+    loop {
+        match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&lock_path)
+        {
+            Ok(_) => return Ok(StoreFileLock { path: lock_path }),
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
+                if start.elapsed() >= timeout {
+                    return Err(CliError::Config(format!(
+                        "{} lock remained busy after {}s: {}",
+                        label,
+                        timeout.as_secs(),
+                        lock_path.display()
+                    )));
+                }
+                std::thread::sleep(poll);
+            }
+            Err(err) => return Err(CliError::Io(err)),
+        }
+    }
+}
+
+fn with_locked_account_store<T>(mutate: impl FnOnce(&mut AccountStore) -> Result<T>) -> Result<T> {
+    let path = account_store_path()?;
+    with_locked_account_store_at(&path, mutate)
+}
+
+fn with_locked_account_store_at<T>(
+    path: &Path,
+    mutate: impl FnOnce(&mut AccountStore) -> Result<T>,
+) -> Result<T> {
+    let _lock = acquire_store_file_lock(path, "account store")?;
+    let mut store = read_account_store_at(path)?;
+    let result = mutate(&mut store)?;
+    write_account_store_at(path, &store)?;
+    Ok(result)
 }
 
 fn webhook_store_path() -> Result<PathBuf> {
@@ -2652,23 +2823,10 @@ fn resolve_keys_for_runtime(
 }
 
 fn default_wechat_data_dir() -> String {
-    if cfg!(target_os = "macos") {
-        dirs::home_dir()
-            .map(|home| {
-                home.join("Library")
-                    .join("Containers")
-                    .join("com.tencent.xinWeChat")
-                    .join("Data")
-                    .join("Library")
-                    .join("Application Support")
-                    .join("com.tencent.xinWeChat")
-                    .to_string_lossy()
-                    .to_string()
-            })
-            .unwrap_or_default()
-    } else {
-        String::new()
-    }
+    let candidates = discover_sources_for_platform(&RuntimePlatform::WeChat);
+    default_wechat_data_path_from_candidates(&candidates)
+        .map(|path| path.to_string_lossy().to_string())
+        .unwrap_or_default()
 }
 
 fn runtime_platform_from_format(format: PlatformFormat) -> RuntimePlatform {
@@ -2717,11 +2875,2710 @@ fn platform_format_id(format: PlatformFormat) -> &'static str {
     }
 }
 
-fn first_existing_path(candidates: &[SourceCandidate]) -> Option<PathBuf> {
+fn first_existing_path_matching(
+    candidates: &[SourceCandidate],
+    mut predicate: impl FnMut(&SourceCandidate) -> bool,
+) -> Option<PathBuf> {
     candidates
         .iter()
-        .find(|item| item.exists && item.readable)
+        .find(|item| item.exists && item.readable && predicate(item))
         .map(|item| item.path.clone())
+}
+
+fn first_path_matching(
+    candidates: &[SourceCandidate],
+    mut predicate: impl FnMut(&SourceCandidate) -> bool,
+) -> Option<PathBuf> {
+    candidates
+        .iter()
+        .find(|item| predicate(item))
+        .map(|item| item.path.clone())
+}
+
+fn is_authorized_source_kind(kind: SourceKind) -> bool {
+    matches!(
+        kind,
+        SourceKind::ExportDirectory | SourceKind::UserWorkspace
+    )
+}
+
+fn preferred_runtime_profile_path(
+    platform: &RuntimePlatform,
+    candidates: &[SourceCandidate],
+) -> Option<PathBuf> {
+    let runtime_topology = collect_source_doctor_runtime_topology(platform, candidates);
+    collect_source_doctor_runtime_profiles(platform, candidates, &runtime_topology)
+        .into_iter()
+        .find_map(|profile| {
+            let path = PathBuf::from(profile.data_dir);
+            path.exists().then_some(path)
+        })
+}
+
+fn preferred_runtime_path(
+    platform: &RuntimePlatform,
+    candidates: &[SourceCandidate],
+    allow_missing: bool,
+) -> Option<PathBuf> {
+    let preferred_label_prefixes: &[&str] = match platform {
+        RuntimePlatform::WeChat => &[
+            "WeChat file workspace",
+            "WeChat xwechat_files root",
+            "WeChat app_data account workspace",
+            "WeChat app_data root",
+            "macOS WeChat app documents",
+            "macOS WeChat sandbox data",
+            "macOS WeChat sandbox root",
+        ],
+        RuntimePlatform::Qq => &[
+            "QQ account runtime root",
+            "QQ sandbox app root",
+            "QQ account nt_db",
+            "QQ global nt_db",
+        ],
+        RuntimePlatform::Discord => &[
+            "Discord desktop app data",
+            "Discord Local Storage",
+            "Discord logs",
+        ],
+        _ => &[],
+    };
+
+    for prefix in preferred_label_prefixes {
+        let selected = if allow_missing {
+            first_path_matching(candidates, |item| {
+                item.kind == SourceKind::AppContainer && item.label.starts_with(prefix)
+            })
+        } else {
+            first_existing_path_matching(candidates, |item| {
+                item.kind == SourceKind::AppContainer && item.label.starts_with(prefix)
+            })
+        };
+        if selected.is_some() {
+            return selected;
+        }
+    }
+
+    if allow_missing {
+        first_path_matching(candidates, |item| item.kind == SourceKind::AppContainer)
+    } else {
+        first_existing_path_matching(candidates, |item| item.kind == SourceKind::AppContainer)
+    }
+}
+
+fn preferred_authorized_source_path(
+    candidates: &[SourceCandidate],
+    allow_missing: bool,
+) -> Option<PathBuf> {
+    if allow_missing {
+        first_path_matching(candidates, |item| is_authorized_source_kind(item.kind))
+    } else {
+        first_existing_path_matching(candidates, |item| is_authorized_source_kind(item.kind))
+    }
+}
+
+fn default_wechat_documents_root_hint() -> Option<PathBuf> {
+    if !cfg!(target_os = "macos") {
+        return None;
+    }
+
+    dirs::home_dir().map(|home| {
+        home.join("Library")
+            .join("Containers")
+            .join("com.tencent.xinWeChat")
+            .join("Data")
+            .join("Documents")
+            .join("xwechat_files")
+    })
+}
+
+fn default_wechat_data_path_from_candidates(candidates: &[SourceCandidate]) -> Option<PathBuf> {
+    preferred_runtime_profile_path(&RuntimePlatform::WeChat, candidates)
+        .or_else(|| preferred_runtime_path(&RuntimePlatform::WeChat, candidates, false))
+        .or_else(default_wechat_documents_root_hint)
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SourceDoctorPlatformReport {
+    platform_id: String,
+    readable_runtime_roots: usize,
+    readable_export_roots: usize,
+    runtime_root_samples: Vec<String>,
+    runtime_topology: Vec<SourceDoctorRuntimeNode>,
+    runtime_profiles: Vec<SourceDoctorRuntimeProfile>,
+    safe_runtime_artifact_count: usize,
+    safe_runtime_artifact_samples: Vec<String>,
+    runtime_artifact_categories: Vec<SourceDoctorArtifactCategory>,
+    likely_runtime_export_artifact_count: usize,
+    likely_runtime_export_artifact_samples: Vec<String>,
+    export_root_samples: Vec<String>,
+    importable_file_count: usize,
+    importable_file_samples: Vec<String>,
+    ready_for_authorized_import_pipeline: bool,
+    ready_for_authorized_import_test: bool,
+    ready_for_authorized_monitor_test: bool,
+    ready_for_frontend_backend_contract: bool,
+    recommended_import_command: Option<String>,
+    recommended_monitor_command: Option<String>,
+    account_status: SourceDoctorAccountStatus,
+    manual_review_status: SourceDoctorManualReviewStatus,
+    checkpoint_status: Option<SourceDoctorCheckpointStatus>,
+    blocking_reasons: Vec<String>,
+    recommended_next_step: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SourceDoctorAccountStatus {
+    registered_accounts_for_platform: usize,
+    registered_account_ids: Vec<String>,
+    registered_runtime_profile_count: usize,
+    ready_for_runtime_account_test: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SourceDoctorCheckpointStatus {
+    db_path: String,
+    db_exists: bool,
+    checkpoint_table_present: bool,
+    completed_import_checkpoints: usize,
+    completed_monitor_checkpoints: usize,
+    ready_for_frontend_real_test_gate: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SourceDoctorManualReviewStatus {
+    workspace_present: bool,
+    workspace_path: Option<String>,
+    selection_pack_present: bool,
+    buildable_selection_pack: bool,
+    inbox_artifact_count: usize,
+    inbox_artifact_samples: Vec<String>,
+    captured_artifact_count: usize,
+    captured_artifact_samples: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SourceDoctorRuntimeNode {
+    kind: String,
+    path: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SourceDoctorRuntimeProfile {
+    id: String,
+    kind: String,
+    data_dir: String,
+    recommended_account_add_command: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SourceDoctorArtifactCategory {
+    kind: String,
+    count: usize,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SourceDoctorSummary {
+    platforms_checked: usize,
+    ready_for_runtime_account_test: usize,
+    ready_for_authorized_import_pipeline: usize,
+    ready_for_authorized_import_test: usize,
+    ready_for_authorized_monitor_test: usize,
+    ready_for_frontend_backend_contract: usize,
+    ready_for_frontend_real_test_gate: Option<usize>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SourceDoctorReport {
+    timestamp: String,
+    checkpoint_db_path: Option<String>,
+    platforms: Vec<SourceDoctorPlatformReport>,
+    summary: SourceDoctorSummary,
+}
+
+fn source_doctor_default_platforms(formats: &[PlatformFormat]) -> Vec<RuntimePlatform> {
+    if formats.is_empty() {
+        return vec![
+            RuntimePlatform::WeChat,
+            RuntimePlatform::Qq,
+            RuntimePlatform::Discord,
+        ];
+    }
+
+    let mut out = Vec::new();
+    for format in formats {
+        let platform = runtime_platform_from_format(*format);
+        if !out.contains(&platform) {
+            out.push(platform);
+        }
+    }
+    out
+}
+
+fn source_ready_default_formats(formats: &[PlatformFormat]) -> Vec<PlatformFormat> {
+    if formats.is_empty() {
+        return vec![
+            PlatformFormat::WeChat,
+            PlatformFormat::Qq,
+            PlatformFormat::Discord,
+        ];
+    }
+
+    let mut out = Vec::new();
+    for format in formats {
+        if !out.contains(format) {
+            out.push(*format);
+        }
+    }
+    out
+}
+
+fn build_source_doctor_import_command(platform_id: &str, input_path: &Path) -> String {
+    format!(
+        "cargo run -p xenobot-cli --features \"api,analysis\" -- import {} {} --write-db --db-path /tmp/xenobot-{}.db",
+        xenobot_core::sandbox::shell_quote_arg(&input_path.to_string_lossy()),
+        platform_id,
+        platform_id
+    )
+}
+
+fn build_source_doctor_monitor_command(platform_id: &str, root: &Path) -> String {
+    format!(
+        "cargo run -p xenobot-cli --features \"api,analysis\" -- monitor --format {} --data-dir {} --write-db --db-path /tmp/xenobot-{}.db",
+        platform_id,
+        xenobot_core::sandbox::shell_quote_arg(&root.to_string_lossy()),
+        platform_id
+    )
+}
+
+fn build_source_doctor_account_add_command(
+    platform_id: &str,
+    account_name: &str,
+    data_dir: &Path,
+) -> String {
+    format!(
+        "cargo run -p xenobot-cli -- account add {} --format {} --data-dir {}",
+        account_name,
+        platform_id,
+        xenobot_core::sandbox::shell_quote_arg(&data_dir.to_string_lossy())
+    )
+}
+
+#[cfg(feature = "analysis")]
+fn source_doctor_archive_work_dir() -> PathBuf {
+    std::env::var("XENOBOT_WORK_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| std::env::temp_dir().join("xenobot-source-doctor-work"))
+}
+
+fn build_source_doctor_stage_runtime_command(platform_id: &str, apply: bool) -> String {
+    let mut command = format!(
+        "cargo run -p xenobot-cli -- source stage-runtime-ready --format {}",
+        platform_id
+    );
+    if apply {
+        command.push_str(" --apply");
+    }
+    command
+}
+
+fn build_source_doctor_prepare_manual_review_command(platform_id: &str) -> String {
+    format!(
+        "cargo run -p xenobot-cli -- source prepare-manual-review --format {}",
+        platform_id
+    )
+}
+
+fn build_source_doctor_build_manual_review_command(platform_id: &str) -> String {
+    format!(
+        "cargo run -p xenobot-cli -- source build-manual-review-pack --format {}",
+        platform_id
+    )
+}
+
+#[cfg_attr(all(feature = "analysis", test), allow(dead_code))]
+#[cfg(any(not(feature = "analysis"), test))]
+fn collect_supported_chat_files_limited(
+    root: &Path,
+    max_depth: usize,
+    sample_limit: usize,
+) -> Result<(usize, Vec<PathBuf>)> {
+    let mut total = 0usize;
+    let mut samples = Vec::new();
+    let mut stack = vec![(root.to_path_buf(), 0usize)];
+
+    while let Some((path, depth)) = stack.pop() {
+        if path.is_file() {
+            if is_supported_import_input(&path) {
+                total = total.saturating_add(1);
+                if samples.len() < sample_limit {
+                    samples.push(path);
+                }
+            }
+            continue;
+        }
+
+        if depth >= max_depth {
+            continue;
+        }
+
+        let entries = match std::fs::read_dir(&path) {
+            Ok(entries) => entries,
+            Err(err) => {
+                return Err(CliError::Io(err));
+            }
+        };
+
+        for entry in entries {
+            let entry = entry?;
+            let child = entry.path();
+            let file_type = entry.file_type()?;
+            if file_type.is_dir() {
+                stack.push((child, depth.saturating_add(1)));
+            } else if file_type.is_file() && is_supported_import_input(&child) {
+                total = total.saturating_add(1);
+                if samples.len() < sample_limit {
+                    samples.push(child);
+                }
+            }
+        }
+    }
+
+    Ok((total, samples))
+}
+
+fn is_safe_runtime_artifact_file(path: &Path) -> bool {
+    #[cfg(feature = "analysis")]
+    if is_internal_import_artifact(path) {
+        return false;
+    }
+
+    let ext = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(|value| value.to_ascii_lowercase());
+    matches!(
+        ext.as_deref(),
+        Some("txt")
+            | Some("json")
+            | Some("jsonl")
+            | Some("csv")
+            | Some("md")
+            | Some("html")
+            | Some("xml")
+            | Some("log")
+    ) || path_has_supported_archive_extension(path)
+}
+
+fn collect_safe_runtime_artifacts_limited(
+    roots: &[PathBuf],
+    max_depth: usize,
+    sample_limit: usize,
+) -> Result<(usize, Vec<PathBuf>)> {
+    let mut total = 0usize;
+    let mut samples = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
+    let mut stack = roots
+        .iter()
+        .filter(|path| path.exists())
+        .map(|path| (path.clone(), 0usize))
+        .collect::<Vec<_>>();
+
+    while let Some((path, depth)) = stack.pop() {
+        if !seen.insert(path.clone()) {
+            continue;
+        }
+
+        if path.is_file() {
+            if is_safe_runtime_artifact_file(&path) {
+                total = total.saturating_add(1);
+                if samples.len() < sample_limit {
+                    samples.push(path);
+                }
+            }
+            continue;
+        }
+
+        if depth >= max_depth {
+            continue;
+        }
+
+        let entries = match std::fs::read_dir(&path) {
+            Ok(entries) => entries,
+            Err(err) => return Err(CliError::Io(err)),
+        };
+
+        for entry in entries {
+            let entry = entry?;
+            let child = entry.path();
+            let file_type = entry.file_type()?;
+            if file_type.is_dir() {
+                stack.push((child, depth.saturating_add(1)));
+            } else if file_type.is_file() && is_safe_runtime_artifact_file(&child) {
+                total = total.saturating_add(1);
+                if samples.len() < sample_limit {
+                    samples.push(child);
+                }
+            }
+        }
+    }
+
+    Ok((total, samples))
+}
+
+fn classify_runtime_artifact(platform: &RuntimePlatform, path: &Path) -> (&'static str, bool) {
+    let lower = path.to_string_lossy().to_ascii_lowercase();
+    let file_name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .map(|value| value.to_ascii_lowercase())
+        .unwrap_or_default();
+
+    match platform {
+        RuntimePlatform::WeChat => {
+            if lower.contains("/backup/") {
+                return ("wechat_backup_artifact", false);
+            }
+            if lower.contains("/msg/file/") {
+                if file_name.contains("chat")
+                    || file_name.contains("history")
+                    || file_name.contains("export")
+                {
+                    return ("wechat_attachment_bundle_export_like", true);
+                }
+                return ("wechat_attachment_bundle", false);
+            }
+            if file_name.ends_with(".zip") || file_name.ends_with(".txt") {
+                if file_name.contains("chat")
+                    || file_name.contains("history")
+                    || file_name.contains("record")
+                    || file_name.contains("export")
+                {
+                    return ("wechat_runtime_export_like", true);
+                }
+                return ("wechat_runtime_text_or_archive", false);
+            }
+            ("wechat_runtime_misc", false)
+        }
+        RuntimePlatform::Qq => {
+            if lower.contains("/local storage/")
+                || lower.contains("/session storage/")
+                || lower.contains("/leveldb/")
+            {
+                return ("qq_local_storage_log", false);
+            }
+            if lower.contains("/partitions/") && file_name.ends_with(".log") {
+                return ("qq_partition_log", false);
+            }
+            if file_name.ends_with(".txt")
+                && (file_name.contains("chat")
+                    || file_name.contains("record")
+                    || file_name.contains("history")
+                    || file_name.contains("export"))
+            {
+                return ("qq_runtime_export_like", true);
+            }
+            if file_name.ends_with(".zip") {
+                return ("qq_runtime_archive", false);
+            }
+            ("qq_runtime_misc", false)
+        }
+        RuntimePlatform::Discord => {
+            if lower.contains("/logs/") {
+                return ("discord_app_log", false);
+            }
+            if lower.contains("/modules/") && file_name.ends_with(".zip") {
+                return ("discord_module_archive", false);
+            }
+            if lower.contains("/local storage/") || lower.contains("/service worker/") {
+                return ("discord_storage_log", false);
+            }
+            if file_name.ends_with(".json")
+                && (file_name.contains("chat")
+                    || file_name.contains("messages")
+                    || file_name.contains("export"))
+            {
+                return ("discord_runtime_export_like", true);
+            }
+            ("discord_runtime_misc", false)
+        }
+        _ => ("runtime_misc", false),
+    }
+}
+
+fn collect_likely_runtime_export_artifacts(
+    platform: &RuntimePlatform,
+    roots: &[PathBuf],
+    max_depth: usize,
+) -> Result<Vec<PathBuf>> {
+    let mut artifacts = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
+    let mut stack = roots
+        .iter()
+        .filter(|path| path.exists())
+        .map(|path| (path.clone(), 0usize))
+        .collect::<Vec<_>>();
+
+    while let Some((path, depth)) = stack.pop() {
+        if !seen.insert(path.clone()) {
+            continue;
+        }
+
+        if path.is_file() {
+            if is_safe_runtime_artifact_file(&path) && classify_runtime_artifact(platform, &path).1
+            {
+                artifacts.push(path);
+            }
+            continue;
+        }
+
+        if depth >= max_depth {
+            continue;
+        }
+
+        let entries = match std::fs::read_dir(&path) {
+            Ok(entries) => entries,
+            Err(err) => return Err(CliError::Io(err)),
+        };
+        for entry in entries {
+            let entry = entry?;
+            let child = entry.path();
+            let file_type = entry.file_type()?;
+            if file_type.is_dir() {
+                stack.push((child, depth.saturating_add(1)));
+            } else if file_type.is_file()
+                && is_safe_runtime_artifact_file(&child)
+                && classify_runtime_artifact(platform, &child).1
+            {
+                artifacts.push(child);
+            }
+        }
+    }
+
+    artifacts.sort();
+    artifacts.dedup();
+    Ok(artifacts)
+}
+
+fn collect_runtime_artifact_diagnostics(
+    platform: &RuntimePlatform,
+    roots: &[PathBuf],
+    max_depth: usize,
+    sample_limit: usize,
+) -> Result<(
+    usize,
+    Vec<PathBuf>,
+    Vec<SourceDoctorArtifactCategory>,
+    usize,
+    Vec<String>,
+)> {
+    let (total, samples) = collect_safe_runtime_artifacts_limited(roots, max_depth, sample_limit)?;
+    let mut category_counts = std::collections::BTreeMap::<String, usize>::new();
+    let mut likely_runtime_export_artifact_count = 0usize;
+    let mut likely_runtime_export_artifact_samples = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
+    let mut stack = roots
+        .iter()
+        .filter(|path| path.exists())
+        .map(|path| (path.clone(), 0usize))
+        .collect::<Vec<_>>();
+
+    while let Some((path, depth)) = stack.pop() {
+        if !seen.insert(path.clone()) {
+            continue;
+        }
+
+        if path.is_file() {
+            if is_safe_runtime_artifact_file(&path) {
+                let (category, likely_export) = classify_runtime_artifact(platform, &path);
+                *category_counts.entry(category.to_string()).or_insert(0) += 1;
+                if likely_export {
+                    likely_runtime_export_artifact_count =
+                        likely_runtime_export_artifact_count.saturating_add(1);
+                    let rendered = path.to_string_lossy().to_string();
+                    if likely_runtime_export_artifact_samples.len() < sample_limit
+                        && !likely_runtime_export_artifact_samples.contains(&rendered)
+                    {
+                        likely_runtime_export_artifact_samples.push(rendered);
+                    }
+                }
+            }
+            continue;
+        }
+
+        if depth >= max_depth {
+            continue;
+        }
+
+        let entries = match std::fs::read_dir(&path) {
+            Ok(entries) => entries,
+            Err(err) => return Err(CliError::Io(err)),
+        };
+        for entry in entries {
+            let entry = entry?;
+            let child = entry.path();
+            let file_type = entry.file_type()?;
+            if file_type.is_dir() {
+                stack.push((child, depth.saturating_add(1)));
+            } else if file_type.is_file() && is_safe_runtime_artifact_file(&child) {
+                let (category, likely_export) = classify_runtime_artifact(platform, &child);
+                *category_counts.entry(category.to_string()).or_insert(0) += 1;
+                if likely_export {
+                    likely_runtime_export_artifact_count =
+                        likely_runtime_export_artifact_count.saturating_add(1);
+                    let rendered = child.to_string_lossy().to_string();
+                    if likely_runtime_export_artifact_samples.len() < sample_limit
+                        && !likely_runtime_export_artifact_samples.contains(&rendered)
+                    {
+                        likely_runtime_export_artifact_samples.push(rendered);
+                    }
+                }
+            }
+        }
+    }
+
+    let categories = category_counts
+        .into_iter()
+        .map(|(kind, count)| SourceDoctorArtifactCategory { kind, count })
+        .collect::<Vec<_>>();
+
+    Ok((
+        total,
+        samples,
+        categories,
+        likely_runtime_export_artifact_count,
+        likely_runtime_export_artifact_samples,
+    ))
+}
+
+fn source_candidate_path_by_label<'a>(
+    candidates: &'a [SourceCandidate],
+    label: &str,
+) -> Option<&'a Path> {
+    candidates
+        .iter()
+        .find(|item| item.label == label && item.exists && item.readable)
+        .map(|item| item.path.as_path())
+}
+
+fn source_doctor_runtime_artifact_root_kinds(
+    platform: &RuntimePlatform,
+) -> &'static [&'static str] {
+    match platform {
+        RuntimePlatform::WeChat => &[
+            "wechat_backup_root",
+            "wechat_backup_workspace",
+            "wechat_shared_workspace",
+            "wechat_file_workspace",
+        ],
+        RuntimePlatform::Qq => &["qq_account_runtime_root", "qq_partition_workspace"],
+        RuntimePlatform::Discord => &[
+            "discord_logs_root",
+            "discord_local_storage_root",
+            "discord_modules_root",
+            "discord_version_root",
+        ],
+        _ => &[],
+    }
+}
+
+fn push_runtime_topology_node(out: &mut Vec<SourceDoctorRuntimeNode>, kind: &str, path: &Path) {
+    let rendered = path.to_string_lossy().to_string();
+    if out.iter().any(|item| item.path == rendered) {
+        return;
+    }
+    out.push(SourceDoctorRuntimeNode {
+        kind: kind.to_string(),
+        path: rendered,
+    });
+}
+
+fn collect_runtime_topology_children(
+    root: &Path,
+    max_depth: usize,
+    matcher: &mut dyn FnMut(&Path, &str, bool) -> Option<&'static str>,
+    out: &mut Vec<SourceDoctorRuntimeNode>,
+) {
+    let mut stack = vec![(root.to_path_buf(), 0usize)];
+    while let Some((path, depth)) = stack.pop() {
+        let read_dir = match std::fs::read_dir(&path) {
+            Ok(entries) => entries,
+            Err(_) => continue,
+        };
+        for entry in read_dir.flatten() {
+            let child = entry.path();
+            let file_type = match entry.file_type() {
+                Ok(file_type) => file_type,
+                Err(_) => continue,
+            };
+            let is_dir = file_type.is_dir();
+            let Some(name) = child.file_name().and_then(|value| value.to_str()) else {
+                continue;
+            };
+            if let Some(kind) = matcher(&child, name, is_dir) {
+                push_runtime_topology_node(out, kind, &child);
+            }
+            if is_dir && depth < max_depth {
+                stack.push((child, depth.saturating_add(1)));
+            }
+        }
+    }
+}
+
+fn collect_source_doctor_runtime_topology(
+    platform: &RuntimePlatform,
+    candidates: &[SourceCandidate],
+) -> Vec<SourceDoctorRuntimeNode> {
+    let mut out = Vec::new();
+    match platform {
+        RuntimePlatform::WeChat => {
+            if let Some(app_data_root) =
+                source_candidate_path_by_label(candidates, "WeChat app_data root")
+            {
+                let mut matcher = |child: &Path, name: &str, is_dir: bool| {
+                    if !is_dir {
+                        return None;
+                    }
+                    if child
+                        .parent()
+                        .map(|value| value.ends_with("login"))
+                        .unwrap_or(false)
+                        && name.starts_with("wxid_")
+                    {
+                        return Some("wechat_login_profile");
+                    }
+                    if name.starts_with("wxid_") {
+                        return Some("wechat_app_account_workspace");
+                    }
+                    None
+                };
+                collect_runtime_topology_children(app_data_root, 2, &mut matcher, &mut out);
+            }
+            if let Some(file_root) =
+                source_candidate_path_by_label(candidates, "WeChat xwechat_files root")
+            {
+                let mut matcher = |_child: &Path, name: &str, is_dir: bool| {
+                    if !is_dir {
+                        return None;
+                    }
+                    if _child
+                        .parent()
+                        .map(|value| value.ends_with("Backup"))
+                        .unwrap_or(false)
+                        && name.starts_with("wxid_")
+                    {
+                        return Some("wechat_backup_workspace");
+                    }
+                    if name.starts_with("wxid_") {
+                        return Some("wechat_file_workspace");
+                    }
+                    if name == "all_users" {
+                        return Some("wechat_shared_workspace");
+                    }
+                    if name == "Backup" {
+                        return Some("wechat_backup_root");
+                    }
+                    None
+                };
+                collect_runtime_topology_children(file_root, 1, &mut matcher, &mut out);
+            }
+        }
+        RuntimePlatform::Qq => {
+            if let Some(qq_root) = source_candidate_path_by_label(candidates, "QQ sandbox app root")
+            {
+                let mut matcher = |_child: &Path, name: &str, is_dir: bool| {
+                    if !is_dir {
+                        return None;
+                    }
+                    if name.starts_with("nt_qq_") {
+                        return Some("qq_account_runtime_root");
+                    }
+                    if name == "global" {
+                        return Some("qq_global_runtime_root");
+                    }
+                    if name == "Partitions" {
+                        return Some("qq_partition_root");
+                    }
+                    if name == "Local Storage" {
+                        return Some("qq_local_storage_root");
+                    }
+                    None
+                };
+                collect_runtime_topology_children(qq_root, 1, &mut matcher, &mut out);
+
+                let mut nested_matcher = |_child: &Path, name: &str, is_dir: bool| {
+                    if !is_dir {
+                        return None;
+                    }
+                    if name == "nt_db" {
+                        return Some("qq_nt_db");
+                    }
+                    if name.starts_with("qqnt_") {
+                        return Some("qq_partition_workspace");
+                    }
+                    if name == "leveldb" {
+                        return Some("qq_leveldb_workspace");
+                    }
+                    None
+                };
+                collect_runtime_topology_children(qq_root, 2, &mut nested_matcher, &mut out);
+            }
+        }
+        RuntimePlatform::Discord => {
+            if let Some(discord_root) =
+                source_candidate_path_by_label(candidates, "Discord desktop app data")
+            {
+                let mut matcher = |_child: &Path, name: &str, is_dir: bool| {
+                    if !is_dir {
+                        return None;
+                    }
+                    if name == "Local Storage" {
+                        return Some("discord_local_storage_root");
+                    }
+                    if name == "logs" {
+                        return Some("discord_logs_root");
+                    }
+                    if name == "Service Worker" {
+                        return Some("discord_service_worker_root");
+                    }
+                    if name == "shared_proto_db" {
+                        return Some("discord_proto_db_root");
+                    }
+                    if _child
+                        .parent()
+                        .map(|value| value == discord_root)
+                        .unwrap_or(false)
+                        && name.chars().all(|ch| ch.is_ascii_digit() || ch == '.')
+                        && name.contains('.')
+                    {
+                        return Some("discord_version_root");
+                    }
+                    None
+                };
+                collect_runtime_topology_children(discord_root, 1, &mut matcher, &mut out);
+
+                let mut nested_matcher = |_child: &Path, name: &str, is_dir: bool| {
+                    if !is_dir {
+                        return None;
+                    }
+                    if name == "leveldb" {
+                        return Some("discord_leveldb_workspace");
+                    }
+                    if name == "CacheStorage" {
+                        return Some("discord_cache_storage");
+                    }
+                    if name == "modules" {
+                        return Some("discord_modules_root");
+                    }
+                    None
+                };
+                collect_runtime_topology_children(discord_root, 2, &mut nested_matcher, &mut out);
+            }
+        }
+        _ => {}
+    }
+    out
+}
+
+fn collect_source_doctor_runtime_profiles(
+    platform: &RuntimePlatform,
+    candidates: &[SourceCandidate],
+    runtime_topology: &[SourceDoctorRuntimeNode],
+) -> Vec<SourceDoctorRuntimeProfile> {
+    let platform_id = core_platform_id(platform).to_string();
+    let mut out = Vec::new();
+
+    match platform {
+        RuntimePlatform::WeChat => {
+            for node in runtime_topology
+                .iter()
+                .filter(|node| node.kind == "wechat_file_workspace")
+            {
+                push_source_doctor_runtime_profile(
+                    &mut out,
+                    &platform_id,
+                    "wechat_file_workspace",
+                    &node.path,
+                );
+            }
+            if out.is_empty() {
+                for node in runtime_topology
+                    .iter()
+                    .filter(|node| node.kind == "wechat_app_account_workspace")
+                {
+                    push_source_doctor_runtime_profile(
+                        &mut out,
+                        &platform_id,
+                        "wechat_app_account_workspace",
+                        &node.path,
+                    );
+                }
+            }
+        }
+        RuntimePlatform::Qq => {
+            for node in runtime_topology
+                .iter()
+                .filter(|node| node.kind == "qq_account_runtime_root")
+            {
+                push_source_doctor_runtime_profile(
+                    &mut out,
+                    &platform_id,
+                    "qq_account_runtime_root",
+                    &node.path,
+                );
+            }
+        }
+        RuntimePlatform::Discord => {
+            if let Some(root) =
+                source_candidate_path_by_label(candidates, "Discord desktop app data")
+            {
+                push_source_doctor_runtime_profile(
+                    &mut out,
+                    &platform_id,
+                    "discord_runtime_root",
+                    &root.to_string_lossy(),
+                );
+            }
+        }
+        _ => {}
+    }
+
+    out
+}
+
+fn push_source_doctor_runtime_profile(
+    out: &mut Vec<SourceDoctorRuntimeProfile>,
+    platform_id: &str,
+    kind: &str,
+    path: &str,
+) {
+    if out.iter().any(|item| item.data_dir == path) {
+        return;
+    }
+    let path_buf = PathBuf::from(path);
+    let base_name = path_buf
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or(platform_id);
+    let account_name = format!("{}-{}", platform_id, sanitize_file_component(base_name));
+    out.push(SourceDoctorRuntimeProfile {
+        id: account_name.clone(),
+        kind: kind.to_string(),
+        data_dir: path.to_string(),
+        recommended_account_add_command: build_source_doctor_account_add_command(
+            platform_id,
+            &account_name,
+            &path_buf,
+        ),
+    });
+}
+
+fn collect_source_doctor_account_status(
+    platform_id: &str,
+    runtime_profiles: &[SourceDoctorRuntimeProfile],
+    store: &AccountStore,
+) -> SourceDoctorAccountStatus {
+    let platform_accounts = store
+        .items
+        .iter()
+        .filter(|item| item.platform == platform_id)
+        .collect::<Vec<_>>();
+    let registered_account_ids = platform_accounts
+        .iter()
+        .map(|item| item.id.clone())
+        .collect::<Vec<_>>();
+    let registered_runtime_profile_count = runtime_profiles
+        .iter()
+        .filter(|profile| {
+            let profile_path = Path::new(&profile.data_dir);
+            platform_accounts
+                .iter()
+                .any(|item| item.data_dir.as_deref() == Some(profile_path))
+        })
+        .count();
+
+    SourceDoctorAccountStatus {
+        registered_accounts_for_platform: platform_accounts.len(),
+        registered_account_ids,
+        registered_runtime_profile_count,
+        ready_for_runtime_account_test: if runtime_profiles.is_empty() {
+            !platform_accounts.is_empty()
+        } else {
+            registered_runtime_profile_count >= runtime_profiles.len()
+        },
+    }
+}
+
+fn collect_manual_review_workspace_status(
+    manual_root: Option<&Path>,
+) -> Result<SourceDoctorManualReviewStatus> {
+    const MANUAL_REVIEW_SAMPLE_LIMIT: usize = 5;
+
+    let Some(manual_root) = manual_root else {
+        return Ok(SourceDoctorManualReviewStatus {
+            workspace_present: false,
+            workspace_path: None,
+            selection_pack_present: false,
+            buildable_selection_pack: false,
+            inbox_artifact_count: 0,
+            inbox_artifact_samples: Vec::new(),
+            captured_artifact_count: 0,
+            captured_artifact_samples: Vec::new(),
+        });
+    };
+
+    let selection_pack_present = manual_root.join("selection.json").is_file();
+    let mut inbox_artifact_count = 0usize;
+    let mut inbox_artifact_samples = Vec::new();
+    let inbox_root = manual_root.join("inbox");
+    if inbox_root.exists() {
+        for path in collect_files_recursive(&inbox_root)? {
+            inbox_artifact_count = inbox_artifact_count.saturating_add(1);
+            if inbox_artifact_samples.len() < MANUAL_REVIEW_SAMPLE_LIMIT {
+                let rendered = path
+                    .strip_prefix(manual_root)
+                    .unwrap_or(&path)
+                    .to_string_lossy()
+                    .to_string();
+                if !inbox_artifact_samples.contains(&rendered) {
+                    inbox_artifact_samples.push(rendered);
+                }
+            }
+        }
+    }
+    let mut captured_artifact_count = 0usize;
+    let mut captured_artifact_samples = Vec::new();
+    for folder in ["notes", "transcripts", "attachments", "screenshots"] {
+        let folder_root = manual_root.join(folder);
+        if !folder_root.exists() {
+            continue;
+        }
+        for path in collect_files_recursive(&folder_root)? {
+            captured_artifact_count = captured_artifact_count.saturating_add(1);
+            if captured_artifact_samples.len() < MANUAL_REVIEW_SAMPLE_LIMIT {
+                let rendered = path
+                    .strip_prefix(manual_root)
+                    .unwrap_or(&path)
+                    .to_string_lossy()
+                    .to_string();
+                if !captured_artifact_samples.contains(&rendered) {
+                    captured_artifact_samples.push(rendered);
+                }
+            }
+        }
+    }
+
+    Ok(SourceDoctorManualReviewStatus {
+        workspace_present: true,
+        workspace_path: Some(manual_root.to_string_lossy().to_string()),
+        selection_pack_present,
+        buildable_selection_pack: !selection_pack_present
+            && (captured_artifact_count > 0 || inbox_artifact_count > 0),
+        inbox_artifact_count,
+        inbox_artifact_samples,
+        captured_artifact_count,
+        captured_artifact_samples,
+    })
+}
+
+fn build_source_doctor_platform_report(
+    platform: &RuntimePlatform,
+    candidates: &[SourceCandidate],
+    account_store: &AccountStore,
+    checkpoint_db_path: Option<&Path>,
+) -> Result<SourceDoctorPlatformReport> {
+    const ROOT_SAMPLE_LIMIT: usize = 3;
+    const FILE_SAMPLE_LIMIT: usize = 5;
+    #[cfg(not(feature = "analysis"))]
+    const MAX_SCAN_DEPTH: usize = 6;
+
+    let platform_id = core_platform_id(platform).to_string();
+    let readable_runtime_roots = candidates
+        .iter()
+        .filter(|item| item.exists && item.readable && item.kind == SourceKind::AppContainer)
+        .count();
+    let readable_export_roots = candidates
+        .iter()
+        .filter(|item| {
+            item.exists
+                && item.readable
+                && matches!(
+                    item.kind,
+                    SourceKind::ExportDirectory | SourceKind::UserWorkspace
+                )
+        })
+        .count();
+
+    let runtime_root_samples = candidates
+        .iter()
+        .filter(|item| item.exists && item.readable && item.kind == SourceKind::AppContainer)
+        .take(ROOT_SAMPLE_LIMIT)
+        .map(|item| item.path.to_string_lossy().to_string())
+        .collect::<Vec<_>>();
+    let runtime_topology = collect_source_doctor_runtime_topology(platform, candidates);
+    let runtime_profiles =
+        collect_source_doctor_runtime_profiles(platform, candidates, &runtime_topology);
+    let safe_runtime_artifact_roots = runtime_topology
+        .iter()
+        .filter(|node| {
+            source_doctor_runtime_artifact_root_kinds(platform)
+                .iter()
+                .any(|kind| node.kind == *kind)
+        })
+        .map(|node| PathBuf::from(&node.path))
+        .collect::<Vec<_>>();
+    let (
+        safe_runtime_artifact_count,
+        safe_runtime_artifact_samples,
+        runtime_artifact_categories,
+        likely_runtime_export_artifact_count,
+        likely_runtime_export_artifact_samples,
+    ) = collect_runtime_artifact_diagnostics(
+        platform,
+        &safe_runtime_artifact_roots,
+        4,
+        FILE_SAMPLE_LIMIT,
+    )?;
+    let safe_runtime_artifact_samples = safe_runtime_artifact_samples
+        .into_iter()
+        .map(|path| path.to_string_lossy().to_string())
+        .collect::<Vec<_>>();
+
+    let export_root_samples = candidates
+        .iter()
+        .filter(|item| {
+            item.exists
+                && item.readable
+                && matches!(
+                    item.kind,
+                    SourceKind::ExportDirectory | SourceKind::UserWorkspace
+                )
+        })
+        .take(ROOT_SAMPLE_LIMIT)
+        .map(|item| item.path.to_string_lossy().to_string())
+        .collect::<Vec<_>>();
+
+    let mut importable_file_count = 0usize;
+    let mut importable_file_samples = Vec::new();
+    #[cfg(feature = "analysis")]
+    let doctor_work_dir = {
+        let path = source_doctor_archive_work_dir();
+        fs::create_dir_all(&path)?;
+        path
+    };
+    for candidate in candidates.iter().filter(|item| {
+        item.exists
+            && item.readable
+            && matches!(
+                item.kind,
+                SourceKind::ExportDirectory | SourceKind::UserWorkspace
+            )
+    }) {
+        #[cfg(feature = "analysis")]
+        let samples =
+            collect_detectable_candidate_import_inputs(&candidate.path, &doctor_work_dir)?;
+        #[cfg(not(feature = "analysis"))]
+        let samples = {
+            let (count, files) = collect_supported_chat_files_limited(
+                &candidate.path,
+                MAX_SCAN_DEPTH,
+                FILE_SAMPLE_LIMIT,
+            )?;
+            importable_file_count = importable_file_count.saturating_add(count);
+            files
+        };
+
+        #[cfg(feature = "analysis")]
+        {
+            importable_file_count = importable_file_count.saturating_add(samples.len());
+        }
+        for sample in samples {
+            if importable_file_samples.len() >= FILE_SAMPLE_LIMIT {
+                break;
+            }
+            let rendered = sample.to_string_lossy().to_string();
+            if !importable_file_samples.contains(&rendered) {
+                importable_file_samples.push(rendered);
+            }
+        }
+        if importable_file_samples.len() >= FILE_SAMPLE_LIMIT {
+            break;
+        }
+    }
+
+    let ready_for_authorized_import_test = importable_file_count > 0;
+    let readable_export_root = candidates.iter().find(|item| {
+        item.exists
+            && item.readable
+            && matches!(
+                item.kind,
+                SourceKind::ExportDirectory | SourceKind::UserWorkspace
+            )
+    });
+    let ready_for_authorized_import_pipeline = readable_export_root.is_some();
+    let ready_for_authorized_monitor_test = readable_export_root.is_some();
+
+    let recommended_import_command = importable_file_samples
+        .first()
+        .map(|path| build_source_doctor_import_command(&platform_id, Path::new(path)));
+    let recommended_monitor_command = readable_export_root
+        .map(|item| build_source_doctor_monitor_command(&platform_id, &item.path));
+    let account_status =
+        collect_source_doctor_account_status(&platform_id, &runtime_profiles, account_store);
+    let ready_for_frontend_backend_contract = account_status.ready_for_runtime_account_test
+        && ready_for_authorized_import_pipeline
+        && ready_for_authorized_monitor_test;
+    let checkpoint_status = checkpoint_db_path
+        .map(|path| collect_source_doctor_checkpoint_status(path, &platform_id))
+        .transpose()?;
+    let manual_review_workspace = readable_export_root
+        .map(|item| item.path.join("manual-review"))
+        .filter(|path| path.exists() && path.is_dir());
+    let manual_review_status =
+        collect_manual_review_workspace_status(manual_review_workspace.as_deref())?;
+
+    let mut blocking_reasons = Vec::new();
+    if !account_status.ready_for_runtime_account_test {
+        blocking_reasons.push(
+            "runtime account coverage is incomplete for the detected runtime profiles".to_string(),
+        );
+    }
+    if !ready_for_authorized_import_pipeline {
+        blocking_reasons
+            .push("no readable authorized export root is available for this platform".to_string());
+    } else if !ready_for_authorized_import_test {
+        if likely_runtime_export_artifact_count > 0 {
+            blocking_reasons.push(
+                "authorized export root exists, but no analysis-detectable chat input is available yet; only runtime export-like artifacts were found".to_string(),
+            );
+        } else if safe_runtime_artifact_count > 0 {
+            blocking_reasons.push(
+                "authorized export root exists, but no analysis-detectable chat input is available yet; current runtime samples still look like attachments, logs, or runtime noise".to_string(),
+            );
+        } else {
+            blocking_reasons.push(
+                "authorized export root exists, but it does not contain any analysis-detectable chat input yet".to_string(),
+            );
+        }
+        if manual_review_status.workspace_present {
+            if manual_review_status.selection_pack_present {
+                blocking_reasons.push(
+                    "manual-review selection.json exists, but it has not produced a completed import checkpoint yet"
+                        .to_string(),
+                );
+            } else if manual_review_status.inbox_artifact_count > 0 {
+                blocking_reasons.push(
+                    "manual-review inbox contains staged artifacts, but selection.json has not been built yet"
+                        .to_string(),
+                );
+            } else if manual_review_status.buildable_selection_pack {
+                blocking_reasons.push(
+                    "manual-review artifacts exist, but selection.json has not been built yet"
+                        .to_string(),
+                );
+            } else if !manual_review_status.selection_pack_present {
+                blocking_reasons.push(
+                    "manual-review workspace exists, but no captured artifacts have been staged yet"
+                        .to_string(),
+                );
+            }
+        }
+    }
+    if let Some(status) = checkpoint_status.as_ref() {
+        if !status.db_exists {
+            blocking_reasons.push("checkpoint database path does not exist yet".to_string());
+        } else if !status.checkpoint_table_present {
+            blocking_reasons.push(
+                "checkpoint database exists, but import_source_checkpoint has not been created yet"
+                    .to_string(),
+            );
+        } else {
+            if status.completed_import_checkpoints == 0 {
+                blocking_reasons.push(
+                    "no completed import checkpoint has been recorded for this platform"
+                        .to_string(),
+                );
+            }
+            if status.completed_monitor_checkpoints == 0 {
+                blocking_reasons.push(
+                    "no completed monitor checkpoint has been recorded for this platform"
+                        .to_string(),
+                );
+            }
+        }
+    }
+
+    let recommended_next_step = if ready_for_authorized_import_test {
+        format!(
+            "authorized export detected; run the recommended import command, then validate monitor with the recommended monitor command"
+        )
+    } else if likely_runtime_export_artifact_count > 0 {
+        let preview_command = build_source_doctor_stage_runtime_command(&platform_id, false);
+        let apply_command = build_source_doctor_stage_runtime_command(&platform_id, true);
+        format!(
+            "runtime export-like artifacts were detected for {}; preview staging with `{}` or copy them into the authorized export root with `{}` before rerunning source doctor",
+            platform_id, preview_command, apply_command
+        )
+    } else if safe_runtime_artifact_count > 0 {
+        let manual_review_command = build_source_doctor_prepare_manual_review_command(&platform_id);
+        if manual_review_status.inbox_artifact_count > 0
+            || manual_review_status.buildable_selection_pack
+        {
+            let build_manual_review_command =
+                build_source_doctor_build_manual_review_command(&platform_id);
+            format!(
+                "runtime artifacts were detected for {}, but the sampled files still look like runtime noise or attachments rather than an authorized chat export; use the platform's own export flow and place the resulting bundle into the planned export root before rerunning source doctor, or build the staged manual-review artifacts into a starter legal-safe selection pack with `{}`",
+                platform_id, build_manual_review_command
+            )
+        } else if manual_review_status.workspace_present {
+            let build_manual_review_command =
+                build_source_doctor_build_manual_review_command(&platform_id);
+            format!(
+                "runtime artifacts were detected for {}, but the sampled files still look like runtime noise or attachments rather than an authorized chat export; drop reviewed notes, transcripts, screenshots, or attachments into {}/inbox (or sort them directly into the manual-review folders) and then run `{}`",
+                platform_id,
+                manual_review_status.workspace_path.as_deref().unwrap_or("manual-review"),
+                build_manual_review_command
+            )
+        } else {
+            format!(
+                "runtime artifacts were detected for {}, but the sampled files still look like runtime noise or attachments rather than an authorized chat export; use the platform's own export flow and place the resulting bundle into the planned export root before rerunning source doctor, or prepare the legal-safe manual fallback with `{}`",
+                platform_id, manual_review_command
+            )
+        }
+    } else if let Some(preferred_drop) = candidates.iter().find(|item| {
+        matches!(
+            item.kind,
+            SourceKind::ExportDirectory | SourceKind::UserWorkspace
+        )
+    }) {
+        let manual_review_command = build_source_doctor_prepare_manual_review_command(&platform_id);
+        if manual_review_status.inbox_artifact_count > 0
+            || manual_review_status.buildable_selection_pack
+        {
+            let build_manual_review_command =
+                build_source_doctor_build_manual_review_command(&platform_id);
+            format!(
+                "place an authorized {} export under {} and rerun `cargo run -p xenobot-cli -- source doctor --format {}`, or build the captured manual-review artifacts into a starter selection pack with `{}`",
+                platform_id,
+                preferred_drop.path.to_string_lossy(),
+                platform_id,
+                build_manual_review_command
+            )
+        } else if manual_review_status.workspace_present {
+            let build_manual_review_command =
+                build_source_doctor_build_manual_review_command(&platform_id);
+            format!(
+                "place an authorized {} export under {} and rerun `cargo run -p xenobot-cli -- source doctor --format {}`, or drop reviewed artifacts into {}/inbox (or sort them directly into the manual-review folders) and then run `{}`",
+                platform_id,
+                preferred_drop.path.to_string_lossy(),
+                platform_id,
+                manual_review_status.workspace_path.as_deref().unwrap_or("manual-review"),
+                build_manual_review_command
+            )
+        } else {
+            format!(
+                "place an authorized {} export under {} and rerun `cargo run -p xenobot-cli -- source doctor --format {}`, or prepare the manual-review fallback with `{}`",
+                platform_id,
+                preferred_drop.path.to_string_lossy(),
+                platform_id,
+                manual_review_command
+            )
+        }
+    } else if readable_runtime_roots > 0 {
+        let manual_review_command = build_source_doctor_prepare_manual_review_command(&platform_id);
+        if manual_review_status.inbox_artifact_count > 0
+            || manual_review_status.buildable_selection_pack
+        {
+            let build_manual_review_command =
+                build_source_doctor_build_manual_review_command(&platform_id);
+            format!(
+                "runtime data exists, but legal-safe import still needs an authorized export file or export folder for {}; if native export stays unavailable, build the captured manual-review artifacts into a starter selection pack with `{}`",
+                platform_id, build_manual_review_command
+            )
+        } else if manual_review_status.workspace_present {
+            let build_manual_review_command =
+                build_source_doctor_build_manual_review_command(&platform_id);
+            format!(
+                "runtime data exists, but legal-safe import still needs an authorized export file or export folder for {}; if native export stays unavailable, drop reviewed artifacts into {}/inbox (or sort them directly into the manual-review folders) and then run `{}`",
+                platform_id,
+                manual_review_status.workspace_path.as_deref().unwrap_or("manual-review"),
+                build_manual_review_command
+            )
+        } else {
+            format!(
+                "runtime data exists, but legal-safe import still needs an authorized export file or export folder for {}; if native export stays unavailable, prepare the manual-review fallback with `{}`",
+                platform_id, manual_review_command
+            )
+        }
+    } else {
+        format!(
+            "no readable runtime or export source was found for {}; confirm the desktop app has local data on this machine",
+            platform_id
+        )
+    };
+
+    Ok(SourceDoctorPlatformReport {
+        platform_id,
+        readable_runtime_roots,
+        readable_export_roots,
+        runtime_root_samples,
+        runtime_topology,
+        runtime_profiles,
+        safe_runtime_artifact_count,
+        safe_runtime_artifact_samples,
+        runtime_artifact_categories,
+        likely_runtime_export_artifact_count,
+        likely_runtime_export_artifact_samples,
+        export_root_samples,
+        importable_file_count,
+        importable_file_samples,
+        ready_for_authorized_import_pipeline,
+        ready_for_authorized_import_test,
+        ready_for_authorized_monitor_test,
+        ready_for_frontend_backend_contract,
+        recommended_import_command,
+        recommended_monitor_command,
+        account_status,
+        manual_review_status,
+        checkpoint_status,
+        blocking_reasons,
+        recommended_next_step,
+    })
+}
+
+fn collect_source_doctor_checkpoint_status(
+    db_path: &Path,
+    platform_id: &str,
+) -> Result<SourceDoctorCheckpointStatus> {
+    let db_path_string = db_path.to_string_lossy().to_string();
+    if !db_path.exists() {
+        return Ok(SourceDoctorCheckpointStatus {
+            db_path: db_path_string,
+            db_exists: false,
+            checkpoint_table_present: false,
+            completed_import_checkpoints: 0,
+            completed_monitor_checkpoints: 0,
+            ready_for_frontend_real_test_gate: false,
+        });
+    }
+
+    let conn =
+        rusqlite::Connection::open_with_flags(db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .map_err(|e| CliError::Database(e.to_string()))?;
+    if !sqlite_object_exists(&conn, "table", "import_source_checkpoint")? {
+        return Ok(SourceDoctorCheckpointStatus {
+            db_path: db_path_string,
+            db_exists: true,
+            checkpoint_table_present: false,
+            completed_import_checkpoints: 0,
+            completed_monitor_checkpoints: 0,
+            ready_for_frontend_real_test_gate: false,
+        });
+    }
+
+    let platform_normalized = platform_id.trim().to_ascii_lowercase();
+    let count_completed = |source_kind: &str| -> Result<usize> {
+        let total: i64 = conn
+            .query_row(
+                r#"
+                SELECT COUNT(*)
+                FROM import_source_checkpoint
+                WHERE source_kind = ?1
+                  AND status = 'completed'
+                  AND lower(coalesce(platform, '')) = ?2
+                "#,
+                rusqlite::params![source_kind, platform_normalized.as_str()],
+                |row| row.get(0),
+            )
+            .map_err(|e| CliError::Database(e.to_string()))?;
+        Ok(total.max(0) as usize)
+    };
+
+    let completed_import_checkpoints = count_completed("import")?;
+    let completed_monitor_checkpoints = count_completed("monitor")?;
+    Ok(SourceDoctorCheckpointStatus {
+        db_path: db_path_string,
+        db_exists: true,
+        checkpoint_table_present: true,
+        completed_import_checkpoints,
+        completed_monitor_checkpoints,
+        ready_for_frontend_real_test_gate: completed_import_checkpoints > 0
+            && completed_monitor_checkpoints > 0,
+    })
+}
+
+fn print_source_doctor(
+    formats: &[PlatformFormat],
+    checkpoint_db_path: Option<&Path>,
+    format: &OutputFormat,
+) -> Result<()> {
+    let platforms = source_doctor_default_platforms(formats);
+    let account_store = read_account_store()?;
+    let mut reports = Vec::new();
+    for platform in platforms {
+        let candidates = discover_sources_for_platform(&platform);
+        reports.push(build_source_doctor_platform_report(
+            &platform,
+            &candidates,
+            &account_store,
+            checkpoint_db_path,
+        )?);
+    }
+
+    let summary = SourceDoctorSummary {
+        platforms_checked: reports.len(),
+        ready_for_runtime_account_test: reports
+            .iter()
+            .filter(|row| row.account_status.ready_for_runtime_account_test)
+            .count(),
+        ready_for_authorized_import_pipeline: reports
+            .iter()
+            .filter(|row| row.ready_for_authorized_import_pipeline)
+            .count(),
+        ready_for_authorized_import_test: reports
+            .iter()
+            .filter(|row| row.ready_for_authorized_import_test)
+            .count(),
+        ready_for_authorized_monitor_test: reports
+            .iter()
+            .filter(|row| row.ready_for_authorized_monitor_test)
+            .count(),
+        ready_for_frontend_backend_contract: reports
+            .iter()
+            .filter(|row| row.ready_for_frontend_backend_contract)
+            .count(),
+        ready_for_frontend_real_test_gate: checkpoint_db_path.map(|_| {
+            reports
+                .iter()
+                .filter(|row| {
+                    row.checkpoint_status
+                        .as_ref()
+                        .map(|status| status.ready_for_frontend_real_test_gate)
+                        .unwrap_or(false)
+                })
+                .count()
+        }),
+    };
+    let report = SourceDoctorReport {
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        checkpoint_db_path: checkpoint_db_path.map(|path| path.to_string_lossy().to_string()),
+        platforms: reports,
+        summary,
+    };
+
+    match format {
+        OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Csv => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&report)
+                    .map_err(|e| CliError::Parse(e.to_string()))?
+            );
+        }
+        OutputFormat::Text | OutputFormat::Table => {
+            println!("source doctor");
+            println!(
+                "runtime account ready: {}/{}",
+                report.summary.ready_for_runtime_account_test, report.summary.platforms_checked
+            );
+            println!(
+                "authorized import pipeline ready: {}/{}",
+                report.summary.ready_for_authorized_import_pipeline,
+                report.summary.platforms_checked
+            );
+            println!(
+                "authorized import data ready: {}/{}",
+                report.summary.ready_for_authorized_import_test, report.summary.platforms_checked
+            );
+            println!(
+                "authorized monitor ready: {}/{}",
+                report.summary.ready_for_authorized_monitor_test, report.summary.platforms_checked
+            );
+            println!(
+                "frontend backend-contract ready: {}/{}",
+                report.summary.ready_for_frontend_backend_contract,
+                report.summary.platforms_checked
+            );
+            if let Some(ready) = report.summary.ready_for_frontend_real_test_gate {
+                println!(
+                    "frontend real-test gate ready: {}/{}",
+                    ready, report.summary.platforms_checked
+                );
+            } else {
+                println!("frontend real-test gate ready: not evaluated (no db path)");
+            }
+            for row in &report.platforms {
+                println!();
+                println!("platform: {}", row.platform_id);
+                println!("readable runtime roots: {}", row.readable_runtime_roots);
+                println!("readable export roots: {}", row.readable_export_roots);
+                println!(
+                    "registered runtime profiles: {}/{}",
+                    row.account_status.registered_runtime_profile_count,
+                    row.runtime_profiles.len()
+                );
+                println!(
+                    "registered accounts for platform: {}",
+                    row.account_status.registered_accounts_for_platform
+                );
+                println!("importable files detected: {}", row.importable_file_count);
+                if !row.account_status.registered_account_ids.is_empty() {
+                    println!("registered account ids:");
+                    for account_id in &row.account_status.registered_account_ids {
+                        println!("- {}", account_id);
+                    }
+                }
+                if !row.runtime_root_samples.is_empty() {
+                    println!("runtime samples:");
+                    for sample in &row.runtime_root_samples {
+                        println!("- {}", sample);
+                    }
+                }
+                if !row.runtime_topology.is_empty() {
+                    println!("runtime topology:");
+                    for node in &row.runtime_topology {
+                        println!("- {} | {}", node.kind, node.path);
+                    }
+                }
+                if !row.runtime_profiles.is_empty() {
+                    println!("runtime profiles:");
+                    for profile in &row.runtime_profiles {
+                        println!("- {} | {} | {}", profile.id, profile.kind, profile.data_dir);
+                        println!("  account add: {}", profile.recommended_account_add_command);
+                    }
+                }
+                println!(
+                    "safe runtime artifacts detected: {}",
+                    row.safe_runtime_artifact_count
+                );
+                println!(
+                    "likely runtime export-like artifacts: {}",
+                    row.likely_runtime_export_artifact_count
+                );
+                if !row.runtime_artifact_categories.is_empty() {
+                    println!("runtime artifact categories:");
+                    for category in &row.runtime_artifact_categories {
+                        println!("- {} | {}", category.kind, category.count);
+                    }
+                }
+                if !row.safe_runtime_artifact_samples.is_empty() {
+                    println!("safe runtime artifact samples:");
+                    for sample in &row.safe_runtime_artifact_samples {
+                        println!("- {}", sample);
+                    }
+                }
+                if !row.likely_runtime_export_artifact_samples.is_empty() {
+                    println!("likely runtime export-like samples:");
+                    for sample in &row.likely_runtime_export_artifact_samples {
+                        println!("- {}", sample);
+                    }
+                }
+                if !row.export_root_samples.is_empty() {
+                    println!("export samples:");
+                    for sample in &row.export_root_samples {
+                        println!("- {}", sample);
+                    }
+                }
+                if !row.importable_file_samples.is_empty() {
+                    println!("importable file samples:");
+                    for sample in &row.importable_file_samples {
+                        println!("- {}", sample);
+                    }
+                }
+                println!(
+                    "ready for authorized import pipeline: {}",
+                    row.ready_for_authorized_import_pipeline
+                );
+                println!(
+                    "ready for authorized import test: {}",
+                    row.ready_for_authorized_import_test
+                );
+                println!(
+                    "ready for authorized monitor test: {}",
+                    row.ready_for_authorized_monitor_test
+                );
+                println!(
+                    "ready for frontend backend-contract: {}",
+                    row.ready_for_frontend_backend_contract
+                );
+                println!(
+                    "manual-review workspace present: {}",
+                    row.manual_review_status.workspace_present
+                );
+                if let Some(path) = row.manual_review_status.workspace_path.as_ref() {
+                    println!("manual-review workspace: {}", path);
+                }
+                println!(
+                    "manual-review selection pack present: {}",
+                    row.manual_review_status.selection_pack_present
+                );
+                println!(
+                    "manual-review buildable selection pack: {}",
+                    row.manual_review_status.buildable_selection_pack
+                );
+                println!(
+                    "manual-review inbox artifacts: {}",
+                    row.manual_review_status.inbox_artifact_count
+                );
+                if !row.manual_review_status.inbox_artifact_samples.is_empty() {
+                    println!("manual-review inbox samples:");
+                    for sample in &row.manual_review_status.inbox_artifact_samples {
+                        println!("- {}", sample);
+                    }
+                }
+                println!(
+                    "manual-review captured artifacts: {}",
+                    row.manual_review_status.captured_artifact_count
+                );
+                if !row
+                    .manual_review_status
+                    .captured_artifact_samples
+                    .is_empty()
+                {
+                    println!("manual-review artifact samples:");
+                    for sample in &row.manual_review_status.captured_artifact_samples {
+                        println!("- {}", sample);
+                    }
+                }
+                if let Some(command) = row.recommended_import_command.as_ref() {
+                    println!("recommended import command: {}", command);
+                }
+                if let Some(command) = row.recommended_monitor_command.as_ref() {
+                    println!("recommended monitor command: {}", command);
+                }
+                if let Some(status) = row.checkpoint_status.as_ref() {
+                    println!("checkpoint db: {}", status.db_path);
+                    println!("checkpoint db exists: {}", status.db_exists);
+                    println!(
+                        "checkpoint table present: {}",
+                        status.checkpoint_table_present
+                    );
+                    println!(
+                        "completed import checkpoints: {}",
+                        status.completed_import_checkpoints
+                    );
+                    println!(
+                        "completed monitor checkpoints: {}",
+                        status.completed_monitor_checkpoints
+                    );
+                    println!(
+                        "frontend real-test gate ready: {}",
+                        status.ready_for_frontend_real_test_gate
+                    );
+                }
+                if !row.blocking_reasons.is_empty() {
+                    println!("blocking reasons:");
+                    for reason in &row.blocking_reasons {
+                        println!("- {}", reason);
+                    }
+                }
+                println!("next step: {}", row.recommended_next_step);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn runtime_stage_target_path(platform_id: &str, export_root: &Path, source_path: &Path) -> PathBuf {
+    use std::hash::{Hash, Hasher};
+
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    source_path.to_string_lossy().hash(&mut hasher);
+    let source_hash = format!("{:016x}", hasher.finish());
+    let file_name = source_path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or("artifact");
+    export_root
+        .join("_runtime-stage")
+        .join(platform_id)
+        .join(format!("{}-{}", source_hash, file_name))
+}
+
+fn stage_runtime_artifacts_into_export_root(
+    platform_id: &str,
+    export_root: &Path,
+    artifacts: &[PathBuf],
+) -> Result<usize> {
+    let stage_root = export_root.join("_runtime-stage").join(platform_id);
+    fs::create_dir_all(&stage_root)?;
+
+    let mut staged = 0usize;
+    for source_path in artifacts {
+        let target_path = runtime_stage_target_path(platform_id, export_root, source_path);
+        if target_path.exists() {
+            continue;
+        }
+        if let Some(parent) = target_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::copy(source_path, &target_path)?;
+        staged = staged.saturating_add(1);
+        println!(
+            "[stage] {} -> {} -> {}",
+            platform_id,
+            source_path.display(),
+            target_path.display()
+        );
+    }
+
+    Ok(staged)
+}
+
+fn handle_source_stage_runtime_ready(formats: &[PlatformFormat], apply: bool) -> Result<()> {
+    const MAX_SCAN_DEPTH: usize = 4;
+    const SAMPLE_LIMIT: usize = 5;
+
+    let selected_formats = source_ready_default_formats(formats);
+    let mut platforms_checked = 0usize;
+    let mut authorized_roots_ready = 0usize;
+    let mut authorized_roots_created = 0usize;
+    let mut likely_runtime_artifacts = 0usize;
+    let mut staged_files = 0usize;
+    let mut skipped_missing_root = 0usize;
+    let mut skipped_no_artifacts = 0usize;
+
+    for format in selected_formats {
+        platforms_checked = platforms_checked.saturating_add(1);
+        let runtime_platform = runtime_platform_from_format(format);
+        let platform_id = platform_format_id(format);
+        let candidates = discover_sources_for_platform(&runtime_platform);
+        let export_root =
+            if let Some(existing) = preferred_authorized_source_path(&candidates, false) {
+                authorized_roots_ready = authorized_roots_ready.saturating_add(1);
+                existing
+            } else if let Some(planned) = preferred_authorized_source_path(&candidates, true) {
+                if apply {
+                    fs::create_dir_all(&planned)?;
+                    authorized_roots_created = authorized_roots_created.saturating_add(1);
+                    authorized_roots_ready = authorized_roots_ready.saturating_add(1);
+                    println!(
+                        "[prepare] {} -> created authorized export root {}",
+                        platform_id,
+                        planned.display()
+                    );
+                }
+                planned
+            } else {
+                skipped_missing_root = skipped_missing_root.saturating_add(1);
+                println!(
+                "[skip] {} -> no authorized export root could be determined for runtime staging",
+                platform_id
+            );
+                continue;
+            };
+        let runtime_topology =
+            collect_source_doctor_runtime_topology(&runtime_platform, &candidates);
+        let artifact_roots = runtime_topology
+            .iter()
+            .filter(|node| {
+                source_doctor_runtime_artifact_root_kinds(&runtime_platform)
+                    .iter()
+                    .any(|kind| node.kind == *kind)
+            })
+            .map(|node| PathBuf::from(&node.path))
+            .collect::<Vec<_>>();
+        let artifacts = collect_likely_runtime_export_artifacts(
+            &runtime_platform,
+            &artifact_roots,
+            MAX_SCAN_DEPTH,
+        )?;
+
+        if artifacts.is_empty() {
+            skipped_no_artifacts = skipped_no_artifacts.saturating_add(1);
+            println!(
+                "[skip] {} -> no likely export-like runtime artifacts were found under readable runtime roots",
+                platform_id
+            );
+            continue;
+        }
+        likely_runtime_artifacts = likely_runtime_artifacts.saturating_add(artifacts.len());
+
+        if !apply {
+            println!(
+                "[preview] {} -> {} likely export-like runtime artifacts can be staged into {}",
+                platform_id,
+                artifacts.len(),
+                export_root.display()
+            );
+            for sample in artifacts.iter().take(SAMPLE_LIMIT) {
+                println!("  sample: {}", sample.display());
+            }
+            continue;
+        }
+
+        let stage_root = export_root.join("_runtime-stage").join(platform_id);
+        let platform_staged =
+            stage_runtime_artifacts_into_export_root(platform_id, &export_root, &artifacts)?;
+        staged_files = staged_files.saturating_add(platform_staged);
+        println!(
+            "[ready] {} -> staged {} likely export-like runtime artifacts into {}",
+            platform_id,
+            platform_staged,
+            stage_root.display()
+        );
+    }
+
+    println!("source stage-runtime-ready summary");
+    println!("platforms checked: {}", platforms_checked);
+    println!("authorized roots ready: {}", authorized_roots_ready);
+    println!("authorized roots created: {}", authorized_roots_created);
+    println!(
+        "likely runtime export-like artifacts: {}",
+        likely_runtime_artifacts
+    );
+    println!("staged files: {}", staged_files);
+    println!("skipped missing authorized root: {}", skipped_missing_root);
+    println!(
+        "skipped with no likely runtime artifacts: {}",
+        skipped_no_artifacts
+    );
+    println!("apply: {}", apply);
+
+    Ok(())
+}
+
+fn manual_review_template(platform_id: &str) -> serde_json::Value {
+    serde_json::json!({
+        "schema": "xenobot/manual-review",
+        "schemaVersion": 1,
+        "captureMode": "manual-selection",
+        "platform": platform_id,
+        "chatName": "",
+        "chatType": "group",
+        "members": [
+            {
+                "id": "member-1",
+                "name": "Alice",
+                "displayName": "Alice"
+            }
+        ],
+        "selectedMessages": [
+            {
+                "senderId": "member-1",
+                "senderName": "Alice",
+                "timestamp": "2026-03-19T12:00:00Z",
+                "content": "Paste or rewrite the message content that should be preserved.",
+                "messageType": "text",
+                "importance": "keep",
+                "reason": "Why this message matters."
+            }
+        ],
+        "selectedFiles": [
+            {
+                "senderId": "member-1",
+                "senderName": "Alice",
+                "timestamp": "2026-03-19T12:00:00Z",
+                "kind": "file",
+                "path": "attachments/example.txt",
+                "note": "Why this file is worth preserving.",
+                "importance": "review"
+            }
+        ],
+        "triage": {
+            "useAiTriage": false,
+            "provider": "openai-compatible",
+            "model": "",
+            "instructions": "Separate valuable records from noise and explain the decision."
+        }
+    })
+}
+
+fn manual_review_readme(platform_id: &str, template_path: &Path) -> String {
+    format!(
+        "# Xenobot Manual Review Fallback\n\nThis workspace is the legal-safe fallback for `{platform_id}` when no platform-native export bundle is available.\n\n## Workflow\n1. Either drop reviewed files into `inbox/` for automatic sorting, or place them directly into `attachments/`, `screenshots/`, `transcripts/`, and `notes/`.\n2. Either duplicate `{}` as `selection.json` and fill it manually, or run `cargo run -p xenobot-cli -- source build-manual-review-pack --format {platform_id}` to auto-stage anything from `inbox/` and generate a starter `selection.json` from the files already dropped here.\n3. Keep only user-approved content here; do not mirror the entire app UI or scrape protected runtime stores.\n4. Import the completed `selection.json` file with Xenobot.\n\n## Expected directories\n- `inbox/`\n- `attachments/`\n- `screenshots/`\n- `transcripts/`\n- `notes/`\n\n## JSON contract\n- `schema` must stay `xenobot/manual-review`\n- `captureMode` must stay `manual-selection`\n- `platform` should stay `{platform_id}`\n- `selectedMessages` should contain the messages worth preserving\n- `selectedFiles` should contain file or screenshot references that matter\n- `triage.useAiTriage` can be turned on later when external LLM triage is wired to this workflow\n- files ending with `.template.json` are intentionally ignored by import/doctor so the scaffold itself does not pollute readiness checks\n- non-JSON notes or transcripts stay as source artifacts until they are assembled into `selection.json`\n",
+        template_path.file_name().and_then(|v| v.to_str()).unwrap_or("selection.template.json")
+    )
+}
+
+fn handle_source_prepare_manual_review(formats: &[PlatformFormat], overwrite: bool) -> Result<()> {
+    let selected_formats = source_ready_default_formats(formats);
+    let mut platforms_checked = 0usize;
+    let mut prepared = 0usize;
+    let mut roots_created = 0usize;
+    let mut skipped_existing = 0usize;
+    let mut skipped_missing_root = 0usize;
+
+    for format in selected_formats {
+        platforms_checked = platforms_checked.saturating_add(1);
+        let runtime_platform = runtime_platform_from_format(format);
+        let platform_id = platform_format_id(format);
+        let candidates = discover_sources_for_platform(&runtime_platform);
+        let export_root =
+            if let Some(existing) = preferred_authorized_source_path(&candidates, false) {
+                existing
+            } else if let Some(planned) = preferred_authorized_source_path(&candidates, true) {
+                fs::create_dir_all(&planned)?;
+                roots_created = roots_created.saturating_add(1);
+                println!(
+                    "[prepare] {} -> created authorized export root {}",
+                    platform_id,
+                    planned.display()
+                );
+                planned
+            } else {
+                skipped_missing_root = skipped_missing_root.saturating_add(1);
+                println!(
+                "[skip] {} -> no authorized export root could be determined for manual-review prep",
+                platform_id
+            );
+                continue;
+            };
+
+        let manual_root = export_root.join("manual-review");
+        for folder in [
+            "inbox",
+            "attachments",
+            "screenshots",
+            "transcripts",
+            "notes",
+        ] {
+            fs::create_dir_all(manual_root.join(folder))?;
+        }
+
+        let template_path = manual_root.join("selection.template.json");
+        let readme_path = manual_root.join("README.md");
+        if !overwrite && (template_path.exists() || readme_path.exists()) {
+            skipped_existing = skipped_existing.saturating_add(1);
+            println!(
+                "[skip] {} -> manual-review workspace already exists under {} (use --overwrite to refresh the template files)",
+                platform_id,
+                manual_root.display()
+            );
+            continue;
+        }
+
+        let template_raw = serde_json::to_string_pretty(&manual_review_template(platform_id))
+            .map_err(|e| CliError::Parse(e.to_string()))?;
+        fs::write(&template_path, template_raw)?;
+        fs::write(
+            &readme_path,
+            manual_review_readme(platform_id, &template_path),
+        )?;
+
+        prepared = prepared.saturating_add(1);
+        println!(
+            "[ready] {} -> manual-review workspace prepared at {}",
+            platform_id,
+            manual_root.display()
+        );
+    }
+
+    println!("source prepare-manual-review summary");
+    println!("platforms checked: {}", platforms_checked);
+    println!("manual-review workspaces prepared: {}", prepared);
+    println!("authorized roots created: {}", roots_created);
+    println!(
+        "skipped existing manual-review workspaces: {}",
+        skipped_existing
+    );
+    println!("skipped missing authorized root: {}", skipped_missing_root);
+    println!("overwrite: {}", overwrite);
+
+    Ok(())
+}
+
+fn infer_manual_review_file_kind(path: &Path) -> &'static str {
+    let ext = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(|value| value.to_ascii_lowercase());
+    match ext.as_deref() {
+        Some("png") | Some("jpg") | Some("jpeg") | Some("heic") | Some("gif") | Some("webp") => {
+            "image"
+        }
+        Some("mp3") | Some("m4a") | Some("wav") | Some("aac") | Some("ogg") => "audio",
+        Some("mp4") | Some("mov") | Some("mkv") | Some("webm") => "video",
+        Some("url") | Some("webloc") | Some("html") => "link",
+        _ => "file",
+    }
+}
+
+fn manual_review_timestamp_for_path(path: &Path) -> String {
+    use std::time::UNIX_EPOCH;
+
+    let timestamp = std::fs::metadata(path)
+        .ok()
+        .and_then(|meta| meta.modified().ok())
+        .and_then(|value| value.duration_since(UNIX_EPOCH).ok())
+        .map(|value| value.as_secs() as i64)
+        .unwrap_or_else(|| chrono::Utc::now().timestamp());
+    chrono::DateTime::<chrono::Utc>::from_timestamp(timestamp, 0)
+        .unwrap_or_else(chrono::Utc::now)
+        .to_rfc3339()
+}
+
+fn collect_files_recursive(root: &Path) -> Result<Vec<PathBuf>> {
+    let mut out = Vec::new();
+    if !root.exists() {
+        return Ok(out);
+    }
+
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(path) = stack.pop() {
+        if path.is_dir() {
+            for entry in std::fs::read_dir(&path)? {
+                stack.push(entry?.path());
+            }
+            continue;
+        }
+        if path.is_file() {
+            out.push(path);
+        }
+    }
+
+    out.sort();
+    Ok(out)
+}
+
+fn manual_review_stage_folder_for_path(path: &Path) -> &'static str {
+    let ext = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(|value| value.to_ascii_lowercase());
+    match ext.as_deref() {
+        Some("png") | Some("jpg") | Some("jpeg") | Some("heic") | Some("gif") | Some("webp") => {
+            "screenshots"
+        }
+        Some("txt") | Some("md") => "notes",
+        Some("json") | Some("jsonl") | Some("srt") | Some("vtt") | Some("csv") | Some("tsv") => {
+            "transcripts"
+        }
+        _ => "attachments",
+    }
+}
+
+fn manual_review_inbox_target_path(manual_root: &Path, source_path: &Path) -> PathBuf {
+    use std::hash::{Hash, Hasher};
+
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    source_path.to_string_lossy().hash(&mut hasher);
+    let source_hash = format!("{:016x}", hasher.finish());
+    let file_name = source_path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or("artifact");
+    manual_root
+        .join(manual_review_stage_folder_for_path(source_path))
+        .join(format!("{}-{}", source_hash, file_name))
+}
+
+fn stage_manual_review_inbox_artifacts(manual_root: &Path) -> Result<usize> {
+    let inbox_root = manual_root.join("inbox");
+    if !inbox_root.exists() {
+        return Ok(0);
+    }
+
+    let mut staged = 0usize;
+    for source_path in collect_files_recursive(&inbox_root)? {
+        let target_path = manual_review_inbox_target_path(manual_root, &source_path);
+        if target_path.exists() {
+            let _ = fs::remove_file(&source_path);
+            continue;
+        }
+        if let Some(parent) = target_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        match fs::rename(&source_path, &target_path) {
+            Ok(_) => {}
+            Err(_) => {
+                fs::copy(&source_path, &target_path)?;
+                let _ = fs::remove_file(&source_path);
+            }
+        }
+        staged = staged.saturating_add(1);
+    }
+
+    Ok(staged)
+}
+
+fn build_manual_review_selection_payload(
+    platform_id: &str,
+    manual_root: &Path,
+) -> Result<Option<serde_json::Value>> {
+    let mut selected_messages = Vec::new();
+    let mut selected_files = Vec::new();
+
+    let message_sources = [
+        ("notes", "Captured note"),
+        ("transcripts", "Captured transcript"),
+    ];
+    for (folder, label) in message_sources {
+        let folder_root = manual_root.join(folder);
+        if !folder_root.exists() {
+            continue;
+        }
+        for path in collect_files_recursive(&folder_root)? {
+            let lower = path
+                .extension()
+                .and_then(|value| value.to_str())
+                .map(|value| value.to_ascii_lowercase());
+            if !matches!(
+                lower.as_deref(),
+                Some("txt") | Some("md") | Some("json") | Some("jsonl")
+            ) {
+                continue;
+            }
+            let content = std::fs::read_to_string(&path)?.trim().to_string();
+            if content.is_empty() {
+                continue;
+            }
+            let relative_path = path
+                .strip_prefix(manual_root)
+                .unwrap_or(&path)
+                .to_string_lossy()
+                .to_string();
+            selected_messages.push(serde_json::json!({
+                "senderId": "manual-capture",
+                "senderName": "Manual Capture",
+                "timestamp": manual_review_timestamp_for_path(&path),
+                "content": content,
+                "messageType": "text",
+                "importance": "review",
+                "reason": format!("{} imported from {}", label, relative_path),
+                "sourcePath": relative_path,
+            }));
+        }
+    }
+
+    let file_sources = [
+        ("attachments", "Captured attachment"),
+        ("screenshots", "Captured screenshot"),
+    ];
+    for (folder, label) in file_sources {
+        let folder_root = manual_root.join(folder);
+        if !folder_root.exists() {
+            continue;
+        }
+        for path in collect_files_recursive(&folder_root)? {
+            let relative_path = path
+                .strip_prefix(manual_root)
+                .unwrap_or(&path)
+                .to_string_lossy()
+                .to_string();
+            selected_files.push(serde_json::json!({
+                "senderId": "manual-capture",
+                "senderName": "Manual Capture",
+                "timestamp": manual_review_timestamp_for_path(&path),
+                "kind": infer_manual_review_file_kind(&path),
+                "path": relative_path.clone(),
+                "label": path.file_name().and_then(|value| value.to_str()).unwrap_or("captured-file"),
+                "note": format!("{} imported from {}", label, relative_path),
+                "importance": "review",
+            }));
+        }
+    }
+
+    if selected_messages.is_empty() && selected_files.is_empty() {
+        return Ok(None);
+    }
+
+    let chat_name = format!("{} Manual Capture", platform_id.to_ascii_uppercase());
+    Ok(Some(serde_json::json!({
+        "schema": "xenobot/manual-review",
+        "schemaVersion": 1,
+        "captureMode": "manual-selection",
+        "platform": platform_id,
+        "chatName": chat_name,
+        "chatType": "group",
+        "members": [
+            {
+                "id": "manual-capture",
+                "name": "Manual Capture",
+                "displayName": "Manual Capture"
+            }
+        ],
+        "selectedMessages": selected_messages,
+        "selectedFiles": selected_files,
+        "triage": {
+            "useAiTriage": false,
+            "provider": "openai-compatible",
+            "model": "",
+            "instructions": "Separate valuable records from noise and explain the decision."
+        },
+        "captureSummary": {
+            "generatedAt": chrono::Utc::now().to_rfc3339(),
+            "messageCount": selected_messages.len(),
+            "fileCount": selected_files.len()
+        }
+    })))
+}
+
+fn handle_source_build_manual_review_pack(
+    formats: &[PlatformFormat],
+    overwrite: bool,
+) -> Result<()> {
+    let selected_formats = source_ready_default_formats(formats);
+    let mut platforms_checked = 0usize;
+    let mut built = 0usize;
+    let mut skipped_missing_root = 0usize;
+    let mut skipped_missing_workspace = 0usize;
+    let mut skipped_existing = 0usize;
+    let mut skipped_empty = 0usize;
+    let mut inbox_staged = 0usize;
+
+    for format in selected_formats {
+        platforms_checked = platforms_checked.saturating_add(1);
+        let runtime_platform = runtime_platform_from_format(format);
+        let platform_id = platform_format_id(format);
+        let candidates = discover_sources_for_platform(&runtime_platform);
+        let Some(export_root) = preferred_authorized_source_path(&candidates, false) else {
+            skipped_missing_root = skipped_missing_root.saturating_add(1);
+            println!(
+                "[skip] {} -> no readable authorized export root is available for manual-review pack build",
+                platform_id
+            );
+            continue;
+        };
+
+        let manual_root = export_root.join("manual-review");
+        if !manual_root.exists() {
+            skipped_missing_workspace = skipped_missing_workspace.saturating_add(1);
+            println!(
+                "[skip] {} -> manual-review workspace is missing under {}",
+                platform_id,
+                export_root.display()
+            );
+            continue;
+        }
+
+        let staged_now = stage_manual_review_inbox_artifacts(&manual_root)?;
+        inbox_staged = inbox_staged.saturating_add(staged_now);
+        if staged_now > 0 {
+            println!(
+                "[stage] {} -> moved {} inbox artifacts into categorized manual-review folders",
+                platform_id, staged_now
+            );
+        }
+
+        let selection_path = manual_root.join("selection.json");
+        if selection_path.exists() && !overwrite {
+            skipped_existing = skipped_existing.saturating_add(1);
+            println!(
+                "[skip] {} -> selection.json already exists under {} (use --overwrite to rebuild it)",
+                platform_id,
+                manual_root.display()
+            );
+            continue;
+        }
+
+        let Some(payload) = build_manual_review_selection_payload(platform_id, &manual_root)?
+        else {
+            skipped_empty = skipped_empty.saturating_add(1);
+            println!(
+                "[skip] {} -> no inbox/notes/transcripts/attachments/screenshots were found under {}",
+                platform_id,
+                manual_root.display()
+            );
+            continue;
+        };
+
+        let raw =
+            serde_json::to_vec_pretty(&payload).map_err(|e| CliError::Parse(e.to_string()))?;
+        fs::write(&selection_path, raw)?;
+        built = built.saturating_add(1);
+        println!(
+            "[ready] {} -> built starter manual-review pack at {}",
+            platform_id,
+            selection_path.display()
+        );
+    }
+
+    println!("source build-manual-review-pack summary");
+    println!("platforms checked: {}", platforms_checked);
+    println!("packs built: {}", built);
+    println!("inbox artifacts staged: {}", inbox_staged);
+    println!("skipped missing authorized root: {}", skipped_missing_root);
+    println!(
+        "skipped missing manual-review workspace: {}",
+        skipped_missing_workspace
+    );
+    println!("skipped existing selection.json: {}", skipped_existing);
+    println!("skipped with no captured artifacts: {}", skipped_empty);
+    println!("overwrite: {}", overwrite);
+
+    Ok(())
+}
+
+#[cfg(feature = "analysis")]
+fn handle_source_import_ready(
+    app: &App,
+    formats: &[PlatformFormat],
+    db_path: Option<&Path>,
+    incremental: bool,
+    merge: bool,
+) -> Result<()> {
+    let selected_formats = source_ready_default_formats(formats);
+    let mut platforms_checked = 0usize;
+    let mut roots_ready = 0usize;
+    let mut imports_started = 0usize;
+    let mut importable_files = 0usize;
+    let mut skipped_missing_root = 0usize;
+    let mut skipped_empty_root = 0usize;
+
+    for format in selected_formats {
+        platforms_checked = platforms_checked.saturating_add(1);
+        let runtime_platform = runtime_platform_from_format(format);
+        let platform_id = platform_format_id(format);
+        let candidates = discover_sources_for_platform(&runtime_platform);
+        let Some(root) = preferred_authorized_source_path(&candidates, false) else {
+            skipped_missing_root = skipped_missing_root.saturating_add(1);
+            println!(
+                "[skip] {} -> no readable authorized export root is available yet",
+                platform_id
+            );
+            continue;
+        };
+
+        let files = collect_detectable_candidate_import_inputs(&root, &app.config.work_dir)?;
+        if files.is_empty() {
+            skipped_empty_root = skipped_empty_root.saturating_add(1);
+            println!(
+                "[skip] {} -> authorized export root is ready but no supported chat files or archives were found under {}",
+                platform_id,
+                root.display()
+            );
+            continue;
+        }
+
+        roots_ready = roots_ready.saturating_add(1);
+        importable_files = importable_files.saturating_add(files.len());
+        println!(
+            "[ready] {} -> root={} files={}",
+            platform_id,
+            root.display(),
+            files.len()
+        );
+
+        let import_args = ImportArgs {
+            input: root.clone(),
+            format,
+            db_path: db_path.map(Path::to_path_buf),
+            session_name: None,
+            incremental,
+            stream: true,
+            write_db: true,
+            merge,
+        };
+        app.handle_import(&import_args)?;
+        imports_started = imports_started.saturating_add(1);
+    }
+
+    println!("source import-ready summary");
+    println!("platforms checked: {}", platforms_checked);
+    println!("authorized roots with files: {}", roots_ready);
+    println!("importable files discovered: {}", importable_files);
+    println!("imports started: {}", imports_started);
+    println!("skipped missing authorized root: {}", skipped_missing_root);
+    println!("skipped empty authorized root: {}", skipped_empty_root);
+
+    Ok(())
+}
+
+#[cfg(not(feature = "analysis"))]
+fn handle_source_import_ready(
+    _app: &App,
+    formats: &[PlatformFormat],
+    _db_path: Option<&Path>,
+    _incremental: bool,
+    _merge: bool,
+) -> Result<()> {
+    let selected = source_ready_default_formats(formats)
+        .into_iter()
+        .map(platform_format_id)
+        .collect::<Vec<_>>()
+        .join(", ");
+    println!(
+        "source import-ready requires the analysis feature; rebuild with --features analysis (targets: {})",
+        selected
+    );
+    Ok(())
+}
+
+#[cfg(all(feature = "analysis", feature = "api"))]
+fn handle_source_sync_ready(
+    app: &App,
+    formats: &[PlatformFormat],
+    db_path: Option<&Path>,
+    interval: u64,
+    incremental: bool,
+    merge: bool,
+) -> Result<()> {
+    let resolved_db_path = db_path
+        .map(Path::to_path_buf)
+        .unwrap_or_else(xenobot_api::database::get_db_path);
+    println!("source sync-ready");
+    println!("db path: {}", resolved_db_path.display());
+    println!("interval seconds: {}", interval);
+    println!("incremental: {}", incremental);
+    println!("merge: {}", merge);
+
+    handle_source_prepare_manual_review(formats, false)?;
+    handle_source_build_manual_review_pack(formats, false)?;
+    handle_source_stage_runtime_ready(formats, true)?;
+    handle_source_import_ready(app, formats, Some(&resolved_db_path), incremental, merge)?;
+    handle_source_monitor_ready(app, formats, Some(&resolved_db_path), interval, true, true)?;
+    print_source_doctor(formats, Some(&resolved_db_path), &OutputFormat::Text)?;
+    Ok(())
+}
+
+#[cfg(not(all(feature = "analysis", feature = "api")))]
+fn handle_source_sync_ready(
+    _app: &App,
+    formats: &[PlatformFormat],
+    _db_path: Option<&Path>,
+    _interval: u64,
+    _incremental: bool,
+    _merge: bool,
+) -> Result<()> {
+    let selected = source_ready_default_formats(formats)
+        .into_iter()
+        .map(platform_format_id)
+        .collect::<Vec<_>>()
+        .join(", ");
+    println!(
+        "source sync-ready requires --features api,analysis (targets: {})",
+        selected
+    );
+    Ok(())
+}
+
+#[cfg(feature = "analysis")]
+fn handle_source_monitor_ready(
+    app: &App,
+    formats: &[PlatformFormat],
+    db_path: Option<&Path>,
+    interval: u64,
+    start: bool,
+    once: bool,
+) -> Result<()> {
+    if once && !start {
+        return Err(CliError::Argument(
+            "--once requires --start for source monitor-ready".to_string(),
+        ));
+    }
+
+    let selected_formats = source_ready_default_formats(formats);
+    let mut platforms_checked = 0usize;
+    let mut roots_ready = 0usize;
+    let mut monitors_started = 0usize;
+    let mut roots_created = 0usize;
+    let mut skipped_missing_root = 0usize;
+
+    let mut monitor_specs = Vec::new();
+    for format in selected_formats {
+        platforms_checked = platforms_checked.saturating_add(1);
+        let runtime_platform = runtime_platform_from_format(format);
+        let platform_id = platform_format_id(format);
+        let candidates = discover_sources_for_platform(&runtime_platform);
+
+        let root = if let Some(existing) = preferred_authorized_source_path(&candidates, false) {
+            existing
+        } else if let Some(planned) = preferred_authorized_source_path(&candidates, true) {
+            fs::create_dir_all(&planned)?;
+            roots_created = roots_created.saturating_add(1);
+            println!(
+                "[prepare] {} -> created authorized export root {}",
+                platform_id,
+                planned.display()
+            );
+            planned
+        } else {
+            skipped_missing_root = skipped_missing_root.saturating_add(1);
+            println!(
+                "[skip] {} -> no authorized export root could be determined",
+                platform_id
+            );
+            continue;
+        };
+
+        roots_ready = roots_ready.saturating_add(1);
+        println!(
+            "[ready] {} -> monitor root={} start={} once={}",
+            platform_id,
+            root.display(),
+            start,
+            once
+        );
+        monitor_specs.push((runtime_platform, format, root, app.config.work_dir.clone()));
+    }
+
+    if start {
+        let mut handles = Vec::new();
+        for (runtime_platform, format, root, work_dir) in monitor_specs {
+            let db_path = db_path.map(Path::to_path_buf);
+            handles.push(std::thread::spawn(move || {
+                run_legal_safe_monitor_loop(
+                    &runtime_platform,
+                    &root,
+                    &work_dir,
+                    interval,
+                    true,
+                    db_path,
+                    format,
+                    once,
+                )
+            }));
+            monitors_started = monitors_started.saturating_add(1);
+        }
+
+        println!("source monitor-ready summary");
+        println!("platforms checked: {}", platforms_checked);
+        println!("authorized roots ready: {}", roots_ready);
+        println!("authorized roots created: {}", roots_created);
+        println!("monitors started: {}", monitors_started);
+        println!("skipped missing authorized root: {}", skipped_missing_root);
+        println!("once mode: {}", once);
+
+        for handle in handles {
+            let result = handle.join().map_err(|_| {
+                CliError::Internal("monitor-ready worker thread panicked".to_string())
+            })?;
+            result?;
+        }
+    } else {
+        println!("source monitor-ready summary");
+        println!("platforms checked: {}", platforms_checked);
+        println!("authorized roots ready: {}", roots_ready);
+        println!("authorized roots created: {}", roots_created);
+        println!("monitors started: 0");
+        println!("skipped missing authorized root: {}", skipped_missing_root);
+        println!("once mode: {}", once);
+    }
+
+    Ok(())
+}
+
+#[cfg(not(feature = "analysis"))]
+fn handle_source_monitor_ready(
+    _app: &App,
+    formats: &[PlatformFormat],
+    _db_path: Option<&Path>,
+    _interval: u64,
+    _start: bool,
+    _once: bool,
+) -> Result<()> {
+    let selected = source_ready_default_formats(formats)
+        .into_iter()
+        .map(platform_format_id)
+        .collect::<Vec<_>>()
+        .join(", ");
+    println!(
+        "source monitor-ready requires the analysis feature; rebuild with --features analysis (targets: {})",
+        selected
+    );
+    Ok(())
 }
 
 fn print_source_candidates(
@@ -2844,6 +5701,138 @@ fn collect_candidate_chat_files(root: &Path) -> Result<Vec<PathBuf>> {
 }
 
 #[cfg(feature = "analysis")]
+fn build_archive_stage_marker(archive_path: &Path) -> Result<ArchiveStageMarker> {
+    use std::time::UNIX_EPOCH;
+
+    let meta = std::fs::metadata(archive_path)?;
+    let modified = meta
+        .modified()
+        .ok()
+        .and_then(|ts| ts.duration_since(UNIX_EPOCH).ok());
+
+    Ok(ArchiveStageMarker {
+        source_path: archive_path.to_string_lossy().to_string(),
+        file_size: meta.len(),
+        modified_secs: modified.map(|v| v.as_secs()).unwrap_or(0),
+        modified_nanos: modified.map(|v| v.subsec_nanos()).unwrap_or(0),
+    })
+}
+
+#[cfg(feature = "analysis")]
+fn archive_stage_dir(work_dir: &Path, archive_path: &Path) -> PathBuf {
+    let file_name = archive_path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("archive");
+    work_dir.join("import-archives").join(format!(
+        "{}-{}",
+        sanitize_file_component(file_name),
+        short_path_hash(archive_path)
+    ))
+}
+
+#[cfg(feature = "analysis")]
+fn expand_supported_chat_archive(archive_path: &Path, work_dir: &Path) -> Result<PathBuf> {
+    let kind = detect_supported_archive_kind(archive_path).ok_or_else(|| {
+        CliError::Argument(format!(
+            "unsupported archive input: {}",
+            archive_path.display()
+        ))
+    })?;
+    let stage_dir = archive_stage_dir(work_dir, archive_path);
+    let marker_path = stage_dir.join(".xenobot-archive-source.json");
+    let marker = build_archive_stage_marker(archive_path)?;
+
+    if stage_dir.exists() {
+        if let Ok(raw) = std::fs::read_to_string(&marker_path) {
+            if let Ok(saved) = serde_json::from_str::<ArchiveStageMarker>(&raw) {
+                if saved == marker {
+                    return Ok(stage_dir);
+                }
+            }
+        }
+        std::fs::remove_dir_all(&stage_dir)?;
+    }
+
+    std::fs::create_dir_all(&stage_dir)?;
+    let status = match kind {
+        ImportArchiveKind::Zip => std::process::Command::new("/usr/bin/ditto")
+            .arg("-x")
+            .arg("-k")
+            .arg(archive_path)
+            .arg(&stage_dir)
+            .status()?,
+        ImportArchiveKind::Tar => std::process::Command::new("/usr/bin/tar")
+            .arg("-xf")
+            .arg(archive_path)
+            .arg("-C")
+            .arg(&stage_dir)
+            .status()?,
+    };
+    if !status.success() {
+        return Err(CliError::Command(format!(
+            "failed to expand archive {} into {}",
+            archive_path.display(),
+            stage_dir.display()
+        )));
+    }
+    let marker_raw =
+        serde_json::to_string_pretty(&marker).map_err(|e| CliError::Parse(e.to_string()))?;
+    std::fs::write(&marker_path, marker_raw)?;
+    Ok(stage_dir)
+}
+
+#[cfg(feature = "analysis")]
+fn collect_candidate_import_inputs(root: &Path, work_dir: &Path) -> Result<Vec<PathBuf>> {
+    let mut out = Vec::new();
+    let mut stack = vec![root.to_path_buf()];
+
+    while let Some(path) = stack.pop() {
+        if path.is_dir() {
+            let entries = std::fs::read_dir(&path)?;
+            for entry in entries {
+                let entry = entry?;
+                stack.push(entry.path());
+            }
+            continue;
+        }
+
+        if path.is_file() && is_supported_chat_file(&path) {
+            out.push(path);
+            continue;
+        }
+
+        if path.is_file() && detect_supported_archive_kind(&path).is_some() {
+            let expanded_root = expand_supported_chat_archive(&path, work_dir)?;
+            out.extend(collect_candidate_chat_files(&expanded_root)?);
+        }
+    }
+
+    out.sort();
+    out.dedup();
+    Ok(out)
+}
+
+#[cfg(feature = "analysis")]
+fn collect_detectable_candidate_import_inputs(
+    root: &Path,
+    work_dir: &Path,
+) -> Result<Vec<PathBuf>> {
+    use xenobot_analysis::parsers::ParserRegistry;
+
+    let registry = ParserRegistry::new();
+    let mut detectable = Vec::new();
+    for path in collect_candidate_import_inputs(root, work_dir)? {
+        if registry.detect_and_parse(&path).is_ok() {
+            detectable.push(path);
+        }
+    }
+    detectable.sort();
+    detectable.dedup();
+    Ok(detectable)
+}
+
+#[cfg(feature = "analysis")]
 fn run_legal_safe_decrypt_stage(
     input_path: &Path,
     work_dir: &Path,
@@ -2859,11 +5848,7 @@ fn run_legal_safe_decrypt_stage(
         )));
     }
 
-    let mut candidates = if input_path.is_file() {
-        vec![input_path.to_path_buf()]
-    } else {
-        collect_candidate_chat_files(input_path)?
-    };
+    let mut candidates = collect_candidate_import_inputs(input_path, work_dir)?;
     candidates.sort();
 
     if candidates.is_empty() {
@@ -2957,7 +5942,6 @@ fn run_legal_safe_decrypt_stage(
     Ok(())
 }
 
-#[cfg(feature = "analysis")]
 fn sanitize_file_component(input: &str) -> String {
     let mut out = String::new();
     let mut last_dash = false;
@@ -2987,29 +5971,108 @@ fn short_path_hash(path: &Path) -> String {
 }
 
 #[cfg(feature = "analysis")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ImportArchiveKind {
+    Zip,
+    Tar,
+}
+
+#[cfg(feature = "analysis")]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+struct ArchiveStageMarker {
+    source_path: String,
+    file_size: u64,
+    modified_secs: u64,
+    modified_nanos: u32,
+}
+
+#[cfg(feature = "analysis")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct MonitorObservedFileState {
+    file_size: u64,
+    modified_secs: u64,
+    modified_nanos: u32,
+}
+
+#[cfg(feature = "analysis")]
+fn read_monitor_file_state(path: &Path) -> Result<MonitorObservedFileState> {
+    use std::time::UNIX_EPOCH;
+
+    let meta = std::fs::metadata(path)?;
+    let modified = meta
+        .modified()
+        .ok()
+        .and_then(|ts| ts.duration_since(UNIX_EPOCH).ok());
+
+    Ok(MonitorObservedFileState {
+        file_size: meta.len(),
+        modified_secs: modified.map(|v| v.as_secs()).unwrap_or(0),
+        modified_nanos: modified.map(|v| v.subsec_nanos()).unwrap_or(0),
+    })
+}
+
+#[cfg(feature = "analysis")]
+fn wait_for_monitor_file_to_settle(
+    path: &Path,
+    stable_window: std::time::Duration,
+    max_wait: std::time::Duration,
+    poll_interval: std::time::Duration,
+) -> Result<MonitorObservedFileState> {
+    use std::cmp::min;
+    use std::io::ErrorKind;
+    use std::time::Instant;
+
+    let min_poll_interval = std::time::Duration::from_millis(25);
+    let poll_interval = poll_interval.max(min_poll_interval);
+
+    let mut last_state = read_monitor_file_state(path)?;
+    let start = Instant::now();
+    let mut stable_since = start;
+
+    loop {
+        if stable_since.elapsed() >= stable_window || start.elapsed() >= max_wait {
+            return Ok(last_state);
+        }
+
+        let remaining = max_wait.saturating_sub(start.elapsed());
+        if remaining.as_nanos() == 0 {
+            return Ok(last_state);
+        }
+        std::thread::sleep(min(poll_interval, remaining));
+
+        match read_monitor_file_state(path) {
+            Ok(current_state) => {
+                if current_state != last_state {
+                    last_state = current_state;
+                    stable_since = Instant::now();
+                }
+            }
+            Err(CliError::Io(err)) if err.kind() == ErrorKind::NotFound => {
+                return Err(CliError::Command(format!(
+                    "monitored file disappeared before it became stable: {}",
+                    path.display()
+                )));
+            }
+            Err(err) => return Err(err),
+        }
+    }
+}
+
+#[cfg(feature = "analysis")]
 fn run_legal_safe_monitor_loop(
     runtime_platform: &RuntimePlatform,
     watch_path: &Path,
+    work_dir: &Path,
     interval_seconds: u64,
     write_db: bool,
     db_path: Option<PathBuf>,
     format_hint: PlatformFormat,
+    once: bool,
 ) -> Result<()> {
     use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
     use std::sync::mpsc::{self, RecvTimeoutError};
-    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+    use std::time::Duration;
     use xenobot_analysis::parsers::ParserRegistry;
-
-    fn file_state(path: &Path) -> Result<(u64, u64)> {
-        let meta = std::fs::metadata(path)?;
-        let modified = meta
-            .modified()
-            .ok()
-            .and_then(|ts: SystemTime| ts.duration_since(UNIX_EPOCH).ok())
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
-        Ok((meta.len(), modified))
-    }
 
     fn resolve_watch_target(path: &Path) -> Option<(PathBuf, RecursiveMode)> {
         if path.is_file() {
@@ -3048,11 +6111,14 @@ fn run_legal_safe_monitor_loop(
         )
     }
 
-    let mut state_map: HashMap<PathBuf, (u64, u64)> = HashMap::new();
+    let mut state_map: HashMap<PathBuf, MonitorObservedFileState> = HashMap::new();
     let parser_registry = ParserRegistry::new();
     let target_platform = core_platform_id(runtime_platform).to_string();
     let mut announced_empty = false;
     let scan_interval = Duration::from_secs(interval_seconds.max(1));
+    let settle_window = Duration::from_millis(450);
+    let settle_max_wait = Duration::from_secs(6);
+    let settle_poll_interval = Duration::from_millis(120);
     #[cfg(all(feature = "analysis", feature = "api"))]
     let checkpoint_db_path = if write_db {
         Some(
@@ -3066,106 +6132,117 @@ fn run_legal_safe_monitor_loop(
 
     let (event_tx, event_rx) = mpsc::channel::<notify::Result<Event>>();
     let mut watcher: Option<RecommendedWatcher> = None;
-    if let Some((target, mode)) = resolve_watch_target(watch_path) {
-        match notify::recommended_watcher(move |event| {
-            let _ = event_tx.send(event);
-        }) {
-            Ok(mut watch_impl) => match watch_impl.watch(&target, mode) {
-                Ok(()) => {
-                    println!(
-                        "[monitor] watcher enabled: target={} mode={:?}",
-                        target.display(),
-                        mode
-                    );
-                    watcher = Some(watch_impl);
-                }
+    if !once {
+        if let Some((target, mode)) = resolve_watch_target(watch_path) {
+            match notify::recommended_watcher(move |event| {
+                let _ = event_tx.send(event);
+            }) {
+                Ok(mut watch_impl) => match watch_impl.watch(&target, mode) {
+                    Ok(()) => {
+                        println!(
+                            "[monitor] watcher enabled: target={} mode={:?}",
+                            target.display(),
+                            mode
+                        );
+                        watcher = Some(watch_impl);
+                    }
+                    Err(err) => {
+                        println!(
+                            "[monitor] watcher setup failed for {}: {}, using polling fallback",
+                            target.display(),
+                            err
+                        );
+                    }
+                },
                 Err(err) => {
                     println!(
-                        "[monitor] watcher setup failed for {}: {}, using polling fallback",
-                        target.display(),
+                        "[monitor] watcher initialization failed: {}, using polling fallback",
                         err
                     );
                 }
-            },
-            Err(err) => {
-                println!(
-                    "[monitor] watcher initialization failed: {}, using polling fallback",
-                    err
-                );
             }
+        } else {
+            println!(
+                "[monitor] no valid watcher target for {}, using polling fallback",
+                watch_path.display()
+            );
         }
     } else {
         println!(
-            "[monitor] no valid watcher target for {}, using polling fallback",
+            "[monitor] one-shot bootstrap mode enabled for {}",
             watch_path.display()
         );
     }
 
     loop {
-        let mut should_scan = watcher.is_none();
-        if let Some(rx) = watcher.as_ref().map(|_| &event_rx) {
-            match rx.recv_timeout(scan_interval) {
-                Ok(Ok(event)) => {
-                    let mut batch_count = 1usize;
-                    let mut path_count = event.paths.len();
-                    let mut requires_rescan = event_kind_requires_rescan(&event.kind);
+        let mut should_scan = once || watcher.is_none();
+        if !once {
+            if let Some(rx) = watcher.as_ref().map(|_| &event_rx) {
+                match rx.recv_timeout(scan_interval) {
+                    Ok(Ok(event)) => {
+                        let mut batch_count = 1usize;
+                        let mut path_count = event.paths.len();
+                        let mut requires_rescan = event_kind_requires_rescan(&event.kind);
 
-                    while let Ok(next) = rx.try_recv() {
-                        batch_count = batch_count.saturating_add(1);
-                        match next {
-                            Ok(ev) => {
-                                path_count = path_count.saturating_add(ev.paths.len());
-                                if event_kind_requires_rescan(&ev.kind) {
+                        while let Ok(next) = rx.try_recv() {
+                            batch_count = batch_count.saturating_add(1);
+                            match next {
+                                Ok(ev) => {
+                                    path_count = path_count.saturating_add(ev.paths.len());
+                                    if event_kind_requires_rescan(&ev.kind) {
+                                        requires_rescan = true;
+                                    }
+                                }
+                                Err(err) => {
+                                    println!("[monitor] watcher event error: {}", err);
                                     requires_rescan = true;
                                 }
                             }
-                            Err(err) => {
-                                println!("[monitor] watcher event error: {}", err);
-                                requires_rescan = true;
+                            if batch_count >= 256 {
+                                break;
                             }
                         }
-                        if batch_count >= 256 {
-                            break;
+
+                        if requires_rescan {
+                            println!(
+                                "[monitor] fs events received: events={} paths={} -> scanning",
+                                batch_count, path_count
+                            );
+                            should_scan = true;
                         }
                     }
-
-                    if requires_rescan {
+                    Ok(Err(err)) => {
+                        println!("[monitor] watcher event error: {}", err);
+                        should_scan = true;
+                    }
+                    Err(RecvTimeoutError::Timeout) => {
+                        should_scan = true;
+                    }
+                    Err(RecvTimeoutError::Disconnected) => {
                         println!(
-                            "[monitor] fs events received: events={} paths={} -> scanning",
-                            batch_count, path_count
+                            "[monitor] watcher channel disconnected, switching to polling fallback"
                         );
+                        watcher = None;
                         should_scan = true;
                     }
                 }
-                Ok(Err(err)) => {
-                    println!("[monitor] watcher event error: {}", err);
-                    should_scan = true;
-                }
-                Err(RecvTimeoutError::Timeout) => {
-                    should_scan = true;
-                }
-                Err(RecvTimeoutError::Disconnected) => {
-                    println!(
-                        "[monitor] watcher channel disconnected, switching to polling fallback"
-                    );
-                    watcher = None;
-                    should_scan = true;
-                }
+            } else {
+                std::thread::sleep(scan_interval);
             }
-        } else {
-            std::thread::sleep(scan_interval);
         }
 
         if !should_scan {
             continue;
         }
 
-        let mut candidates = Vec::new();
-        if watch_path.is_file() {
-            candidates.push(watch_path.to_path_buf());
-        } else if watch_path.exists() {
-            candidates = collect_candidate_chat_files(watch_path)?;
-        }
+        let mut candidates = if watch_path.exists() {
+            collect_candidate_import_inputs(watch_path, work_dir)?
+        } else {
+            Vec::new()
+        };
+        let candidates_seen = candidates.len();
+        let mut updates_applied = 0usize;
+        let mut parse_skipped = 0usize;
 
         let candidate_set: std::collections::HashSet<PathBuf> =
             candidates.iter().cloned().collect();
@@ -3174,7 +6251,7 @@ fn run_legal_safe_monitor_loop(
         if candidates.is_empty() {
             if !announced_empty {
                 println!(
-                    "[monitor] no candidate chat files under {}",
+                    "[monitor] no candidate chat files or archives under {}",
                     watch_path.display()
                 );
                 announced_empty = true;
@@ -3185,19 +6262,37 @@ fn run_legal_safe_monitor_loop(
 
         candidates.sort();
         for path in candidates {
-            let state = match file_state(&path) {
+            let state = match read_monitor_file_state(&path) {
+                Ok(v) => v,
+                Err(err) => {
+                    println!("[skip] {} -> {}", path.display(), err);
+                    parse_skipped = parse_skipped.saturating_add(1);
+                    continue;
+                }
+            };
+
+            let previous_state = state_map.get(&path).copied();
+            let changed = previous_state != Some(state);
+            if !changed {
+                continue;
+            }
+            let settled_state = match wait_for_monitor_file_to_settle(
+                &path,
+                settle_window,
+                settle_max_wait,
+                settle_poll_interval,
+            ) {
                 Ok(v) => v,
                 Err(err) => {
                     println!("[skip] {} -> {}", path.display(), err);
                     continue;
                 }
             };
-
-            let changed = state_map.get(&path).copied() != Some(state);
-            if !changed {
+            if previous_state == Some(settled_state) {
+                state_map.insert(path.clone(), settled_state);
                 continue;
             }
-            state_map.insert(path.clone(), state);
+            state_map.insert(path.clone(), settled_state);
 
             #[cfg(all(feature = "analysis", feature = "api"))]
             if write_db {
@@ -3271,11 +6366,21 @@ fn run_legal_safe_monitor_loop(
                             );
                         }
                     }
+                    updates_applied = updates_applied.saturating_add(1);
                 }
                 Err(err) => {
                     println!("[skip] {} -> {}", path.display(), err);
+                    parse_skipped = parse_skipped.saturating_add(1);
                 }
             }
+        }
+
+        if once {
+            println!(
+                "[monitor] one-shot bootstrap completed: candidates={} updates={} skipped={}",
+                candidates_seen, updates_applied, parse_skipped
+            );
+            return Ok(());
         }
     }
 }
@@ -3535,11 +6640,71 @@ fn persist_monitor_chat_to_db(
 }
 
 #[cfg(feature = "analysis")]
+fn is_internal_import_artifact(path: &Path) -> bool {
+    matches!(
+        path.file_name().and_then(|value| value.to_str()),
+        Some(".xenobot-archive-source.json")
+    )
+}
+
+fn is_manual_review_template_artifact(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|value| value.to_str())
+        .map(|value| value.to_ascii_lowercase().ends_with(".template.json"))
+        .unwrap_or(false)
+}
+
+fn is_manual_review_scaffold_artifact(path: &Path) -> bool {
+    if is_manual_review_template_artifact(path) {
+        return true;
+    }
+
+    let file_name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .map(|value| value.to_ascii_lowercase());
+    let parent_name = path
+        .parent()
+        .and_then(|value| value.file_name())
+        .and_then(|value| value.to_str())
+        .map(|value| value.to_ascii_lowercase());
+
+    matches!(
+        (parent_name.as_deref(), file_name.as_deref()),
+        (Some("manual-review"), Some("readme.md"))
+    )
+}
+
+fn is_within_manual_review_workspace(path: &Path) -> bool {
+    path.ancestors().any(|ancestor| {
+        ancestor
+            .file_name()
+            .and_then(|value| value.to_str())
+            .map(|value| {
+                let lowered = value.to_ascii_lowercase();
+                lowered == "manual-review" || lowered == "manual_review"
+            })
+            .unwrap_or(false)
+    })
+}
+
 fn is_supported_chat_file(path: &Path) -> bool {
+    #[cfg(feature = "analysis")]
+    if is_internal_import_artifact(path) {
+        return false;
+    }
+
+    if is_manual_review_scaffold_artifact(path) {
+        return false;
+    }
+
     let ext = path
         .extension()
         .and_then(|v| v.to_str())
         .map(|v| v.to_ascii_lowercase());
+    if is_within_manual_review_workspace(path) {
+        return matches!(ext.as_deref(), Some("json"));
+    }
     matches!(
         ext.as_deref(),
         Some("txt")
@@ -3550,6 +6715,31 @@ fn is_supported_chat_file(path: &Path) -> bool {
             | Some("html")
             | Some("xml")
     )
+}
+
+fn path_has_supported_archive_extension(path: &Path) -> bool {
+    let lower = path.to_string_lossy().to_ascii_lowercase();
+    lower.ends_with(".zip")
+        || lower.ends_with(".tar")
+        || lower.ends_with(".tar.gz")
+        || lower.ends_with(".tgz")
+}
+
+#[cfg(feature = "analysis")]
+fn detect_supported_archive_kind(path: &Path) -> Option<ImportArchiveKind> {
+    let lower = path.to_string_lossy().to_ascii_lowercase();
+    if lower.ends_with(".zip") {
+        Some(ImportArchiveKind::Zip)
+    } else if lower.ends_with(".tar") || lower.ends_with(".tar.gz") || lower.ends_with(".tgz") {
+        Some(ImportArchiveKind::Tar)
+    } else {
+        None
+    }
+}
+
+#[cfg(any(not(feature = "analysis"), test))]
+fn is_supported_import_input(path: &Path) -> bool {
+    is_supported_chat_file(path) || path_has_supported_archive_extension(path)
 }
 
 #[cfg(all(feature = "analysis", feature = "api"))]
@@ -7700,207 +10890,852 @@ fn run_api_file_gateway_stress(
 }
 
 #[cfg(feature = "api")]
-fn run_api_smoke_check(db_path: Option<PathBuf>) -> Result<()> {
-    use tower::util::ServiceExt;
-    use xenobot_api::database::repository::{ChatMeta, Repository};
+struct ApiSmokeFixture {
+    platform_id: &'static str,
+    file_name: &'static str,
+    file_contents: String,
+    keyword: &'static str,
+    semantic_query: &'static str,
+}
 
+#[cfg(feature = "api")]
+struct ApiSmokeFlowReport {
+    platform_id: String,
+    health_status: axum::http::StatusCode,
+    health_body: String,
+    detect_format_status: axum::http::StatusCode,
+    detect_format_id: String,
+    detect_platform: String,
+    detect_parser_source: String,
+    import_status: axum::http::StatusCode,
+    imported_session_id: String,
+    detected_platform: String,
+    payload_platform: String,
+    generated_session_count: u64,
+    member_activity_status: axum::http::StatusCode,
+    member_activity_count: usize,
+    member_activity_body: serde_json::Value,
+    summary_status: axum::http::StatusCode,
+    generated_summary: String,
+    summary_persisted: bool,
+    memory_status: axum::http::StatusCode,
+    memory_count: usize,
+    memory_body: serde_json::Value,
+    keyword_search_status: axum::http::StatusCode,
+    keyword_hit_count: usize,
+    keyword_search_body: serde_json::Value,
+    semantic_search_status: axum::http::StatusCode,
+    semantic_hit_count: usize,
+    semantic_search_body: serde_json::Value,
+    generate_status: axum::http::StatusCode,
+    generated_sql: String,
+    execute_status: axum::http::StatusCode,
+    execute_body: String,
+}
+
+#[cfg(feature = "api")]
+fn build_api_smoke_fixtures() -> Result<Vec<ApiSmokeFixture>> {
+    Ok(vec![
+        ApiSmokeFixture {
+            platform_id: "wechat",
+            file_name: "smoke_messages.wechat.json",
+            file_contents: serde_json::to_string_pretty(&serde_json::json!({
+                "success": true,
+                "talker": "launch-room@chatroom",
+                "count": 4,
+                "hasMore": false,
+                "messages": [
+                    {
+                        "localId": 1,
+                        "createTime": 1700000001,
+                        "localType": 1,
+                        "content": "Launch readiness looks good.",
+                        "isSend": 0,
+                        "senderUsername": "wxid_alice",
+                        "senderDisplayName": "Alice",
+                        "parsedContent": "Launch readiness looks good."
+                    },
+                    {
+                        "localId": 2,
+                        "createTime": 1700000045,
+                        "localType": 1,
+                        "content": "I still want one more launch checklist pass.",
+                        "isSend": 0,
+                        "senderUsername": "wxid_bob",
+                        "senderDisplayName": "Bob",
+                        "parsedContent": "I still want one more launch checklist pass."
+                    },
+                    {
+                        "localId": 3,
+                        "createTime": 1700000090,
+                        "localType": 1,
+                        "content": "Please remember the blocker about the payment webhook.",
+                        "isSend": 0,
+                        "senderUsername": "wxid_alice",
+                        "senderDisplayName": "Alice",
+                        "parsedContent": "Please remember the blocker about the payment webhook."
+                    },
+                    {
+                        "localId": 4,
+                        "createTime": 1700000135,
+                        "localType": 10000,
+                        "content": "Semantic search should find the launch blocker summary.",
+                        "isSend": null,
+                        "senderUsername": "system",
+                        "senderDisplayName": "System",
+                        "parsedContent": "Semantic search should find the launch blocker summary."
+                    }
+                ]
+            }))
+            .map_err(|e| CliError::Parse(e.to_string()))?,
+            keyword: "launch",
+            semantic_query: "Which messages talk about launch blockers and readiness?",
+        },
+        ApiSmokeFixture {
+            platform_id: "qq",
+            file_name: "smoke_messages.qq.json",
+            file_contents: serde_json::to_string_pretty(&serde_json::json!({
+                "chatInfo": {
+                    "name": "Release Bridge Group",
+                    "type": "group",
+                    "participantCount": 3
+                },
+                "statistics": {
+                    "totalMessages": 4
+                },
+                "messages": [
+                    {
+                        "id": "msg-1",
+                        "seq": "1",
+                        "timestamp": 1735813230000_i64,
+                        "time": "2025-01-02T10:20:30.000Z",
+                        "type": "text",
+                        "recalled": false,
+                        "system": false,
+                        "sender": {
+                            "uid": "uid-alice",
+                            "uin": "10001",
+                            "name": "Alice Account",
+                            "nickname": "Alice",
+                            "groupCard": "Captain Alice"
+                        },
+                        "content": {
+                            "text": "launch checklist is almost done\nplease keep the blocker memo",
+                            "html": "<p>launch checklist is almost done</p>",
+                            "elements": [
+                                {"type": "text", "data": {"text": "launch checklist is almost done"}}
+                            ],
+                            "resources": [
+                                {"type": "image", "filename": "diagram.png", "size": 2048}
+                            ]
+                        }
+                    },
+                    {
+                        "id": "msg-2",
+                        "seq": "2",
+                        "timestamp": 1735813260000_i64,
+                        "time": "2025-01-02T10:21:00.000Z",
+                        "type": "text",
+                        "recalled": false,
+                        "system": false,
+                        "sender": {
+                            "uid": "uid-bob",
+                            "uin": "10002",
+                            "name": "Bob"
+                        },
+                        "content": {
+                            "text": "discord bridge still needs one more review",
+                            "html": "",
+                            "elements": [],
+                            "resources": []
+                        }
+                    },
+                    {
+                        "id": "msg-3",
+                        "seq": "3",
+                        "timestamp": 1735813295000_i64,
+                        "time": "2025-01-02T10:21:35.000Z",
+                        "type": "text",
+                        "recalled": false,
+                        "system": false,
+                        "sender": {
+                            "uid": "uid-carol",
+                            "uin": "10003",
+                            "name": "Carol"
+                        },
+                        "content": {
+                            "text": "payment blocker should be tracked before launch",
+                            "html": "",
+                            "elements": [],
+                            "resources": []
+                        }
+                    },
+                    {
+                        "id": "msg-4",
+                        "seq": "4",
+                        "timestamp": 1735813325000_i64,
+                        "time": "2025-01-02T10:22:05.000Z",
+                        "type": "text",
+                        "recalled": false,
+                        "system": false,
+                        "sender": {
+                            "uid": "uid-alice",
+                            "uin": "10001",
+                            "name": "Alice Account",
+                            "nickname": "Alice",
+                            "groupCard": "Captain Alice"
+                        },
+                        "content": {
+                            "text": "summary memory should keep the launch blocker context",
+                            "html": "",
+                            "elements": [],
+                            "resources": []
+                        }
+                    }
+                ]
+            }))
+            .map_err(|e| CliError::Parse(e.to_string()))?,
+            keyword: "launch",
+            semantic_query:
+                "Which QQ messages mention blockers, launch readiness, or checklist work?",
+        },
+        ApiSmokeFixture {
+            platform_id: "discord",
+            file_name: "smoke_messages.discord.json",
+            file_contents: serde_json::to_string_pretty(&serde_json::json!({
+                "guild": {
+                    "id": "g1",
+                    "name": "Launch Guild"
+                },
+                "channel": {
+                    "id": "c1",
+                    "type": "GuildTextChat",
+                    "name": "release-war-room"
+                },
+                "messages": [
+                    {
+                        "id": "1",
+                        "type": "Default",
+                        "timestamp": "2025-01-02T10:20:30Z",
+                        "author": {"id": "u1", "name": "Alice", "nickname": "Alice"},
+                        "content": "Discord launch room says the deployment checklist is green.",
+                        "attachments": [{"id": "a1", "fileName": "deployment-checklist.png"}]
+                    },
+                    {
+                        "id": "2",
+                        "type": "Default",
+                        "timestamp": "2025-01-02T10:21:05Z",
+                        "author": {"id": "u2", "name": "Bob"},
+                        "content": "A remaining blocker exists in the payment webhook flow.",
+                        "embeds": [{"title": "payment webhook tracker"}]
+                    },
+                    {
+                        "id": "3",
+                        "type": "Default",
+                        "timestamp": "2025-01-02T10:21:40Z",
+                        "author": {"id": "u3", "name": "Carol"},
+                        "content": "We need the summary and memory layer to remember the blocker.",
+                        "stickers": [{"id": "s1", "name": "Remember"}]
+                    },
+                    {
+                        "id": "4",
+                        "type": "ChannelPinnedMessage",
+                        "timestamp": "2025-01-02T10:22:10Z",
+                        "author": {"id": "u1", "name": "Alice"},
+                        "content": ""
+                    }
+                ]
+            }))
+            .map_err(|e| CliError::Parse(e.to_string()))?,
+            keyword: "blocker",
+            semantic_query:
+                "Which Discord messages mention blockers, readiness, or checklist status?",
+        },
+    ])
+}
+
+#[cfg(feature = "api")]
+async fn run_single_api_smoke_flow(
+    app: &axum::Router,
+    smoke_root: &Path,
+    fixture: &ApiSmokeFixture,
+) -> Result<ApiSmokeFlowReport> {
+    let export_path = smoke_root.join(fixture.file_name);
+    std::fs::write(&export_path, &fixture.file_contents)?;
+
+    let (health_status, health_body) = smoke_request_text(app, "GET", "/health").await?;
+    let (detect_format_status, detect_format_body) = smoke_request_json(
+        app,
+        "POST",
+        "/chat/detect-format",
+        Some(serde_json::json!({
+            "file_path": export_path.to_string_lossy().to_string()
+        })),
+    )
+    .await?;
+    if detect_format_status != axum::http::StatusCode::OK {
+        return Err(CliError::Internal(format!(
+            "smoke check failed [{}]: detect-format expected success, got status={} body={}",
+            fixture.platform_id, detect_format_status, detect_format_body
+        )));
+    }
+    let detect_format_id = detect_format_body["format"]
+        .as_str()
+        .unwrap_or_default()
+        .to_string();
+    let detect_platform = detect_format_body["platform"]
+        .as_str()
+        .unwrap_or_default()
+        .to_string();
+    let detect_parser_source = detect_format_body["parserSource"]
+        .as_str()
+        .unwrap_or_default()
+        .to_string();
+    let (import_status, import_body) = smoke_request_json(
+        app,
+        "POST",
+        "/chat/import",
+        Some(serde_json::json!({
+            "file_path": export_path.to_string_lossy().to_string()
+        })),
+    )
+    .await?;
+    if import_status != axum::http::StatusCode::OK || import_body["success"] != true {
+        return Err(CliError::Internal(format!(
+            "smoke check failed [{}]: import expected success, got status={} body={}",
+            fixture.platform_id, import_status, import_body
+        )));
+    }
+    let session_id = import_body["sessionId"]
+        .as_str()
+        .ok_or_else(|| {
+            CliError::Internal(format!(
+                "smoke check failed [{}]: import missing sessionId",
+                fixture.platform_id
+            ))
+        })?
+        .to_string();
+    let detected_platform = import_body["detectedPlatform"]
+        .as_str()
+        .unwrap_or_default()
+        .to_string();
+    let payload_platform = import_body["payloadPlatform"]
+        .as_str()
+        .unwrap_or_default()
+        .to_string();
+
+    let generate_session_endpoint = format!("/session/generate/{}", session_id);
+    let (session_generate_status, session_generate_body) = smoke_request_json(
+        app,
+        "POST",
+        &generate_session_endpoint,
+        Some(serde_json::json!({})),
+    )
+    .await?;
+    if session_generate_status != axum::http::StatusCode::OK {
+        return Err(CliError::Internal(format!(
+            "smoke check failed [{}]: session generate expected 200, got {} body={}",
+            fixture.platform_id, session_generate_status, session_generate_body
+        )));
+    }
+    let generated_session_count = session_generate_body.as_u64().ok_or_else(|| {
+        CliError::Internal(format!(
+            "smoke check failed [{}]: session generate did not return a count",
+            fixture.platform_id
+        ))
+    })?;
+    if generated_session_count == 0 {
+        return Err(CliError::Internal(format!(
+            "smoke check failed [{}]: session generation returned zero chat sessions",
+            fixture.platform_id
+        )));
+    }
+
+    let sessions_endpoint = format!("/session/sessions/{}", session_id);
+    let (sessions_status, sessions_body) =
+        smoke_request_json(app, "GET", &sessions_endpoint, None).await?;
+    if sessions_status != axum::http::StatusCode::OK {
+        return Err(CliError::Internal(format!(
+            "smoke check failed [{}]: session list expected 200, got {} body={}",
+            fixture.platform_id, sessions_status, sessions_body
+        )));
+    }
+    let sessions = sessions_body.as_array().ok_or_else(|| {
+        CliError::Internal(format!(
+            "smoke check failed [{}]: session list did not return an array",
+            fixture.platform_id
+        ))
+    })?;
+    let first_chat_session_id = sessions
+        .first()
+        .and_then(|row| row.get("id"))
+        .and_then(|value| value.as_u64())
+        .ok_or_else(|| {
+            CliError::Internal(format!(
+                "smoke check failed [{}]: session list missing first chat session id",
+                fixture.platform_id
+            ))
+        })?;
+
+    let member_activity_endpoint = format!("/chat/sessions/{}/member-activity", session_id);
+    let (member_activity_status, member_activity_body) =
+        smoke_request_json(app, "GET", &member_activity_endpoint, None).await?;
+    let member_activity_count = member_activity_body
+        .as_array()
+        .map(|rows| rows.len())
+        .unwrap_or(0);
+
+    let summary_endpoint = format!(
+        "/session/generate-summary/{}/{}",
+        session_id, first_chat_session_id
+    );
+    let (summary_status, summary_body) = smoke_request_json(
+        app,
+        "POST",
+        &summary_endpoint,
+        Some(serde_json::json!({
+            "locale": "en-US",
+            "forceRegenerate": true
+        })),
+    )
+    .await?;
+    let generated_summary = summary_body["summary"]
+        .as_str()
+        .unwrap_or_default()
+        .to_string();
+    let (sessions_after_status, sessions_after_body) =
+        smoke_request_json(app, "GET", &sessions_endpoint, None).await?;
+    if sessions_after_status != axum::http::StatusCode::OK {
+        return Err(CliError::Internal(format!(
+            "smoke check failed [{}]: session list after summary expected 200, got {} body={}",
+            fixture.platform_id, sessions_after_status, sessions_after_body
+        )));
+    }
+    let summary_persisted = sessions_after_body
+        .as_array()
+        .and_then(|rows| rows.first())
+        .and_then(|row| row.get("summary"))
+        .and_then(|value| value.as_str())
+        .is_some_and(|value| !value.trim().is_empty());
+
+    let memory_endpoint = format!("/memory/sessions/{}/entries", session_id);
+    let (memory_status, memory_body) =
+        smoke_request_json(app, "GET", &memory_endpoint, None).await?;
+    let memory_count = memory_body["items"]
+        .as_array()
+        .map(|rows| rows.len())
+        .unwrap_or(0);
+
+    let (keyword_search_status, keyword_search_body) = smoke_request_json(
+        app,
+        "POST",
+        "/ai/search-messages",
+        Some(serde_json::json!({
+            "sessionId": session_id,
+            "keywords": [fixture.keyword],
+            "limit": 10
+        })),
+    )
+    .await?;
+    let keyword_hit_count = keyword_search_body["count"].as_u64().unwrap_or(0) as usize;
+
+    let (semantic_search_status, semantic_search_body) = smoke_request_json(
+        app,
+        "POST",
+        "/ai/semantic-search-messages",
+        Some(serde_json::json!({
+            "sessionId": session_id,
+            "query": fixture.semantic_query,
+            "limit": 5,
+            "threshold": 0.05
+        })),
+    )
+    .await?;
+    let semantic_hit_count = semantic_search_body["count"].as_u64().unwrap_or(0) as usize;
+
+    let generate_endpoint = format!("/chat/sessions/{}/generate-sql", session_id);
+    let (generate_status, generate_body_json) = smoke_request_json(
+        app,
+        "POST",
+        &generate_endpoint,
+        Some(serde_json::json!({
+            "prompt": "recent messages",
+            "maxRows": 5
+        })),
+    )
+    .await?;
+    if generate_status != axum::http::StatusCode::OK {
+        return Err(CliError::Internal(format!(
+            "smoke check failed [{}]: generate-sql expected 200, got {} with body {}",
+            fixture.platform_id, generate_status, generate_body_json
+        )));
+    }
+    let generated_sql = generate_body_json
+        .get("sql")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+    let expected_scope = format!("msg.meta_id = {}", session_id);
+    if !generated_sql.contains(&expected_scope) {
+        return Err(CliError::Internal(format!(
+            "smoke check failed [{}]: generated SQL missing session scope '{}'",
+            fixture.platform_id, expected_scope
+        )));
+    }
+
+    let execute_endpoint = format!("/chat/sessions/{}/execute-sql", session_id);
+    let (execute_status, execute_body_json) = smoke_request_json(
+        app,
+        "POST",
+        &execute_endpoint,
+        Some(serde_json::json!({ "sql": generated_sql })),
+    )
+    .await?;
+    let execute_body = execute_body_json.to_string();
+
+    Ok(ApiSmokeFlowReport {
+        platform_id: fixture.platform_id.to_string(),
+        health_status,
+        health_body,
+        detect_format_status,
+        detect_format_id,
+        detect_platform,
+        detect_parser_source,
+        import_status,
+        imported_session_id: session_id,
+        detected_platform,
+        payload_platform,
+        generated_session_count,
+        member_activity_status,
+        member_activity_count,
+        member_activity_body,
+        summary_status,
+        generated_summary,
+        summary_persisted,
+        memory_status,
+        memory_count,
+        memory_body,
+        keyword_search_status,
+        keyword_hit_count,
+        keyword_search_body,
+        semantic_search_status,
+        semantic_hit_count,
+        semantic_search_body,
+        generate_status,
+        generated_sql,
+        execute_status,
+        execute_body,
+    })
+}
+
+#[cfg(feature = "api")]
+async fn smoke_request_json(
+    app: &axum::Router,
+    method: &str,
+    uri: &str,
+    payload: Option<serde_json::Value>,
+) -> Result<(axum::http::StatusCode, serde_json::Value)> {
+    use tower::util::ServiceExt;
+
+    let mut builder = axum::http::Request::builder().method(method).uri(uri);
+    let body = if let Some(value) = payload {
+        builder = builder.header("content-type", "application/json");
+        axum::body::Body::from(value.to_string())
+    } else {
+        axum::body::Body::empty()
+    };
+
+    let request = builder
+        .body(body)
+        .map_err(|e| CliError::Internal(format!("failed to build request: {}", e)))?;
+    let response: axum::response::Response = app
+        .clone()
+        .oneshot(request)
+        .await
+        .unwrap_or_else(|err| match err {});
+    let status = response.status();
+    let body_bytes = axum::body::to_bytes(response.into_body(), 4 * 1024 * 1024)
+        .await
+        .map_err(|e| CliError::Internal(format!("failed to read response body: {}", e)))?;
+    let body_json = if body_bytes.is_empty() {
+        serde_json::Value::Null
+    } else {
+        serde_json::from_slice::<serde_json::Value>(&body_bytes).map_err(|e| {
+            CliError::Internal(format!(
+                "failed to parse JSON response for {} {}: {}",
+                method, uri, e
+            ))
+        })?
+    };
+
+    Ok((status, body_json))
+}
+
+#[cfg(feature = "api")]
+async fn smoke_request_text(
+    app: &axum::Router,
+    method: &str,
+    uri: &str,
+) -> Result<(axum::http::StatusCode, String)> {
+    use tower::util::ServiceExt;
+
+    let request = axum::http::Request::builder()
+        .method(method)
+        .uri(uri)
+        .body(axum::body::Body::empty())
+        .map_err(|e| CliError::Internal(format!("failed to build request: {}", e)))?;
+    let response: axum::response::Response = app
+        .clone()
+        .oneshot(request)
+        .await
+        .unwrap_or_else(|err| match err {});
+    let status = response.status();
+    let body_bytes = axum::body::to_bytes(response.into_body(), 4 * 1024 * 1024)
+        .await
+        .map_err(|e| CliError::Internal(format!("failed to read response body: {}", e)))?;
+    let body = String::from_utf8_lossy(&body_bytes).to_string();
+    Ok((status, body))
+}
+
+#[cfg(feature = "api")]
+fn run_api_smoke_check(db_path: Option<PathBuf>) -> Result<()> {
+    let previous_db_path = std::env::var_os("XENOBOT_DB_PATH");
     if let Some(path) = db_path.as_ref() {
         std::env::set_var("XENOBOT_DB_PATH", path.as_os_str());
     }
+
+    let smoke_root = std::env::temp_dir().join(format!(
+        "xenobot-api-smoke-{}-{}",
+        std::process::id(),
+        chrono::Utc::now().timestamp_micros()
+    ));
+    std::fs::create_dir_all(&smoke_root)?;
+    let smoke_root_for_runtime = smoke_root.clone();
+    let fixtures = build_api_smoke_fixtures()?;
 
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .map_err(|e| CliError::Internal(e.to_string()))?;
 
-    let (health_status, health_body, generate_status, generated_sql, execute_status, execute_body) =
-        runtime.block_on(async move {
-            xenobot_api::database::init_database()
-                .await
-                .map_err(|e| CliError::Database(e.to_string()))?;
+    let reports = runtime.block_on(async move {
+        xenobot_api::database::init_database()
+            .await
+            .map_err(|e| CliError::Database(e.to_string()))?;
 
-            let pool = xenobot_api::database::get_pool()
-                .await
-                .map_err(|e| CliError::Database(e.to_string()))?;
-            let repo = Repository::new(pool);
-            let session_id = repo
-                .create_chat(&ChatMeta {
-                    id: 0,
-                    name: "api_smoke_session".to_string(),
-                    platform: "wechat".to_string(),
-                    chat_type: "group".to_string(),
-                    imported_at: 1_700_000_000,
-                    group_id: None,
-                    group_avatar: None,
-                    owner_id: None,
-                    schema_version: 3,
-                    session_gap_threshold: 1800,
-                })
-                .await
-                .map_err(|e| CliError::Database(e.to_string()))?;
+        let config = xenobot_api::config::ApiConfig::default();
+        let app = xenobot_api::router::build_router(&config);
+        let mut reports = Vec::with_capacity(fixtures.len());
+        for fixture in fixtures {
+            reports.push(run_single_api_smoke_flow(&app, &smoke_root_for_runtime, &fixture).await?);
+        }
+        Ok::<Vec<ApiSmokeFlowReport>, CliError>(reports)
+    });
 
-            let config = xenobot_api::config::ApiConfig::default();
-            let app = xenobot_api::router::build_router(&config);
-            let health_request: axum::http::Request<axum::body::Body> =
-                axum::http::Request::builder()
-                    .method("GET")
-                    .uri("/health")
-                    .body(axum::body::Body::empty())
-                    .map_err(|e| CliError::Internal(format!("failed to build request: {}", e)))?;
-            let health_response: axum::response::Response = app
-                .clone()
-                .oneshot(health_request)
-                .await
-                .unwrap_or_else(|err| match err {});
-            let health_status: axum::http::StatusCode = health_response.status();
-            let health_body_bytes = axum::body::to_bytes(health_response.into_body(), 1024 * 1024)
-                .await
-                .map_err(|e| CliError::Internal(format!("failed to read response body: {}", e)))?;
-            let health_body = String::from_utf8_lossy(&health_body_bytes).to_string();
-
-            let generate_endpoint = format!("/chat/sessions/{}/generate-sql", session_id);
-            let generate_request: axum::http::Request<axum::body::Body> =
-                axum::http::Request::builder()
-                    .method("POST")
-                    .uri(&generate_endpoint)
-                    .header("content-type", "application/json")
-                    .body(axum::body::Body::from(
-                        serde_json::json!({
-                            "prompt": "最近消息",
-                            "maxRows": 5
-                        })
-                        .to_string(),
-                    ))
-                    .map_err(|e| {
-                        CliError::Internal(format!("failed to build generate-sql request: {}", e))
-                    })?;
-            let generate_response: axum::response::Response = app
-                .clone()
-                .oneshot(generate_request)
-                .await
-                .unwrap_or_else(|err| match err {});
-            let generate_status: axum::http::StatusCode = generate_response.status();
-            let generate_body_bytes =
-                axum::body::to_bytes(generate_response.into_body(), 2 * 1024 * 1024)
-                    .await
-                    .map_err(|e| {
-                        CliError::Internal(format!(
-                            "failed to read generate-sql response body: {}",
-                            e
-                        ))
-                    })?;
-            if generate_status != axum::http::StatusCode::OK {
-                let generate_body_text = String::from_utf8_lossy(&generate_body_bytes).to_string();
-                return Err(CliError::Internal(format!(
-                    "smoke check failed: generate-sql expected 200, got {} with body {}",
-                    generate_status, generate_body_text
-                )));
-            }
-            if generate_body_bytes.is_empty() {
-                return Err(CliError::Internal(
-                    "smoke check failed: generate-sql returned empty body".to_string(),
-                ));
-            }
-            let generate_body_json: serde_json::Value =
-                serde_json::from_slice(&generate_body_bytes).map_err(|e| {
-                    CliError::Internal(format!("failed to parse generate-sql response body: {}", e))
-                })?;
-            let generated_sql = generate_body_json
-                .get("sql")
-                .and_then(|v| v.as_str())
-                .unwrap_or_default()
-                .to_string();
-
-            let expected_scope = format!("msg.meta_id = {}", session_id);
-            if !generated_sql.contains(&expected_scope) {
-                return Err(CliError::Internal(format!(
-                    "smoke check failed: generated SQL missing session scope '{}'",
-                    expected_scope
-                )));
-            }
-
-            let execute_endpoint = format!("/chat/sessions/{}/execute-sql", session_id);
-            let execute_request: axum::http::Request<axum::body::Body> =
-                axum::http::Request::builder()
-                    .method("POST")
-                    .uri(&execute_endpoint)
-                    .header("content-type", "application/json")
-                    .body(axum::body::Body::from(
-                        serde_json::json!({
-                            "sql": generated_sql
-                        })
-                        .to_string(),
-                    ))
-                    .map_err(|e| {
-                        CliError::Internal(format!("failed to build execute-sql request: {}", e))
-                    })?;
-            let execute_response: axum::response::Response = app
-                .clone()
-                .oneshot(execute_request)
-                .await
-                .unwrap_or_else(|err| match err {});
-            let execute_status: axum::http::StatusCode = execute_response.status();
-            let execute_body_bytes =
-                axum::body::to_bytes(execute_response.into_body(), 2 * 1024 * 1024)
-                    .await
-                    .map_err(|e| {
-                        CliError::Internal(format!(
-                            "failed to read execute-sql response body: {}",
-                            e
-                        ))
-                    })?;
-            let execute_body = String::from_utf8_lossy(&execute_body_bytes).to_string();
-
-            Ok::<
-                (
-                    axum::http::StatusCode,
-                    String,
-                    axum::http::StatusCode,
-                    String,
-                    axum::http::StatusCode,
-                    String,
-                ),
-                CliError,
-            >((
-                health_status,
-                health_body,
-                generate_status,
-                generated_sql,
-                execute_status,
-                execute_body,
-            ))
-        })?;
+    let _ = std::fs::remove_dir_all(&smoke_root);
+    if let Some(value) = previous_db_path {
+        std::env::set_var("XENOBOT_DB_PATH", value);
+    } else {
+        std::env::remove_var("XENOBOT_DB_PATH");
+    }
+    let reports = reports?;
 
     println!("api smoke check completed");
-    println!("route: GET /health");
-    println!("status: {}", health_status.as_u16());
-    println!("body: {}", health_body);
-    println!("route: POST /chat/sessions/:session_id/generate-sql");
-    println!("status: {}", generate_status.as_u16());
-    println!("contract: generated SQL includes session scope filter");
-    println!(
-        "sql preview: {}",
-        generated_sql.chars().take(120).collect::<String>()
-    );
-    println!("route: POST /chat/sessions/:session_id/execute-sql");
-    println!("status: {}", execute_status.as_u16());
-    if health_status != axum::http::StatusCode::OK {
-        return Err(CliError::Internal(format!(
-            "smoke check failed: expected 200, got {}",
-            health_status
-        )));
+    for report in &reports {
+        println!("platform: {}", report.platform_id);
+        println!("route: GET /health");
+        println!("status: {}", report.health_status.as_u16());
+        println!("body: {}", report.health_body);
+        println!("route: POST /chat/detect-format");
+        println!("status: {}", report.detect_format_status.as_u16());
+        println!("detected format: {}", report.detect_format_id);
+        println!("detected platform: {}", report.detect_platform);
+        println!("parser source: {}", report.detect_parser_source);
+        println!("route: POST /chat/import");
+        println!("status: {}", report.import_status.as_u16());
+        println!("imported session id: {}", report.imported_session_id);
+        println!("detected platform: {}", report.detected_platform);
+        println!("payload platform: {}", report.payload_platform);
+        println!("route: POST /session/generate/:session_id");
+        println!(
+            "generated chat sessions: {}",
+            report.generated_session_count
+        );
+        println!("route: GET /chat/sessions/:session_id/member-activity");
+        println!(
+            "status: {} members={}",
+            report.member_activity_status.as_u16(),
+            report.member_activity_count
+        );
+        if report.member_activity_status != axum::http::StatusCode::OK
+            || report.member_activity_count == 0
+        {
+            println!("member activity body: {}", report.member_activity_body);
+        }
+        println!("route: POST /session/generate-summary/:session_id/:chat_session_id");
+        println!("status: {}", report.summary_status.as_u16());
+        println!(
+            "summary preview: {}",
+            report
+                .generated_summary
+                .chars()
+                .take(120)
+                .collect::<String>()
+        );
+        println!(
+            "summary persisted to chat_session.summary: {}",
+            report.summary_persisted
+        );
+        println!("route: GET /memory/sessions/:session_id/entries");
+        println!(
+            "status: {} memoryEntries={}",
+            report.memory_status.as_u16(),
+            report.memory_count
+        );
+        if report.memory_status != axum::http::StatusCode::OK || report.memory_count == 0 {
+            println!("memory body: {}", report.memory_body);
+        }
+        println!("route: POST /ai/search-messages");
+        println!(
+            "status: {} hits={}",
+            report.keyword_search_status.as_u16(),
+            report.keyword_hit_count
+        );
+        if report.keyword_search_status != axum::http::StatusCode::OK
+            || report.keyword_hit_count == 0
+        {
+            println!("keyword search body: {}", report.keyword_search_body);
+        }
+        println!("route: POST /ai/semantic-search-messages");
+        println!(
+            "status: {} hits={}",
+            report.semantic_search_status.as_u16(),
+            report.semantic_hit_count
+        );
+        if report.semantic_search_status != axum::http::StatusCode::OK
+            || report.semantic_hit_count == 0
+        {
+            println!("semantic search body: {}", report.semantic_search_body);
+        }
+        println!("route: POST /chat/sessions/:session_id/generate-sql");
+        println!("status: {}", report.generate_status.as_u16());
+        println!("contract: generated SQL includes session scope filter");
+        println!(
+            "sql preview: {}",
+            report.generated_sql.chars().take(120).collect::<String>()
+        );
+        println!("route: POST /chat/sessions/:session_id/execute-sql");
+        println!("status: {}", report.execute_status.as_u16());
     }
-    if !health_body.trim().eq_ignore_ascii_case("ok") {
-        return Err(CliError::Internal(format!(
-            "smoke check failed: expected body 'OK', got '{}'",
-            health_body.trim()
-        )));
-    }
-    if execute_status != axum::http::StatusCode::OK {
-        return Err(CliError::Internal(format!(
-            "smoke check failed: execute-sql expected 200, got {} with body {}",
-            execute_status, execute_body
-        )));
+
+    for report in &reports {
+        if report.health_status != axum::http::StatusCode::OK {
+            return Err(CliError::Internal(format!(
+                "smoke check failed [{}]: expected 200, got {}",
+                report.platform_id, report.health_status
+            )));
+        }
+        if !report.health_body.trim().eq_ignore_ascii_case("ok") {
+            return Err(CliError::Internal(format!(
+                "smoke check failed [{}]: expected body 'OK', got '{}'",
+                report.platform_id,
+                report.health_body.trim()
+            )));
+        }
+        if report.detect_format_status != axum::http::StatusCode::OK {
+            return Err(CliError::Internal(format!(
+                "smoke check failed [{}]: detect-format expected 200, got {}",
+                report.platform_id, report.detect_format_status
+            )));
+        }
+        if report.detect_platform != report.platform_id {
+            return Err(CliError::Internal(format!(
+                "smoke check failed [{}]: detect-format route drift, expected platform '{}', got '{}'",
+                report.platform_id, report.platform_id, report.detect_platform
+            )));
+        }
+        if report.import_status != axum::http::StatusCode::OK {
+            return Err(CliError::Internal(format!(
+                "smoke check failed [{}]: import expected 200, got {}",
+                report.platform_id, report.import_status
+            )));
+        }
+        if report.detected_platform != report.platform_id {
+            return Err(CliError::Internal(format!(
+                "smoke check failed [{}]: detect-format drift, expected detected platform '{}', got '{}'",
+                report.platform_id, report.platform_id, report.detected_platform
+            )));
+        }
+        if report.payload_platform != report.platform_id {
+            return Err(CliError::Internal(format!(
+                "smoke check failed [{}]: normalized payload platform drift, expected '{}', got '{}'",
+                report.platform_id, report.platform_id, report.payload_platform
+            )));
+        }
+        if report.generated_session_count == 0 {
+            return Err(CliError::Internal(format!(
+                "smoke check failed [{}]: no chat session index rows were generated",
+                report.platform_id
+            )));
+        }
+        if report.member_activity_status != axum::http::StatusCode::OK
+            || report.member_activity_count == 0
+        {
+            return Err(CliError::Internal(format!(
+                "smoke check failed [{}]: member activity expected 200 + non-empty rows, got status={} count={} body={}",
+                report.platform_id, report.member_activity_status, report.member_activity_count, report.member_activity_body
+            )));
+        }
+        if report.summary_status != axum::http::StatusCode::OK
+            || report.generated_summary.trim().is_empty()
+        {
+            return Err(CliError::Internal(format!(
+                "smoke check failed [{}]: summary generation expected 200 + non-empty summary, got status={} summary='{}'",
+                report.platform_id,
+                report.summary_status,
+                report.generated_summary
+            )));
+        }
+        if report.generated_summary.contains("系统消息") {
+            return Err(CliError::Internal(format!(
+                "smoke check failed [{}]: summary should not expose system-message participants, got summary='{}'",
+                report.platform_id, report.generated_summary
+            )));
+        }
+        if !report.summary_persisted {
+            return Err(CliError::Internal(format!(
+                "smoke check failed [{}]: generated summary was not persisted into chat_session.summary",
+                report.platform_id
+            )));
+        }
+        if report.memory_status != axum::http::StatusCode::OK || report.memory_count == 0 {
+            return Err(CliError::Internal(format!(
+                "smoke check failed [{}]: memory sync expected 200 + entries, got status={} count={} body={}",
+                report.platform_id, report.memory_status, report.memory_count, report.memory_body
+            )));
+        }
+        if report.keyword_search_status != axum::http::StatusCode::OK
+            || report.keyword_hit_count == 0
+        {
+            return Err(CliError::Internal(format!(
+                "smoke check failed [{}]: keyword search expected 200 + hits, got status={} count={} body={}",
+                report.platform_id, report.keyword_search_status, report.keyword_hit_count, report.keyword_search_body
+            )));
+        }
+        if report.semantic_search_status != axum::http::StatusCode::OK
+            || report.semantic_hit_count == 0
+        {
+            return Err(CliError::Internal(format!(
+                "smoke check failed [{}]: semantic search expected 200 + hits, got status={} count={} body={}",
+                report.platform_id, report.semantic_search_status, report.semantic_hit_count, report.semantic_search_body
+            )));
+        }
+        if report.execute_status != axum::http::StatusCode::OK {
+            return Err(CliError::Internal(format!(
+                "smoke check failed [{}]: execute-sql expected 200, got {} with body {}",
+                report.platform_id, report.execute_status, report.execute_body
+            )));
+        }
     }
 
     Ok(())
@@ -9670,6 +13505,9 @@ fn run_mcp_resource_read(
 mod tests {
     use super::*;
 
+    #[cfg(all(feature = "analysis", feature = "api"))]
+    static API_DB_TEST_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     #[test]
     fn validate_select_sql_accepts_select_statement() {
         let sql = "SELECT id, content FROM message LIMIT 10;";
@@ -9681,20 +13519,18 @@ mod tests {
     fn validate_select_sql_rejects_non_select_statement() {
         let sql = "DELETE FROM message";
         let err = validate_select_sql(sql).expect_err("non-select must be rejected");
-        assert!(
-            err.to_string()
-                .contains("only SELECT statements are allowed")
-        );
+        assert!(err
+            .to_string()
+            .contains("only SELECT statements are allowed"));
     }
 
     #[test]
     fn validate_select_sql_rejects_multiple_statements() {
         let sql = "SELECT 1; SELECT 2;";
         let err = validate_select_sql(sql).expect_err("multiple statements must be rejected");
-        assert!(
-            err.to_string()
-                .contains("multiple SQL statements are not allowed")
-        );
+        assert!(err
+            .to_string()
+            .contains("multiple SQL statements are not allowed"));
     }
 
     #[cfg(feature = "api")]
@@ -9711,10 +13547,9 @@ mod tests {
     fn parse_mcp_tool_args_json_rejects_non_object_payload() {
         let err =
             parse_mcp_tool_args_json(r#"[1,2,3]"#).expect_err("array json should be rejected");
-        assert!(
-            err.to_string()
-                .contains("--args-json must be a JSON object")
-        );
+        assert!(err
+            .to_string()
+            .contains("--args-json must be a JSON object"));
     }
 
     #[cfg(feature = "api")]
@@ -9800,10 +13635,9 @@ mod tests {
             1500,
         )
         .expect_err("non-object args should fail before network execution");
-        assert!(
-            err.to_string()
-                .contains("--args-json must be a JSON object")
-        );
+        assert!(err
+            .to_string()
+            .contains("--args-json must be a JSON object"));
     }
 
     #[cfg(feature = "api")]
@@ -9886,6 +13720,8 @@ mod tests {
     #[cfg(feature = "api")]
     #[test]
     fn run_api_smoke_check_validates_health_and_sql_contracts() {
+        #[cfg(all(feature = "analysis", feature = "api"))]
+        let _guard = API_DB_TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
         let temp_db = std::env::temp_dir().join(format!(
             "xenobot-cli-api-smoke-{}.db",
             std::time::SystemTime::now()
@@ -10067,6 +13903,67 @@ mod tests {
         let _ = std::fs::remove_file(&temp_path);
     }
 
+    #[cfg(feature = "analysis")]
+    #[test]
+    fn monitor_file_state_reflects_subsecond_rewrites() {
+        let temp_path = std::env::temp_dir().join(format!(
+            "xenobot-monitor-state-{}-{}.txt",
+            std::process::id(),
+            chrono::Utc::now().timestamp_micros()
+        ));
+        std::fs::write(&temp_path, "a").expect("write initial file");
+        let first = read_monitor_file_state(&temp_path).expect("read first state");
+
+        std::thread::sleep(std::time::Duration::from_millis(15));
+        std::fs::write(&temp_path, "abcdef").expect("rewrite file");
+        let second = read_monitor_file_state(&temp_path).expect("read second state");
+
+        assert_ne!(first, second);
+        assert_eq!(second.file_size, 6);
+
+        let _ = std::fs::remove_file(&temp_path);
+    }
+
+    #[cfg(feature = "analysis")]
+    #[test]
+    fn wait_for_monitor_file_to_settle_tracks_burst_until_final_write() {
+        let temp_path = std::env::temp_dir().join(format!(
+            "xenobot-monitor-settle-{}-{}.txt",
+            std::process::id(),
+            chrono::Utc::now().timestamp_micros()
+        ));
+        std::fs::write(&temp_path, "a").expect("write initial file");
+
+        let writer_path = temp_path.clone();
+        let writer = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            std::fs::write(&writer_path, "ab").expect("write second version");
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            std::fs::write(&writer_path, "abc").expect("write third version");
+        });
+
+        let start = std::time::Instant::now();
+        let settled = wait_for_monitor_file_to_settle(
+            &temp_path,
+            std::time::Duration::from_millis(35),
+            std::time::Duration::from_millis(220),
+            std::time::Duration::from_millis(10),
+        )
+        .expect("settle window should complete");
+        let elapsed = start.elapsed();
+        writer.join().expect("writer thread");
+
+        assert_eq!(settled.file_size, 3);
+        assert_eq!(
+            std::fs::read_to_string(&temp_path).expect("read final file"),
+            "abc"
+        );
+        assert!(elapsed >= std::time::Duration::from_millis(60));
+        assert!(elapsed < std::time::Duration::from_millis(220));
+
+        let _ = std::fs::remove_file(&temp_path);
+    }
+
     #[cfg(all(feature = "analysis", feature = "api"))]
     #[test]
     fn monitor_checkpoint_helper_matches_completed_fingerprint() {
@@ -10122,6 +14019,229 @@ mod tests {
         assert!(!mismatch);
 
         let _ = std::fs::remove_file(&temp_db);
+    }
+
+    #[cfg(all(feature = "analysis", feature = "api"))]
+    #[test]
+    fn persist_monitor_chat_to_db_roundtrip_records_messages_and_checkpoint() {
+        let _guard = API_DB_TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        let temp_root = std::env::temp_dir().join(format!(
+            "xenobot-monitor-roundtrip-{}-{}",
+            std::process::id(),
+            chrono::Utc::now().timestamp_micros()
+        ));
+        std::fs::create_dir_all(&temp_root).expect("create temp root");
+        let temp_db = temp_root.join("monitor.db");
+        let source_path = temp_root.join("monitor.wechat.json");
+
+        std::fs::write(&source_path, r#"{"fingerprint":"v1"}"#).expect("write initial source");
+
+        let build_chat = || xenobot_analysis::parsers::ParsedChat {
+            platform: "wechat".to_string(),
+            chat_name: "Ops Bridge".to_string(),
+            chat_type: xenobot_analysis::parsers::ChatType::Group,
+            messages: vec![
+                xenobot_analysis::parsers::ParsedMessage {
+                    sender: "alice".to_string(),
+                    sender_name: Some("Alice".to_string()),
+                    timestamp: 1_700_000_001,
+                    content: "Launch readiness looks good.".to_string(),
+                    msg_type: xenobot_analysis::parsers::MessageType::Text,
+                },
+                xenobot_analysis::parsers::ParsedMessage {
+                    sender: "bob".to_string(),
+                    sender_name: Some("Bob".to_string()),
+                    timestamp: 1_700_000_045,
+                    content: "One more checklist pass would help.".to_string(),
+                    msg_type: xenobot_analysis::parsers::MessageType::Text,
+                },
+                xenobot_analysis::parsers::ParsedMessage {
+                    sender: "alice".to_string(),
+                    sender_name: Some("Alice".to_string()),
+                    timestamp: 1_700_000_090,
+                    content: "Remember the payment webhook blocker.".to_string(),
+                    msg_type: xenobot_analysis::parsers::MessageType::Text,
+                },
+                xenobot_analysis::parsers::ParsedMessage {
+                    sender: "carol".to_string(),
+                    sender_name: Some("Carol".to_string()),
+                    timestamp: 1_700_000_135,
+                    content: "Semantic search should find the blocker summary.".to_string(),
+                    msg_type: xenobot_analysis::parsers::MessageType::Text,
+                },
+            ],
+            members: vec![
+                xenobot_analysis::parsers::ChatMember {
+                    id: "alice".to_string(),
+                    name: Some("Alice".to_string()),
+                    display_name: Some("Alice".to_string()),
+                },
+                xenobot_analysis::parsers::ChatMember {
+                    id: "bob".to_string(),
+                    name: Some("Bob".to_string()),
+                    display_name: Some("Bob".to_string()),
+                },
+                xenobot_analysis::parsers::ChatMember {
+                    id: "carol".to_string(),
+                    name: Some("Carol".to_string()),
+                    display_name: Some("Carol".to_string()),
+                },
+            ],
+        };
+
+        let first = persist_monitor_chat_to_db(
+            &source_path,
+            build_chat(),
+            Some(&temp_db),
+            PlatformFormat::WeChat,
+        )
+        .expect("first monitor import should succeed");
+        assert_eq!(first.processed_messages, 4);
+        assert_eq!(first.inserted_messages, 4);
+        assert_eq!(first.skipped_duplicates, 0);
+        assert!(!first.source_checkpoint_skipped);
+        assert!(first.meta_id > 0);
+
+        let second = persist_monitor_chat_to_db(
+            &source_path,
+            build_chat(),
+            Some(&temp_db),
+            PlatformFormat::WeChat,
+        )
+        .expect("unchanged source should hit checkpoint fast path");
+        assert_eq!(second.meta_id, first.meta_id);
+        assert_eq!(second.processed_messages, 0);
+        assert_eq!(second.inserted_messages, 0);
+        assert_eq!(second.skipped_duplicates, 0);
+        assert!(second.source_checkpoint_skipped);
+
+        std::fs::write(&source_path, r#"{"fingerprint":"v2"}"#).expect("rewrite source file");
+
+        let third = persist_monitor_chat_to_db(
+            &source_path,
+            build_chat(),
+            Some(&temp_db),
+            PlatformFormat::WeChat,
+        )
+        .expect("changed fingerprint should reprocess and deduplicate");
+        assert_eq!(third.meta_id, first.meta_id);
+        assert_eq!(third.processed_messages, 4);
+        assert_eq!(third.inserted_messages, 0);
+        assert_eq!(third.skipped_duplicates, 4);
+        assert!(!third.source_checkpoint_skipped);
+
+        let conn = rusqlite::Connection::open(&temp_db).expect("open monitor db");
+        let meta_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM meta WHERE id = ?1 AND name = ?2 AND platform = ?3",
+                rusqlite::params![first.meta_id, "Ops Bridge", "wechat"],
+                |row| row.get(0),
+            )
+            .expect("query meta count");
+        assert_eq!(meta_count, 1);
+
+        let message_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM message WHERE meta_id = ?1",
+                rusqlite::params![first.meta_id],
+                |row| row.get(0),
+            )
+            .expect("query message count");
+        assert_eq!(message_count, 4);
+
+        let member_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM member WHERE platform_id IN (?1, ?2, ?3)",
+                rusqlite::params!["wechat:alice", "wechat:bob", "wechat:carol"],
+                |row| row.get(0),
+            )
+            .expect("query member count");
+        assert_eq!(member_count, 3);
+
+        let current_fingerprint =
+            build_source_file_fingerprint(&source_path).expect("build current fingerprint");
+        let checkpoint = conn
+            .query_row(
+                r#"
+                SELECT fingerprint, last_inserted_messages, last_duplicate_messages, status, COALESCE(meta_id, 0)
+                FROM import_source_checkpoint
+                WHERE source_kind = 'monitor' AND source_path = ?1
+                "#,
+                rusqlite::params![source_path.to_string_lossy().to_string()],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, i64>(1)?,
+                        row.get::<_, i64>(2)?,
+                        row.get::<_, String>(3)?,
+                        row.get::<_, i64>(4)?,
+                    ))
+                },
+            )
+            .expect("query checkpoint row");
+        assert_eq!(checkpoint.0, current_fingerprint.fingerprint);
+        assert_eq!(checkpoint.1, 0);
+        assert_eq!(checkpoint.2, 4);
+        assert_eq!(checkpoint.3, "completed");
+        assert_eq!(checkpoint.4, first.meta_id);
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[cfg(all(feature = "analysis", feature = "api"))]
+    #[test]
+    fn one_shot_monitor_bootstrap_records_checkpoint_for_existing_export() {
+        let _guard = API_DB_TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        let temp_root = std::env::temp_dir().join(format!(
+            "xenobot-monitor-once-{}-{}",
+            std::process::id(),
+            chrono::Utc::now().timestamp_micros()
+        ));
+        let export_root = temp_root.join("exports");
+        let work_dir = temp_root.join("work");
+        let temp_db = temp_root.join("monitor-once.db");
+        let source_path = export_root.join("wechat-export.json");
+        std::fs::create_dir_all(&export_root).expect("create export root");
+        std::fs::create_dir_all(&work_dir).expect("create work dir");
+        std::fs::write(
+            &source_path,
+            r#"{"weflow":{"version":"1.0.0"},"session":{"wxid":"launch-room@chatroom","nickname":"Launch Room","remark":"","displayName":"Launch Room","type":"群聊"},"messages":[{"localId":1,"createTime":1735813230,"type":"文本消息","content":"hello wechat","isSend":0,"senderUsername":"wxid_alice","senderDisplayName":"Alice"},{"localId":2,"createTime":1735813290,"type":"文本消息","content":"bootstrap monitor pass","isSend":0,"senderUsername":"wxid_bob","senderDisplayName":"Bob"}]}"#,
+        )
+        .expect("write export");
+
+        run_legal_safe_monitor_loop(
+            &RuntimePlatform::WeChat,
+            &export_root,
+            &work_dir,
+            1,
+            true,
+            Some(temp_db.clone()),
+            PlatformFormat::WeChat,
+            true,
+        )
+        .expect("one-shot monitor should succeed");
+
+        let conn = rusqlite::Connection::open(&temp_db).expect("open db");
+        let checkpoint_count: i64 = conn
+            .query_row(
+                r#"
+                SELECT COUNT(*)
+                FROM import_source_checkpoint
+                WHERE source_kind = 'monitor'
+                  AND status = 'completed'
+                  AND lower(coalesce(platform, '')) = 'wechat'
+                "#,
+                [],
+                |row| row.get(0),
+            )
+            .expect("count monitor checkpoints");
+        let message_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM message", [], |row| row.get(0))
+            .expect("count messages");
+        assert_eq!(checkpoint_count, 1);
+        assert_eq!(message_count, 2);
+
+        let _ = std::fs::remove_dir_all(&temp_root);
     }
 
     #[cfg(feature = "api")]
@@ -10259,11 +14379,9 @@ mod tests {
             payload["analysis"].as_str().unwrap_or_default(),
             "time_distribution_daily"
         );
-        assert!(
-            payload["rows"]
-                .as_array()
-                .is_some_and(|rows| !rows.is_empty())
-        );
+        assert!(payload["rows"]
+            .as_array()
+            .is_some_and(|rows| !rows.is_empty()));
     }
 
     #[test]
@@ -10342,6 +14460,1483 @@ mod tests {
     }
 
     #[test]
+    fn source_doctor_defaults_to_trio_platforms() {
+        let platforms = source_doctor_default_platforms(&[]);
+        let ids = platforms
+            .iter()
+            .map(core_platform_id)
+            .collect::<std::collections::HashSet<_>>();
+        assert_eq!(platforms.len(), 3);
+        assert!(ids.contains("wechat"));
+        assert!(ids.contains("qq"));
+        assert!(ids.contains("discord"));
+    }
+
+    #[test]
+    fn source_ready_defaults_to_trio_formats() {
+        let formats = source_ready_default_formats(&[]);
+        assert_eq!(
+            formats,
+            vec![
+                PlatformFormat::WeChat,
+                PlatformFormat::Qq,
+                PlatformFormat::Discord
+            ]
+        );
+    }
+
+    #[cfg(feature = "analysis")]
+    #[test]
+    fn detect_supported_archive_kind_recognizes_common_export_archives() {
+        assert_eq!(
+            detect_supported_archive_kind(Path::new("/tmp/export.zip")),
+            Some(ImportArchiveKind::Zip)
+        );
+        assert_eq!(
+            detect_supported_archive_kind(Path::new("/tmp/export.tar")),
+            Some(ImportArchiveKind::Tar)
+        );
+        assert_eq!(
+            detect_supported_archive_kind(Path::new("/tmp/export.tar.gz")),
+            Some(ImportArchiveKind::Tar)
+        );
+        assert_eq!(
+            detect_supported_archive_kind(Path::new("/tmp/export.tgz")),
+            Some(ImportArchiveKind::Tar)
+        );
+        assert_eq!(
+            detect_supported_archive_kind(Path::new("/tmp/export.json")),
+            None
+        );
+    }
+
+    #[cfg(feature = "analysis")]
+    #[test]
+    fn internal_archive_marker_is_not_treated_as_chat_input() {
+        assert!(!is_supported_chat_file(Path::new(
+            "/tmp/.xenobot-archive-source.json"
+        )));
+        assert!(!is_supported_import_input(Path::new(
+            "/tmp/.xenobot-archive-source.json"
+        )));
+    }
+
+    #[cfg(feature = "analysis")]
+    #[test]
+    fn manual_review_template_file_is_not_treated_as_chat_input() {
+        assert!(!is_supported_chat_file(Path::new(
+            "/tmp/manual-review/selection.template.json"
+        )));
+        assert!(!is_supported_import_input(Path::new(
+            "/tmp/manual-review/selection.template.json"
+        )));
+    }
+
+    #[cfg(feature = "analysis")]
+    #[test]
+    fn manual_review_readme_is_not_treated_as_chat_input() {
+        assert!(!is_supported_chat_file(Path::new(
+            "/tmp/manual-review/README.md"
+        )));
+        assert!(!is_supported_import_input(Path::new(
+            "/tmp/manual-review/README.md"
+        )));
+    }
+
+    #[cfg(feature = "analysis")]
+    #[test]
+    fn manual_review_notes_are_not_treated_as_direct_chat_input() {
+        assert!(!is_supported_chat_file(Path::new(
+            "/tmp/manual-review/notes/thread-summary.txt"
+        )));
+        assert!(!is_supported_import_input(Path::new(
+            "/tmp/manual-review/notes/thread-summary.txt"
+        )));
+    }
+
+    #[test]
+    fn build_manual_review_selection_payload_returns_none_when_workspace_is_empty() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "xenobot-manual-review-empty-{}-{}",
+            std::process::id(),
+            chrono::Utc::now().timestamp_micros()
+        ));
+        std::fs::create_dir_all(temp_root.join("notes")).expect("create notes dir");
+        std::fs::create_dir_all(temp_root.join("attachments")).expect("create attachments dir");
+
+        let payload =
+            build_manual_review_selection_payload("wechat", &temp_root).expect("build payload");
+        assert!(payload.is_none());
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
+    fn build_manual_review_selection_payload_collects_notes_and_files() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "xenobot-manual-review-payload-{}-{}",
+            std::process::id(),
+            chrono::Utc::now().timestamp_micros()
+        ));
+        let notes_dir = temp_root.join("notes");
+        let screenshots_dir = temp_root.join("screenshots");
+        std::fs::create_dir_all(&notes_dir).expect("create notes dir");
+        std::fs::create_dir_all(&screenshots_dir).expect("create screenshots dir");
+        std::fs::write(notes_dir.join("summary.txt"), "Critical summary line").expect("write note");
+        std::fs::write(screenshots_dir.join("capture.png"), b"png").expect("write screenshot");
+
+        let payload = build_manual_review_selection_payload("discord", &temp_root)
+            .expect("build payload")
+            .expect("payload should exist");
+        assert_eq!(payload["schema"], "xenobot/manual-review");
+        assert_eq!(payload["platform"], "discord");
+        assert_eq!(
+            payload["selectedMessages"].as_array().map(|v| v.len()),
+            Some(1)
+        );
+        assert_eq!(
+            payload["selectedFiles"].as_array().map(|v| v.len()),
+            Some(1)
+        );
+        assert_eq!(
+            payload["selectedFiles"][0]["path"],
+            serde_json::Value::String("screenshots/capture.png".to_string())
+        );
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
+    fn stage_manual_review_inbox_artifacts_moves_files_into_expected_folders() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "xenobot-manual-review-inbox-stage-{}-{}",
+            std::process::id(),
+            chrono::Utc::now().timestamp_micros()
+        ));
+        let inbox_root = temp_root.join("inbox");
+        std::fs::create_dir_all(&inbox_root).expect("create inbox root");
+        std::fs::create_dir_all(temp_root.join("notes")).expect("create notes root");
+        std::fs::create_dir_all(temp_root.join("screenshots")).expect("create screenshots root");
+        std::fs::create_dir_all(temp_root.join("attachments")).expect("create attachments root");
+        std::fs::write(inbox_root.join("summary.txt"), "keep").expect("write note");
+        std::fs::write(inbox_root.join("capture.png"), b"png").expect("write screenshot");
+        std::fs::write(inbox_root.join("evidence.pdf"), b"pdf").expect("write attachment");
+
+        let staged = stage_manual_review_inbox_artifacts(&temp_root).expect("stage inbox");
+        assert_eq!(staged, 3);
+        assert!(collect_files_recursive(&inbox_root)
+            .expect("read inbox")
+            .is_empty());
+        assert_eq!(
+            collect_files_recursive(&temp_root.join("notes"))
+                .expect("read notes")
+                .len(),
+            1
+        );
+        assert_eq!(
+            collect_files_recursive(&temp_root.join("screenshots"))
+                .expect("read screenshots")
+                .len(),
+            1
+        );
+        assert_eq!(
+            collect_files_recursive(&temp_root.join("attachments"))
+                .expect("read attachments")
+                .len(),
+            1
+        );
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[cfg(feature = "analysis")]
+    #[test]
+    fn collect_candidate_import_inputs_expands_zip_archives() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "xenobot-import-archive-{}-{}",
+            std::process::id(),
+            chrono::Utc::now().timestamp_micros()
+        ));
+        let export_dir = temp_root.join("exports");
+        let source_dir = temp_root.join("source");
+        let work_dir = temp_root.join("work");
+        let archive_path = export_dir.join("wechat-export.zip");
+        std::fs::create_dir_all(&export_dir).expect("create export dir");
+        std::fs::create_dir_all(&source_dir).expect("create source dir");
+        std::fs::create_dir_all(&work_dir).expect("create work dir");
+        std::fs::write(source_dir.join("chat.json"), "{}").expect("write chat file");
+
+        let status = std::process::Command::new("/usr/bin/ditto")
+            .arg("-c")
+            .arg("-k")
+            .arg(&source_dir)
+            .arg(&archive_path)
+            .status()
+            .expect("create zip archive");
+        assert!(status.success(), "zip archive creation should succeed");
+
+        let inputs =
+            collect_candidate_import_inputs(&archive_path, &work_dir).expect("collect inputs");
+        assert_eq!(inputs.len(), 1);
+        assert!(inputs[0].ends_with("chat.json"));
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[cfg(feature = "analysis")]
+    #[test]
+    fn authorized_export_root_counts_archived_chat_inputs() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "xenobot-import-ready-archive-root-{}-{}",
+            std::process::id(),
+            chrono::Utc::now().timestamp_micros()
+        ));
+        let export_root = temp_root.join("exports");
+        let source_dir = temp_root.join("source");
+        let work_dir = temp_root.join("work");
+        let archive_path = export_root.join("discord-export.zip");
+        std::fs::create_dir_all(&export_root).expect("create export root");
+        std::fs::create_dir_all(&source_dir).expect("create source dir");
+        std::fs::create_dir_all(&work_dir).expect("create work dir");
+        std::fs::write(
+            source_dir.join("chat.json"),
+            r#"{"guild":{"name":"Ops"},"channel":{"name":"bridge"},"messages":[]}"#,
+        )
+        .expect("write chat file");
+
+        let status = std::process::Command::new("/usr/bin/ditto")
+            .arg("-c")
+            .arg("-k")
+            .arg(&source_dir)
+            .arg(&archive_path)
+            .status()
+            .expect("create zip archive");
+        assert!(status.success(), "zip archive creation should succeed");
+
+        let inputs =
+            collect_candidate_import_inputs(&export_root, &work_dir).expect("collect inputs");
+        assert_eq!(inputs.len(), 1);
+        assert!(inputs[0].ends_with("chat.json"));
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
+    fn source_doctor_marks_platform_ready_when_authorized_export_exists() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "xenobot-source-doctor-ready-{}-{}",
+            std::process::id(),
+            chrono::Utc::now().timestamp_micros()
+        ));
+        let runtime_root = temp_root.join("runtime");
+        let export_root = temp_root.join("authorized exports");
+        let export_file = export_root.join("wechat chat sample.json");
+        std::fs::create_dir_all(&runtime_root).expect("create runtime root");
+        std::fs::create_dir_all(&export_root).expect("create export root");
+        std::fs::write(&export_file, "{}").expect("write export file");
+
+        let candidates = vec![
+            SourceCandidate {
+                platform: RuntimePlatform::WeChat,
+                platform_id: "wechat".to_string(),
+                label: "runtime".to_string(),
+                kind: SourceKind::AppContainer,
+                path: runtime_root.clone(),
+                exists: true,
+                readable: true,
+            },
+            SourceCandidate {
+                platform: RuntimePlatform::WeChat,
+                platform_id: "wechat".to_string(),
+                label: "export".to_string(),
+                kind: SourceKind::ExportDirectory,
+                path: export_root.clone(),
+                exists: true,
+                readable: true,
+            },
+        ];
+
+        let report = build_source_doctor_platform_report(
+            &RuntimePlatform::WeChat,
+            &candidates,
+            &AccountStore::default(),
+            None,
+        )
+        .expect("build doctor report");
+        assert_eq!(report.platform_id, "wechat");
+        assert_eq!(report.readable_runtime_roots, 1);
+        assert_eq!(report.readable_export_roots, 1);
+        assert_eq!(report.importable_file_count, 1);
+        assert!(report.ready_for_authorized_import_pipeline);
+        assert!(report.ready_for_authorized_import_test);
+        assert!(report.ready_for_authorized_monitor_test);
+        assert!(!report.ready_for_frontend_backend_contract);
+        assert!(report
+            .recommended_import_command
+            .as_deref()
+            .unwrap_or_default()
+            .contains("authorized exports/wechat chat sample.json"));
+        assert!(report
+            .recommended_import_command
+            .as_deref()
+            .unwrap_or_default()
+            .contains('\''));
+        assert!(report
+            .recommended_monitor_command
+            .as_deref()
+            .unwrap_or_default()
+            .contains("authorized exports"));
+        assert!(report
+            .recommended_monitor_command
+            .as_deref()
+            .unwrap_or_default()
+            .contains('\''));
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
+    fn source_doctor_marks_platform_ready_when_authorized_export_archive_contains_chat_input() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "xenobot-source-doctor-archive-ready-{}-{}",
+            std::process::id(),
+            chrono::Utc::now().timestamp_micros()
+        ));
+        let runtime_root = temp_root.join("runtime");
+        let export_root = temp_root.join("authorized exports");
+        let source_dir = temp_root.join("source");
+        let archive_path = export_root.join("discord-export.zip");
+        std::fs::create_dir_all(&runtime_root).expect("create runtime root");
+        std::fs::create_dir_all(&export_root).expect("create export root");
+        std::fs::create_dir_all(&source_dir).expect("create source dir");
+        std::fs::write(source_dir.join("chat.json"), "{\"messages\":[]}").expect("write chat file");
+
+        let status = std::process::Command::new("zip")
+            .current_dir(&source_dir)
+            .arg("-q")
+            .arg("-r")
+            .arg(&archive_path)
+            .arg("chat.json")
+            .status()
+            .expect("create zip archive");
+        assert!(status.success(), "zip archive creation should succeed");
+
+        let candidates = vec![
+            SourceCandidate {
+                platform: RuntimePlatform::Discord,
+                platform_id: "discord".to_string(),
+                label: "runtime".to_string(),
+                kind: SourceKind::AppContainer,
+                path: runtime_root,
+                exists: true,
+                readable: true,
+            },
+            SourceCandidate {
+                platform: RuntimePlatform::Discord,
+                platform_id: "discord".to_string(),
+                label: "export".to_string(),
+                kind: SourceKind::ExportDirectory,
+                path: export_root,
+                exists: true,
+                readable: true,
+            },
+        ];
+
+        let report = build_source_doctor_platform_report(
+            &RuntimePlatform::Discord,
+            &candidates,
+            &AccountStore::default(),
+            None,
+        )
+        .expect("build doctor report");
+        assert_eq!(report.importable_file_count, 1);
+        assert!(report.ready_for_authorized_import_test);
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
+    fn source_doctor_ignores_authorized_export_archive_without_chat_input() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "xenobot-source-doctor-archive-nochat-{}-{}",
+            std::process::id(),
+            chrono::Utc::now().timestamp_micros()
+        ));
+        let runtime_root = temp_root.join("runtime");
+        let export_root = temp_root.join("authorized exports");
+        let source_dir = temp_root.join("source");
+        let archive_path = export_root.join("attachment-only.zip");
+        std::fs::create_dir_all(&runtime_root).expect("create runtime root");
+        std::fs::create_dir_all(&export_root).expect("create export root");
+        std::fs::create_dir_all(&source_dir).expect("create source dir");
+        std::fs::write(source_dir.join("attachment.bin"), "plain attachment")
+            .expect("write non-chat file");
+
+        let status = std::process::Command::new("zip")
+            .current_dir(&source_dir)
+            .arg("-q")
+            .arg("-r")
+            .arg(&archive_path)
+            .arg("attachment.bin")
+            .status()
+            .expect("create zip archive");
+        assert!(status.success(), "zip archive creation should succeed");
+
+        let candidates = vec![
+            SourceCandidate {
+                platform: RuntimePlatform::Discord,
+                platform_id: "discord".to_string(),
+                label: "runtime".to_string(),
+                kind: SourceKind::AppContainer,
+                path: runtime_root,
+                exists: true,
+                readable: true,
+            },
+            SourceCandidate {
+                platform: RuntimePlatform::Discord,
+                platform_id: "discord".to_string(),
+                label: "export".to_string(),
+                kind: SourceKind::ExportDirectory,
+                path: export_root,
+                exists: true,
+                readable: true,
+            },
+        ];
+
+        let report = build_source_doctor_platform_report(
+            &RuntimePlatform::Discord,
+            &candidates,
+            &AccountStore::default(),
+            None,
+        )
+        .expect("build doctor report");
+        assert_eq!(report.importable_file_count, 0);
+        assert!(!report.ready_for_authorized_import_test);
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
+    fn source_doctor_ignores_manual_review_scaffold_without_selected_pack() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "xenobot-source-doctor-manual-review-scaffold-{}-{}",
+            std::process::id(),
+            chrono::Utc::now().timestamp_micros()
+        ));
+        let export_root = temp_root.join("authorized exports");
+        let manual_root = export_root.join("manual-review");
+        std::fs::create_dir_all(&manual_root).expect("create manual review root");
+        std::fs::write(
+            manual_root.join("README.md"),
+            "# Manual review\nfill the selection pack",
+        )
+        .expect("write readme");
+        std::fs::write(
+            manual_root.join("selection.template.json"),
+            r#"{"schema":"xenobot/manual-review","selectedMessages":[]}"#,
+        )
+        .expect("write template");
+
+        let candidates = vec![SourceCandidate {
+            platform: RuntimePlatform::WeChat,
+            platform_id: "wechat".to_string(),
+            label: "export".to_string(),
+            kind: SourceKind::ExportDirectory,
+            path: export_root,
+            exists: true,
+            readable: true,
+        }];
+
+        let report = build_source_doctor_platform_report(
+            &RuntimePlatform::WeChat,
+            &candidates,
+            &AccountStore::default(),
+            None,
+        )
+        .expect("build doctor report");
+        assert_eq!(report.importable_file_count, 0);
+        assert!(!report.ready_for_authorized_import_test);
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[cfg(feature = "analysis")]
+    #[test]
+    fn collect_detectable_candidate_import_inputs_ignores_manual_review_notes_without_pack() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "xenobot-detectable-manual-review-notes-{}-{}",
+            std::process::id(),
+            chrono::Utc::now().timestamp_micros()
+        ));
+        let export_root = temp_root.join("exports");
+        let manual_root = export_root.join("manual-review");
+        let notes_root = manual_root.join("notes");
+        let work_dir = temp_root.join("work");
+        std::fs::create_dir_all(&notes_root).expect("create notes root");
+        std::fs::create_dir_all(&work_dir).expect("create work dir");
+        std::fs::write(
+            notes_root.join("selection-notes.txt"),
+            "Alice said this is important.\nBob agreed later.",
+        )
+        .expect("write note file");
+
+        let inputs = collect_detectable_candidate_import_inputs(&export_root, &work_dir)
+            .expect("collect detectable inputs");
+        assert!(
+            inputs.is_empty(),
+            "notes-only manual review workspace must not look import-ready"
+        );
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[cfg(feature = "analysis")]
+    #[test]
+    fn collect_detectable_candidate_import_inputs_accepts_completed_manual_review_pack() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "xenobot-detectable-manual-review-pack-{}-{}",
+            std::process::id(),
+            chrono::Utc::now().timestamp_micros()
+        ));
+        let export_root = temp_root.join("exports");
+        let manual_root = export_root.join("manual-review");
+        let work_dir = temp_root.join("work");
+        std::fs::create_dir_all(&manual_root).expect("create manual root");
+        std::fs::create_dir_all(&work_dir).expect("create work dir");
+        std::fs::write(
+            manual_root.join("selection.json"),
+            r#"{
+              "schema": "xenobot/manual-review",
+              "captureMode": "manual-selection",
+              "platform": "discord",
+              "chatName": "Ops War Room",
+              "chatType": "group",
+              "members": [{"id": "u1", "displayName": "Alice"}],
+              "selectedMessages": [{
+                "senderId": "u1",
+                "senderName": "Alice",
+                "timestamp": "2026-03-19T10:00:00Z",
+                "content": "Keep this thread",
+                "messageType": "text"
+              }]
+            }"#,
+        )
+        .expect("write selection pack");
+
+        let inputs = collect_detectable_candidate_import_inputs(&export_root, &work_dir)
+            .expect("collect detectable inputs");
+        assert_eq!(inputs.len(), 1);
+        assert!(inputs[0].ends_with("selection.json"));
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
+    fn source_doctor_reports_manual_review_artifacts_and_buildable_pack() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "xenobot-source-doctor-manual-review-artifacts-{}-{}",
+            std::process::id(),
+            chrono::Utc::now().timestamp_micros()
+        ));
+        let export_root = temp_root.join("authorized exports");
+        let manual_root = export_root.join("manual-review");
+        std::fs::create_dir_all(manual_root.join("notes")).expect("create notes root");
+        std::fs::create_dir_all(manual_root.join("screenshots")).expect("create screenshots root");
+        std::fs::write(
+            manual_root.join("notes").join("summary.txt"),
+            "Preserve this note",
+        )
+        .expect("write note");
+        std::fs::write(manual_root.join("screenshots").join("capture.png"), b"png")
+            .expect("write screenshot");
+
+        let candidates = vec![SourceCandidate {
+            platform: RuntimePlatform::WeChat,
+            platform_id: "wechat".to_string(),
+            label: "export".to_string(),
+            kind: SourceKind::ExportDirectory,
+            path: export_root,
+            exists: true,
+            readable: true,
+        }];
+
+        let report = build_source_doctor_platform_report(
+            &RuntimePlatform::WeChat,
+            &candidates,
+            &AccountStore::default(),
+            None,
+        )
+        .expect("build doctor report");
+        assert!(report.manual_review_status.workspace_present);
+        assert!(!report.manual_review_status.selection_pack_present);
+        assert!(report.manual_review_status.buildable_selection_pack);
+        assert_eq!(report.manual_review_status.captured_artifact_count, 2);
+        assert!(report
+            .manual_review_status
+            .captured_artifact_samples
+            .iter()
+            .any(|sample| sample == "notes/summary.txt"));
+        assert!(report
+            .manual_review_status
+            .captured_artifact_samples
+            .iter()
+            .any(|sample| sample == "screenshots/capture.png"));
+        assert!(report
+            .blocking_reasons
+            .iter()
+            .any(|reason| reason.contains("selection.json has not been built yet")));
+        assert!(report
+            .recommended_next_step
+            .contains("source build-manual-review-pack --format wechat"));
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
+    fn source_doctor_reports_manual_review_inbox_artifacts_as_buildable() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "xenobot-source-doctor-manual-review-inbox-{}-{}",
+            std::process::id(),
+            chrono::Utc::now().timestamp_micros()
+        ));
+        let export_root = temp_root.join("authorized exports");
+        let manual_root = export_root.join("manual-review");
+        std::fs::create_dir_all(manual_root.join("inbox")).expect("create inbox root");
+        std::fs::write(
+            manual_root.join("inbox").join("summary.txt"),
+            "Preserve this note",
+        )
+        .expect("write note");
+
+        let candidates = vec![SourceCandidate {
+            platform: RuntimePlatform::Discord,
+            platform_id: "discord".to_string(),
+            label: "export".to_string(),
+            kind: SourceKind::ExportDirectory,
+            path: export_root,
+            exists: true,
+            readable: true,
+        }];
+
+        let report = build_source_doctor_platform_report(
+            &RuntimePlatform::Discord,
+            &candidates,
+            &AccountStore::default(),
+            None,
+        )
+        .expect("build doctor report");
+        assert!(report.manual_review_status.workspace_present);
+        assert_eq!(report.manual_review_status.inbox_artifact_count, 1);
+        assert!(report.manual_review_status.buildable_selection_pack);
+        assert!(report
+            .manual_review_status
+            .inbox_artifact_samples
+            .iter()
+            .any(|sample| sample == "inbox/summary.txt"));
+        assert!(report
+            .blocking_reasons
+            .iter()
+            .any(|reason| reason.contains("manual-review inbox contains staged artifacts")));
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
+    fn source_doctor_reports_manual_review_selection_pack_when_present() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "xenobot-source-doctor-manual-review-selection-{}-{}",
+            std::process::id(),
+            chrono::Utc::now().timestamp_micros()
+        ));
+        let export_root = temp_root.join("authorized exports");
+        let manual_root = export_root.join("manual-review");
+        std::fs::create_dir_all(&manual_root).expect("create manual root");
+        std::fs::write(
+            manual_root.join("selection.json"),
+            r#"{
+              "schema": "xenobot/manual-review",
+              "captureMode": "manual-selection",
+              "platform": "qq",
+              "chatName": "QQ Manual Capture",
+              "chatType": "group",
+              "members": [{"id": "u1", "displayName": "Alice"}],
+              "selectedMessages": [{
+                "senderId": "u1",
+                "senderName": "Alice",
+                "timestamp": "2026-03-19T10:00:00Z",
+                "content": "Keep this",
+                "messageType": "text"
+              }]
+            }"#,
+        )
+        .expect("write selection pack");
+
+        let candidates = vec![SourceCandidate {
+            platform: RuntimePlatform::Qq,
+            platform_id: "qq".to_string(),
+            label: "export".to_string(),
+            kind: SourceKind::ExportDirectory,
+            path: export_root,
+            exists: true,
+            readable: true,
+        }];
+
+        let report = build_source_doctor_platform_report(
+            &RuntimePlatform::Qq,
+            &candidates,
+            &AccountStore::default(),
+            None,
+        )
+        .expect("build doctor report");
+        assert!(report.manual_review_status.workspace_present);
+        assert!(report.manual_review_status.selection_pack_present);
+        assert!(!report.manual_review_status.buildable_selection_pack);
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
+    fn source_doctor_reports_missing_authorized_export_when_only_runtime_exists() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "xenobot-source-doctor-runtime-only-{}-{}",
+            std::process::id(),
+            chrono::Utc::now().timestamp_micros()
+        ));
+        let runtime_root = temp_root.join("runtime");
+        let planned_export_root = temp_root.join("planned-export");
+        std::fs::create_dir_all(&runtime_root).expect("create runtime root");
+
+        let candidates = vec![
+            SourceCandidate {
+                platform: RuntimePlatform::Discord,
+                platform_id: "discord".to_string(),
+                label: "runtime".to_string(),
+                kind: SourceKind::AppContainer,
+                path: runtime_root.clone(),
+                exists: true,
+                readable: true,
+            },
+            SourceCandidate {
+                platform: RuntimePlatform::Discord,
+                platform_id: "discord".to_string(),
+                label: "export".to_string(),
+                kind: SourceKind::ExportDirectory,
+                path: planned_export_root.clone(),
+                exists: false,
+                readable: false,
+            },
+        ];
+
+        let report = build_source_doctor_platform_report(
+            &RuntimePlatform::Discord,
+            &candidates,
+            &AccountStore::default(),
+            None,
+        )
+        .expect("build doctor report");
+        assert_eq!(report.platform_id, "discord");
+        assert_eq!(report.readable_runtime_roots, 1);
+        assert_eq!(report.readable_export_roots, 0);
+        assert_eq!(report.importable_file_count, 0);
+        assert!(!report.ready_for_authorized_import_pipeline);
+        assert!(!report.ready_for_authorized_import_test);
+        assert!(!report.ready_for_authorized_monitor_test);
+        assert!(!report.ready_for_frontend_backend_contract);
+        assert!(report.recommended_import_command.is_none());
+        assert!(report.recommended_monitor_command.is_none());
+        assert!(report
+            .recommended_next_step
+            .contains("authorized discord export"));
+        assert!(report
+            .recommended_next_step
+            .contains("source doctor --format discord"));
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
+    fn source_doctor_collects_wechat_runtime_topology_from_realistic_roots() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "xenobot-source-doctor-wechat-topology-{}-{}",
+            std::process::id(),
+            chrono::Utc::now().timestamp_micros()
+        ));
+        let app_data_root = temp_root.join("app_data");
+        let file_root = temp_root.join("xwechat_files");
+        std::fs::create_dir_all(app_data_root.join("wxid_demo"))
+            .expect("create app account workspace");
+        std::fs::create_dir_all(app_data_root.join("login").join("wxid_demo"))
+            .expect("create login profile");
+        std::fs::create_dir_all(file_root.join("wxid_demo_c001")).expect("create file workspace");
+        std::fs::create_dir_all(file_root.join("all_users")).expect("create shared workspace");
+        std::fs::create_dir_all(file_root.join("Backup")).expect("create backup root");
+        std::fs::create_dir_all(file_root.join("Backup").join("wxid_demo"))
+            .expect("create backup workspace");
+
+        let candidates = vec![
+            SourceCandidate {
+                platform: RuntimePlatform::WeChat,
+                platform_id: "wechat".to_string(),
+                label: "WeChat app_data root".to_string(),
+                kind: SourceKind::AppContainer,
+                path: app_data_root.clone(),
+                exists: true,
+                readable: true,
+            },
+            SourceCandidate {
+                platform: RuntimePlatform::WeChat,
+                platform_id: "wechat".to_string(),
+                label: "WeChat xwechat_files root".to_string(),
+                kind: SourceKind::AppContainer,
+                path: file_root.clone(),
+                exists: true,
+                readable: true,
+            },
+        ];
+
+        let report = build_source_doctor_platform_report(
+            &RuntimePlatform::WeChat,
+            &candidates,
+            &AccountStore::default(),
+            None,
+        )
+        .expect("build doctor report");
+        assert!(report
+            .runtime_topology
+            .iter()
+            .any(|node| node.kind == "wechat_app_account_workspace"));
+        assert!(report
+            .runtime_topology
+            .iter()
+            .any(|node| node.kind == "wechat_login_profile"));
+        assert!(report
+            .runtime_topology
+            .iter()
+            .any(|node| node.kind == "wechat_file_workspace"));
+        assert!(report
+            .runtime_topology
+            .iter()
+            .any(|node| node.kind == "wechat_shared_workspace"));
+        assert!(report
+            .runtime_topology
+            .iter()
+            .any(|node| node.kind == "wechat_backup_root"));
+        assert!(report
+            .runtime_topology
+            .iter()
+            .any(|node| node.kind == "wechat_backup_workspace"));
+        assert!(report
+            .runtime_profiles
+            .iter()
+            .any(|profile| profile.kind == "wechat_file_workspace"));
+        assert!(report.runtime_profiles.iter().all(|profile| profile
+            .recommended_account_add_command
+            .contains("account add")));
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
+    fn source_doctor_collects_qq_runtime_topology_from_realistic_roots() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "xenobot-source-doctor-qq-topology-{}-{}",
+            std::process::id(),
+            chrono::Utc::now().timestamp_micros()
+        ));
+        let qq_root = temp_root.join("QQ");
+        std::fs::create_dir_all(qq_root.join("nt_qq_demo").join("nt_db"))
+            .expect("create account nt_db");
+        std::fs::create_dir_all(qq_root.join("global").join("nt_db")).expect("create global nt_db");
+        std::fs::create_dir_all(qq_root.join("Partitions").join("qqnt_1001"))
+            .expect("create partition workspace");
+        std::fs::create_dir_all(qq_root.join("Local Storage").join("leveldb"))
+            .expect("create leveldb workspace");
+
+        let candidates = vec![SourceCandidate {
+            platform: RuntimePlatform::Qq,
+            platform_id: "qq".to_string(),
+            label: "QQ sandbox app root".to_string(),
+            kind: SourceKind::AppContainer,
+            path: qq_root.clone(),
+            exists: true,
+            readable: true,
+        }];
+
+        let report = build_source_doctor_platform_report(
+            &RuntimePlatform::Qq,
+            &candidates,
+            &AccountStore::default(),
+            None,
+        )
+        .expect("build doctor report");
+        assert!(report
+            .runtime_topology
+            .iter()
+            .any(|node| node.kind == "qq_account_runtime_root"));
+        assert!(report
+            .runtime_topology
+            .iter()
+            .any(|node| node.kind == "qq_nt_db"));
+        assert!(report
+            .runtime_topology
+            .iter()
+            .any(|node| node.kind == "qq_partition_workspace"));
+        assert!(report
+            .runtime_topology
+            .iter()
+            .any(|node| node.kind == "qq_leveldb_workspace"));
+        assert_eq!(report.runtime_profiles.len(), 1);
+        assert_eq!(report.runtime_profiles[0].kind, "qq_account_runtime_root");
+        assert!(report.runtime_profiles[0]
+            .recommended_account_add_command
+            .contains("--format qq"));
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
+    fn source_doctor_reports_safe_runtime_artifacts_from_discord_runtime() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "xenobot-source-doctor-discord-artifacts-{}-{}",
+            std::process::id(),
+            chrono::Utc::now().timestamp_micros()
+        ));
+        let discord_root = temp_root.join("discord");
+        let logs_root = discord_root.join("logs");
+        let version_root = discord_root.join("0.0.375");
+        std::fs::create_dir_all(&logs_root).expect("create logs root");
+        std::fs::create_dir_all(version_root.join("modules")).expect("create modules root");
+        std::fs::write(logs_root.join("renderer.log"), "hello from discord log")
+            .expect("write runtime log");
+        std::fs::write(version_root.join("export.zip"), b"placeholder")
+            .expect("write runtime archive placeholder");
+
+        let candidates = vec![SourceCandidate {
+            platform: RuntimePlatform::Discord,
+            platform_id: "discord".to_string(),
+            label: "Discord desktop app data".to_string(),
+            kind: SourceKind::AppContainer,
+            path: discord_root.clone(),
+            exists: true,
+            readable: true,
+        }];
+
+        let report = build_source_doctor_platform_report(
+            &RuntimePlatform::Discord,
+            &candidates,
+            &AccountStore::default(),
+            None,
+        )
+        .expect("build doctor report");
+        assert!(report.safe_runtime_artifact_count >= 2);
+        assert!(report
+            .safe_runtime_artifact_samples
+            .iter()
+            .any(|sample| sample.ends_with("renderer.log")));
+        assert!(report
+            .safe_runtime_artifact_samples
+            .iter()
+            .any(|sample| sample.ends_with("export.zip")));
+        assert!(report
+            .recommended_next_step
+            .contains("runtime artifacts were detected"));
+        assert!(report
+            .recommended_next_step
+            .contains("source prepare-manual-review --format discord"));
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
+    fn collect_likely_runtime_export_artifacts_detects_qq_export_like_txt() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "xenobot-source-stage-runtime-{}-{}",
+            std::process::id(),
+            chrono::Utc::now().timestamp_micros()
+        ));
+        let qq_root = temp_root.join("QQ");
+        let runtime_root = qq_root.join("nt_qq_demo");
+        std::fs::create_dir_all(&runtime_root).expect("create qq runtime root");
+        let export_like = runtime_root.join("chat history export.txt");
+        std::fs::write(&export_like, "hello").expect("write qq export-like txt");
+
+        let artifacts =
+            collect_likely_runtime_export_artifacts(&RuntimePlatform::Qq, &[runtime_root], 4)
+                .expect("collect likely runtime artifacts");
+        assert_eq!(artifacts.len(), 1);
+        assert_eq!(artifacts[0], export_like);
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
+    fn stage_runtime_artifacts_into_export_root_copies_unique_files() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "xenobot-runtime-stage-copy-{}-{}",
+            std::process::id(),
+            chrono::Utc::now().timestamp_micros()
+        ));
+        let source_root = temp_root.join("runtime");
+        let export_root = temp_root.join("export");
+        std::fs::create_dir_all(&source_root).expect("create runtime root");
+        std::fs::create_dir_all(&export_root).expect("create export root");
+        let source_file = source_root.join("messages export.json");
+        std::fs::write(&source_file, "{\"messages\":[]}").expect("write source file");
+
+        let first = stage_runtime_artifacts_into_export_root(
+            "discord",
+            &export_root,
+            std::slice::from_ref(&source_file),
+        )
+        .expect("stage runtime artifacts");
+        let second = stage_runtime_artifacts_into_export_root(
+            "discord",
+            &export_root,
+            std::slice::from_ref(&source_file),
+        )
+        .expect("restage runtime artifacts");
+
+        assert_eq!(first, 1);
+        assert_eq!(second, 0);
+        let staged_root = export_root.join("_runtime-stage").join("discord");
+        let staged_files = std::fs::read_dir(&staged_root)
+            .expect("read staged root")
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .expect("collect staged files");
+        assert_eq!(staged_files.len(), 1);
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
+    fn source_doctor_recommends_runtime_stage_command_when_likely_export_exists() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "xenobot-source-stage-doctor-{}-{}",
+            std::process::id(),
+            chrono::Utc::now().timestamp_micros()
+        ));
+        let runtime_root = temp_root.join("discord");
+        let version_root = runtime_root.join("0.0.375");
+        let export_root = temp_root.join("discord-export");
+        std::fs::create_dir_all(runtime_root.join("logs")).expect("create discord logs root");
+        std::fs::create_dir_all(&version_root).expect("create discord version root");
+        std::fs::create_dir_all(&export_root).expect("create export root");
+        std::fs::write(version_root.join("messages export.json"), "{}")
+            .expect("write discord export-like json");
+
+        let candidates = vec![
+            SourceCandidate {
+                platform: RuntimePlatform::Discord,
+                platform_id: "discord".to_string(),
+                label: "Discord desktop app data".to_string(),
+                kind: SourceKind::AppContainer,
+                path: runtime_root.clone(),
+                exists: true,
+                readable: true,
+            },
+            SourceCandidate {
+                platform: RuntimePlatform::Discord,
+                platform_id: "discord".to_string(),
+                label: "Discord exports in Downloads".to_string(),
+                kind: SourceKind::ExportDirectory,
+                path: export_root,
+                exists: true,
+                readable: true,
+            },
+        ];
+
+        let report = build_source_doctor_platform_report(
+            &RuntimePlatform::Discord,
+            &candidates,
+            &AccountStore::default(),
+            None,
+        )
+        .expect("build doctor report");
+        assert_eq!(report.likely_runtime_export_artifact_count, 1);
+        assert!(report
+            .recommended_next_step
+            .contains("source stage-runtime-ready --format discord"));
+        assert!(report.recommended_next_step.contains("--apply"));
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
+    fn preferred_authorized_source_path_ignores_runtime_roots_and_keeps_planned_export_root() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "xenobot-source-doctor-authorized-path-{}-{}",
+            std::process::id(),
+            chrono::Utc::now().timestamp_micros()
+        ));
+        let runtime_root = temp_root.join("discord-runtime");
+        let planned_export_root = temp_root.join("discord-export");
+        std::fs::create_dir_all(&runtime_root).expect("create runtime root");
+
+        let candidates = vec![
+            SourceCandidate {
+                platform: RuntimePlatform::Discord,
+                platform_id: "discord".to_string(),
+                label: "Discord desktop app data".to_string(),
+                kind: SourceKind::AppContainer,
+                path: runtime_root.clone(),
+                exists: true,
+                readable: true,
+            },
+            SourceCandidate {
+                platform: RuntimePlatform::Discord,
+                platform_id: "discord".to_string(),
+                label: "Discord exports in Downloads".to_string(),
+                kind: SourceKind::ExportDirectory,
+                path: planned_export_root.clone(),
+                exists: false,
+                readable: false,
+            },
+        ];
+
+        assert_eq!(preferred_authorized_source_path(&candidates, false), None);
+        assert_eq!(
+            preferred_authorized_source_path(&candidates, true),
+            Some(planned_export_root.clone())
+        );
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
+    fn default_wechat_data_path_prefers_file_workspace_over_legacy_root() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "xenobot-source-doctor-wechat-default-{}-{}",
+            std::process::id(),
+            chrono::Utc::now().timestamp_micros()
+        ));
+        let legacy_root = temp_root.join("legacy-root");
+        let app_data_root = temp_root.join("app_data");
+        let file_root = temp_root.join("xwechat_files");
+        let file_workspace = file_root.join("wxid_demo_c001");
+        std::fs::create_dir_all(&legacy_root).expect("create legacy root");
+        std::fs::create_dir_all(app_data_root.join("wxid_demo"))
+            .expect("create app_data workspace");
+        std::fs::create_dir_all(&file_workspace).expect("create file workspace");
+
+        let candidates = vec![
+            SourceCandidate {
+                platform: RuntimePlatform::WeChat,
+                platform_id: "wechat".to_string(),
+                label: "macOS WeChat sandbox root".to_string(),
+                kind: SourceKind::AppContainer,
+                path: legacy_root,
+                exists: true,
+                readable: true,
+            },
+            SourceCandidate {
+                platform: RuntimePlatform::WeChat,
+                platform_id: "wechat".to_string(),
+                label: "WeChat app_data root".to_string(),
+                kind: SourceKind::AppContainer,
+                path: app_data_root,
+                exists: true,
+                readable: true,
+            },
+            SourceCandidate {
+                platform: RuntimePlatform::WeChat,
+                platform_id: "wechat".to_string(),
+                label: "WeChat xwechat_files root".to_string(),
+                kind: SourceKind::AppContainer,
+                path: file_root,
+                exists: true,
+                readable: true,
+            },
+        ];
+
+        assert_eq!(
+            default_wechat_data_path_from_candidates(&candidates),
+            Some(file_workspace)
+        );
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
+    fn preferred_runtime_profile_path_picks_qq_account_root() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "xenobot-source-doctor-qq-runtime-profile-{}-{}",
+            std::process::id(),
+            chrono::Utc::now().timestamp_micros()
+        ));
+        let qq_root = temp_root.join("QQ");
+        let account_root = qq_root.join("nt_qq_demo");
+        std::fs::create_dir_all(account_root.join("nt_db")).expect("create account nt_db");
+
+        let candidates = vec![SourceCandidate {
+            platform: RuntimePlatform::Qq,
+            platform_id: "qq".to_string(),
+            label: "QQ sandbox app root".to_string(),
+            kind: SourceKind::AppContainer,
+            path: qq_root,
+            exists: true,
+            readable: true,
+        }];
+
+        assert_eq!(
+            preferred_runtime_profile_path(&RuntimePlatform::Qq, &candidates),
+            Some(account_root)
+        );
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
+    fn source_doctor_marks_runtime_profile_ready_when_account_matches_profile_dir() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "xenobot-source-doctor-account-coverage-{}-{}",
+            std::process::id(),
+            chrono::Utc::now().timestamp_micros()
+        ));
+        let discord_root = temp_root.join("discord");
+        std::fs::create_dir_all(&discord_root).expect("create discord root");
+
+        let candidates = vec![SourceCandidate {
+            platform: RuntimePlatform::Discord,
+            platform_id: "discord".to_string(),
+            label: "Discord desktop app data".to_string(),
+            kind: SourceKind::AppContainer,
+            path: discord_root.clone(),
+            exists: true,
+            readable: true,
+        }];
+        let store = AccountStore {
+            active_account_id: Some("discord-discord-auto".to_string()),
+            items: vec![StoredAccountProfile {
+                id: "discord-discord-auto".to_string(),
+                name: "discord-auto".to_string(),
+                platform: "discord".to_string(),
+                data_dir: Some(discord_root.clone()),
+                wechat_version: "auto".to_string(),
+                created_at: chrono::Utc::now().to_rfc3339(),
+                updated_at: chrono::Utc::now().to_rfc3339(),
+            }],
+        };
+
+        let report = build_source_doctor_platform_report(
+            &RuntimePlatform::Discord,
+            &candidates,
+            &store,
+            None,
+        )
+        .expect("build doctor report");
+        assert_eq!(report.account_status.registered_accounts_for_platform, 1);
+        assert_eq!(report.account_status.registered_runtime_profile_count, 1);
+        assert!(report.account_status.ready_for_runtime_account_test);
+        assert!(!report.ready_for_authorized_import_pipeline);
+        assert!(!report.ready_for_frontend_backend_contract);
+        assert_eq!(
+            report.account_status.registered_account_ids,
+            vec!["discord-discord-auto".to_string()]
+        );
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
+    fn source_doctor_marks_frontend_backend_contract_ready_when_account_and_export_root_exist() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "xenobot-source-doctor-backend-contract-{}-{}",
+            std::process::id(),
+            chrono::Utc::now().timestamp_micros()
+        ));
+        let discord_root = temp_root.join("discord");
+        let export_root = temp_root.join("discord-export");
+        std::fs::create_dir_all(&discord_root).expect("create discord root");
+        std::fs::create_dir_all(&export_root).expect("create export root");
+
+        let candidates = vec![
+            SourceCandidate {
+                platform: RuntimePlatform::Discord,
+                platform_id: "discord".to_string(),
+                label: "Discord desktop app data".to_string(),
+                kind: SourceKind::AppContainer,
+                path: discord_root.clone(),
+                exists: true,
+                readable: true,
+            },
+            SourceCandidate {
+                platform: RuntimePlatform::Discord,
+                platform_id: "discord".to_string(),
+                label: "Discord exports in Downloads".to_string(),
+                kind: SourceKind::ExportDirectory,
+                path: export_root,
+                exists: true,
+                readable: true,
+            },
+        ];
+        let store = AccountStore {
+            active_account_id: Some("discord-discord-auto".to_string()),
+            items: vec![StoredAccountProfile {
+                id: "discord-discord-auto".to_string(),
+                name: "discord-auto".to_string(),
+                platform: "discord".to_string(),
+                data_dir: Some(discord_root.clone()),
+                wechat_version: "auto".to_string(),
+                created_at: chrono::Utc::now().to_rfc3339(),
+                updated_at: chrono::Utc::now().to_rfc3339(),
+            }],
+        };
+
+        let report = build_source_doctor_platform_report(
+            &RuntimePlatform::Discord,
+            &candidates,
+            &store,
+            None,
+        )
+        .expect("build doctor report");
+        assert!(report.ready_for_authorized_import_pipeline);
+        assert!(report.ready_for_authorized_monitor_test);
+        assert!(report.ready_for_frontend_backend_contract);
+        assert!(!report.ready_for_authorized_import_test);
+        assert!(report
+            .blocking_reasons
+            .iter()
+            .any(|reason| reason.contains("analysis-detectable chat input")));
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
+    fn locked_account_store_keeps_parallel_adds() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "xenobot-account-store-lock-{}-{}",
+            std::process::id(),
+            chrono::Utc::now().timestamp_micros()
+        ));
+        let store_path = temp_root.join("accounts.json");
+        std::fs::create_dir_all(&temp_root).expect("create temp root");
+
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(3));
+        let mut handles = Vec::new();
+        for (platform, name, data_dir) in [
+            ("wechat", "wechat-auto", "/tmp/wechat"),
+            ("qq", "qq-auto", "/tmp/qq"),
+            ("discord", "discord-auto", "/tmp/discord"),
+        ] {
+            let barrier = barrier.clone();
+            let store_path = store_path.clone();
+            let platform = platform.to_string();
+            let name = name.to_string();
+            let data_dir = data_dir.to_string();
+            handles.push(std::thread::spawn(move || {
+                barrier.wait();
+                with_locked_account_store_at(&store_path, |store| {
+                    let profile = StoredAccountProfile {
+                        id: format!("{}-{}", platform, name),
+                        name: name.clone(),
+                        platform: platform.clone(),
+                        data_dir: Some(PathBuf::from(&data_dir)),
+                        wechat_version: "auto".to_string(),
+                        created_at: chrono::Utc::now().to_rfc3339(),
+                        updated_at: chrono::Utc::now().to_rfc3339(),
+                    };
+                    store.items.push(profile);
+                    if store.active_account_id.is_none() {
+                        store.active_account_id = Some(format!("{}-{}", platform, name));
+                    }
+                    Ok(())
+                })
+            }));
+        }
+
+        for handle in handles {
+            handle
+                .join()
+                .expect("join account writer thread")
+                .expect("write locked account store");
+        }
+
+        let store = read_account_store_at(&store_path).expect("read account store");
+        assert_eq!(store.items.len(), 3);
+        let ids = store
+            .items
+            .iter()
+            .map(|item| item.id.as_str())
+            .collect::<std::collections::HashSet<_>>();
+        assert!(ids.contains("wechat-wechat-auto"));
+        assert!(ids.contains("qq-qq-auto"));
+        assert!(ids.contains("discord-discord-auto"));
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
+    fn source_doctor_reads_completed_import_and_monitor_checkpoints() {
+        let temp_root = std::env::temp_dir().join(format!(
+            "xenobot-source-doctor-checkpoints-{}-{}",
+            std::process::id(),
+            chrono::Utc::now().timestamp_micros()
+        ));
+        let export_root = temp_root.join("discord-export");
+        let db_path = temp_root.join("xenobot.db");
+        std::fs::create_dir_all(&export_root).expect("create export root");
+        std::fs::write(export_root.join("chat.json"), "{}").expect("write export file");
+
+        let conn = rusqlite::Connection::open(&db_path).expect("open temp db");
+        conn.execute_batch(
+            r#"
+            CREATE TABLE import_source_checkpoint (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source_kind TEXT NOT NULL,
+                source_path TEXT NOT NULL,
+                fingerprint TEXT NOT NULL,
+                file_size INTEGER NOT NULL DEFAULT 0,
+                modified_at INTEGER NOT NULL DEFAULT 0,
+                platform TEXT,
+                chat_name TEXT,
+                meta_id INTEGER,
+                last_processed_at INTEGER NOT NULL,
+                last_inserted_messages INTEGER NOT NULL DEFAULT 0,
+                last_duplicate_messages INTEGER NOT NULL DEFAULT 0,
+                status TEXT NOT NULL DEFAULT 'completed',
+                error_message TEXT
+            );
+            INSERT INTO import_source_checkpoint (
+                source_kind, source_path, fingerprint, file_size, modified_at,
+                platform, chat_name, meta_id, last_processed_at,
+                last_inserted_messages, last_duplicate_messages, status, error_message
+            ) VALUES
+                ('import', '/tmp/discord-export/chat.json', 'fp-import', 10, 100, 'discord', 'ops', 1, 200, 5, 0, 'completed', NULL),
+                ('monitor', '/tmp/discord-export/chat.json', 'fp-monitor', 10, 101, 'discord', 'ops', 1, 201, 1, 0, 'completed', NULL);
+            "#,
+        )
+        .expect("seed checkpoint rows");
+        drop(conn);
+
+        let candidates = vec![SourceCandidate {
+            platform: RuntimePlatform::Discord,
+            platform_id: "discord".to_string(),
+            label: "export".to_string(),
+            kind: SourceKind::ExportDirectory,
+            path: export_root.clone(),
+            exists: true,
+            readable: true,
+        }];
+
+        let report = build_source_doctor_platform_report(
+            &RuntimePlatform::Discord,
+            &candidates,
+            &AccountStore::default(),
+            Some(&db_path),
+        )
+        .expect("build doctor report");
+        let checkpoint_status = report
+            .checkpoint_status
+            .as_ref()
+            .expect("checkpoint status should be present");
+        assert_eq!(checkpoint_status.completed_import_checkpoints, 1);
+        assert_eq!(checkpoint_status.completed_monitor_checkpoints, 1);
+        assert!(checkpoint_status.ready_for_frontend_real_test_gate);
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
     fn collect_db_verification_reports_ok_when_required_objects_exist() {
         let conn = rusqlite::Connection::open_in_memory().expect("open in-memory db");
         conn.execute_batch(
@@ -10391,12 +15986,10 @@ mod tests {
             collect_db_verification(std::path::Path::new(":memory:"), &conn).expect("verify db");
         assert!(!report.ok);
         assert!(report.missing_required > 0);
-        assert!(
-            report
-                .checks
-                .iter()
-                .any(|row| row.required && row.name == "sessions" && !row.exists)
-        );
+        assert!(report
+            .checks
+            .iter()
+            .any(|row| row.required && row.name == "sessions" && !row.exists));
     }
 
     #[test]
@@ -10444,18 +16037,14 @@ mod tests {
             collect_db_verification(std::path::Path::new(":memory:"), &conn).expect("verify db");
         assert!(report.ok);
         assert_eq!(report.missing_optional, 0);
-        assert!(
-            report
-                .checks
-                .iter()
-                .any(|row| !row.required && row.name == "idx_message_dedup_lookup" && row.exists)
-        );
-        assert!(
-            report
-                .checks
-                .iter()
-                .any(|row| !row.required && row.name == "idx_meta_platform_name" && row.exists)
-        );
+        assert!(report
+            .checks
+            .iter()
+            .any(|row| !row.required && row.name == "idx_message_dedup_lookup" && row.exists));
+        assert!(report
+            .checks
+            .iter()
+            .any(|row| !row.required && row.name == "idx_meta_platform_name" && row.exists));
     }
 
     #[test]
@@ -10555,18 +16144,14 @@ mod tests {
             .iter()
             .find(|t| t.name == "child")
             .expect("child table");
-        assert!(
-            child
-                .columns
-                .iter()
-                .any(|c| c.name == "id" && c.primary_key)
-        );
-        assert!(
-            child
-                .indexes
-                .iter()
-                .any(|idx| idx.name == "idx_child_parent_id")
-        );
+        assert!(child
+            .columns
+            .iter()
+            .any(|c| c.name == "id" && c.primary_key));
+        assert!(child
+            .indexes
+            .iter()
+            .any(|idx| idx.name == "idx_child_parent_id"));
         assert!(child.foreign_keys.iter().any(|fk| fk.table == "parent"));
         assert!(child.row_count.is_none());
     }

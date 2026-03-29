@@ -219,7 +219,7 @@ watch(locale, () => {
 </script>
 
 <template>
-  <div class="xeno-home-footer-wrap absolute bottom-4 left-0 right-0">
+  <div class="xeno-home-footer-wrap mt-8 flex justify-center px-4 pb-6">
     <div class="xeno-home-footer flex items-center justify-center">
       <template v-for="(link, index) in footerLinks" :key="link.id">
         <!-- English UI note -->

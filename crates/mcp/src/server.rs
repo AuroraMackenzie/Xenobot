@@ -8,17 +8,17 @@ use crate::protocol::{
     ServerInfo, ToolCallRequest, ToolCallResult, ToolResult,
 };
 use axum::{
-    Json, Router,
     extract::{
-        ConnectInfo, Path, State,
         ws::{Message, WebSocket, WebSocketUpgrade},
+        ConnectInfo, Path, State,
     },
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Sse},
     routing::{get, post},
+    Json, Router,
 };
 use futures_util::{SinkExt, StreamExt};
-use rusqlite::{Connection, params};
+use rusqlite::{params, Connection};
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -26,7 +26,7 @@ use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::sync::{RwLock, mpsc};
+use tokio::sync::{mpsc, RwLock};
 use tokio_stream;
 use tracing::{debug, error, info};
 
@@ -1971,7 +1971,7 @@ fn extract_client_info(headers: &HeaderMap) -> Option<ClientInfo> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::body::{Body, to_bytes};
+    use axum::body::{to_bytes, Body};
     use axum::http::{Method, Request, StatusCode};
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -2469,11 +2469,9 @@ mod tests {
         assert_eq!(status, StatusCode::BAD_REQUEST);
         assert_eq!(bad_args_json["success"], false);
         assert_eq!(bad_args_json["code"], "invalid_params");
-        assert!(
-            bad_args_json["error"]
-                .as_str()
-                .is_some_and(|text| text.contains("missing required integer field"))
-        );
+        assert!(bad_args_json["error"]
+            .as_str()
+            .is_some_and(|text| text.contains("missing required integer field")));
 
         if let Some(previous) = previous_db {
             std::env::set_var("XENOBOT_DB_PATH", previous);
@@ -2520,11 +2518,9 @@ mod tests {
             init_json["result"]["protocolVersion"],
             crate::protocol::MCP_PROTOCOL_VERSION
         );
-        assert!(
-            init_json["result"]["serverInfo"]["name"]
-                .as_str()
-                .is_some_and(|value| !value.trim().is_empty())
-        );
+        assert!(init_json["result"]["serverInfo"]["name"]
+            .as_str()
+            .is_some_and(|value| !value.trim().is_empty()));
         assert_eq!(
             init_json["result"]["capabilities"]["tools"]["supported"],
             true
@@ -2545,11 +2541,9 @@ mod tests {
             init_json["result"]["capabilities"]["roots"]["supported"],
             false
         );
-        assert!(
-            init_json["result"]["instructions"]
-                .as_str()
-                .is_some_and(|text| !text.trim().is_empty())
-        );
+        assert!(init_json["result"]["instructions"]
+            .as_str()
+            .is_some_and(|text| !text.trim().is_empty()));
 
         let (status, list_json) = request_json(
             &app,
@@ -2569,19 +2563,15 @@ mod tests {
             .iter()
             .filter_map(|tool| tool["name"].as_str())
             .collect::<std::collections::HashSet<_>>();
-        assert!(
-            list_json["result"]["tools"]
-                .as_array()
-                .is_some_and(|arr| arr.iter().all(|tool| tool["inputSchema"].is_object()))
-        );
-        assert!(
-            list_json["result"]["tools"]
-                .as_array()
-                .is_some_and(|arr| arr.iter().any(|tool| {
-                    tool["name"] == "chat_records"
-                        && tool["inputSchema"]["properties"]["sessionId"].is_object()
-                }))
-        );
+        assert!(list_json["result"]["tools"]
+            .as_array()
+            .is_some_and(|arr| arr.iter().all(|tool| tool["inputSchema"].is_object())));
+        assert!(list_json["result"]["tools"]
+            .as_array()
+            .is_some_and(|arr| arr.iter().any(|tool| {
+                tool["name"] == "chat_records"
+                    && tool["inputSchema"]["properties"]["sessionId"].is_object()
+            })));
         for required in [
             "chat_records",
             "query_contacts",
@@ -2687,11 +2677,9 @@ mod tests {
         assert_eq!(status, StatusCode::OK);
         assert_eq!(invalid_tool_args_json["error"]["code"], -32602);
         assert_eq!(invalid_tool_args_json["error"]["message"], "invalid_params");
-        assert!(
-            invalid_tool_args_json["error"]["data"]["error"]
-                .as_str()
-                .is_some_and(|text| text.contains("missing required integer field"))
-        );
+        assert!(invalid_tool_args_json["error"]["data"]["error"]
+            .as_str()
+            .is_some_and(|text| text.contains("missing required integer field")));
 
         let (status, unknown_method_json) = request_json(
             &app,
@@ -2783,31 +2771,23 @@ mod tests {
 
         let (status, catalog_json) = request_json(&app, Method::GET, "/integrations", None).await;
         assert_eq!(status, StatusCode::OK);
-        assert!(
-            catalog_json["integrations"]
-                .as_array()
-                .is_some_and(|arr| !arr.is_empty())
-        );
-        assert!(
-            catalog_json["integrations"]
-                .as_array()
-                .is_some_and(|arr| arr.iter().any(|item| item["id"] == "claude-desktop"))
-        );
-        assert!(
-            catalog_json["integrations"]
-                .as_array()
-                .is_some_and(|arr| arr.iter().any(|item| item["id"] == "pencil"))
-        );
+        assert!(catalog_json["integrations"]
+            .as_array()
+            .is_some_and(|arr| !arr.is_empty()));
+        assert!(catalog_json["integrations"]
+            .as_array()
+            .is_some_and(|arr| arr.iter().any(|item| item["id"] == "claude-desktop")));
+        assert!(catalog_json["integrations"]
+            .as_array()
+            .is_some_and(|arr| arr.iter().any(|item| item["id"] == "pencil")));
 
         let (status, preset_json) =
             request_json(&app, Method::GET, "/integrations/claude-desktop", None).await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(preset_json["id"], "claude-desktop");
-        assert!(
-            preset_json["transport"]["sse"]
-                .as_str()
-                .is_some_and(|url| url.ends_with("/sse"))
-        );
+        assert!(preset_json["transport"]["sse"]
+            .as_str()
+            .is_some_and(|url| url.ends_with("/sse")));
         assert!(preset_json["configuration"]["mcpServers"]["xenobot"].is_object());
         assert_eq!(
             preset_json["configuration"]["mcpServers"]["xenobot"]["command"],
@@ -2823,46 +2803,34 @@ mod tests {
             request_json(&app, Method::GET, "/integrations/chatwise", None).await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(chatwise_json["id"], "chatwise");
-        assert!(
-            chatwise_json["configuration"]["servers"]
-                .as_array()
-                .is_some_and(|arr| arr.first().is_some_and(|item| item["name"] == "xenobot"))
-        );
-        assert!(
-            chatwise_json["configuration"]["servers"]
-                .as_array()
-                .is_some_and(|arr| arr.first().is_some_and(|item| item["transport"] == "sse"))
-        );
+        assert!(chatwise_json["configuration"]["servers"]
+            .as_array()
+            .is_some_and(|arr| arr.first().is_some_and(|item| item["name"] == "xenobot")));
+        assert!(chatwise_json["configuration"]["servers"]
+            .as_array()
+            .is_some_and(|arr| arr.first().is_some_and(|item| item["transport"] == "sse")));
 
         let (status, opencode_json) =
             request_json(&app, Method::GET, "/integrations/opencode", None).await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(opencode_json["id"], "opencode");
-        assert!(
-            opencode_json["configuration"]["mcpServers"]
-                .as_array()
-                .is_some_and(|arr| arr.first().is_some_and(|item| item["name"] == "xenobot"))
-        );
-        assert!(
-            opencode_json["configuration"]["mcpServers"]
-                .as_array()
-                .is_some_and(|arr| arr.first().is_some_and(|item| item["transport"] == "sse"))
-        );
+        assert!(opencode_json["configuration"]["mcpServers"]
+            .as_array()
+            .is_some_and(|arr| arr.first().is_some_and(|item| item["name"] == "xenobot")));
+        assert!(opencode_json["configuration"]["mcpServers"]
+            .as_array()
+            .is_some_and(|arr| arr.first().is_some_and(|item| item["transport"] == "sse")));
 
         let (status, pencil_json) =
             request_json(&app, Method::GET, "/integrations/pencil", None).await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(pencil_json["id"], "pencil");
-        assert!(
-            pencil_json["configuration"]["servers"]
-                .as_array()
-                .is_some_and(|arr| arr.first().is_some_and(|item| item["name"] == "xenobot"))
-        );
-        assert!(
-            pencil_json["configuration"]["servers"]
-                .as_array()
-                .is_some_and(|arr| arr.first().is_some_and(|item| item["transport"] == "sse"))
-        );
+        assert!(pencil_json["configuration"]["servers"]
+            .as_array()
+            .is_some_and(|arr| arr.first().is_some_and(|item| item["name"] == "xenobot")));
+        assert!(pencil_json["configuration"]["servers"]
+            .as_array()
+            .is_some_and(|arr| arr.first().is_some_and(|item| item["transport"] == "sse")));
 
         let (status, unknown_json) = request_json(
             &app,
@@ -2872,11 +2840,9 @@ mod tests {
         )
         .await;
         assert_eq!(status, StatusCode::NOT_FOUND);
-        assert!(
-            unknown_json["supported"]
-                .as_array()
-                .is_some_and(|arr| arr.iter().any(|item| item == "claude-desktop"))
-        );
+        assert!(unknown_json["supported"]
+            .as_array()
+            .is_some_and(|arr| arr.iter().any(|item| item == "claude-desktop")));
     }
 
     fn percent_encode_path(value: &str) -> String {
@@ -2916,11 +2882,9 @@ mod tests {
         assert_eq!(status, StatusCode::OK);
         assert_eq!(read_json["uri"], first_uri);
         assert!(read_json["content"].is_array());
-        assert!(
-            read_json["mimeType"]
-                .as_str()
-                .is_some_and(|mime| mime.contains("json"))
-        );
+        assert!(read_json["mimeType"]
+            .as_str()
+            .is_some_and(|mime| mime.contains("json")));
     }
 
     #[tokio::test]
@@ -2991,11 +2955,9 @@ mod tests {
         assert_eq!(read_json["jsonrpc"], "2.0");
         assert_eq!(read_json["id"], "resources-read-1");
         assert!(read_json["result"]["content"].is_array());
-        assert!(
-            read_json["result"]["mimeType"]
-                .as_str()
-                .is_some_and(|mime| mime.contains("json"))
-        );
+        assert!(read_json["result"]["mimeType"]
+            .as_str()
+            .is_some_and(|mime| mime.contains("json")));
 
         let (status, missing_param_json) = request_json(
             &app,
@@ -3067,11 +3029,9 @@ mod tests {
         )
         .await;
         assert_eq!(status, StatusCode::OK);
-        assert!(
-            tool_list_json["result"]["tools"]
-                .as_array()
-                .is_some_and(|arr| arr.iter().any(|item| item["name"] == "get_current_time"))
-        );
+        assert!(tool_list_json["result"]["tools"]
+            .as_array()
+            .is_some_and(|arr| arr.iter().any(|item| item["name"] == "get_current_time")));
 
         let (status, tool_call_json) = request_json(
             &app,
@@ -3150,11 +3110,9 @@ mod tests {
         .await;
         assert_eq!(status, StatusCode::OK);
         assert!(resource_read_json["result"]["content"].is_array());
-        assert!(
-            resource_read_json["result"]["mimeType"]
-                .as_str()
-                .is_some_and(|mime| mime.contains("json"))
-        );
+        assert!(resource_read_json["result"]["mimeType"]
+            .as_str()
+            .is_some_and(|mime| mime.contains("json")));
 
         let (status, nested_resource_read_json) = request_json(
             &app,
@@ -3174,11 +3132,9 @@ mod tests {
         .await;
         assert_eq!(status, StatusCode::OK);
         assert!(nested_resource_read_json["result"]["content"].is_array());
-        assert!(
-            nested_resource_read_json["result"]["mimeType"]
-                .as_str()
-                .is_some_and(|mime| mime.contains("json"))
-        );
+        assert!(nested_resource_read_json["result"]["mimeType"]
+            .as_str()
+            .is_some_and(|mime| mime.contains("json")));
 
         if let Some(previous) = previous_db {
             std::env::set_var("XENOBOT_DB_PATH", previous);

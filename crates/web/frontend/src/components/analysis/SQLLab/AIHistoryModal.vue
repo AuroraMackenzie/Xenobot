@@ -14,7 +14,6 @@ defineProps<{
 const emit = defineEmits<{
   "update:open": [value: boolean];
   execute: [record: AIHistory];
-  delete: [id: string];
 }>();
 
 // English engineering note.
@@ -43,7 +42,7 @@ function formatHistoryTime(timestamp: number): string {
   <UModal
     :open="open"
     :title="t('ai.sqlLab.history.title')"
-    description="Review saved AI-generated SQL records and rerun or delete them."
+    description="Review saved AI-generated SQL records and rerun them safely."
     @update:open="emit('update:open', $event)"
   >
     <template #content>
@@ -95,14 +94,6 @@ function formatHistoryTime(timestamp: number): string {
 
             <!-- English UI note -->
             <div class="flex justify-end gap-2">
-              <UButton
-                variant="ghost"
-                size="xs"
-                color="error"
-                @click="emit('delete', record.id)"
-              >
-                <UIcon name="i-heroicons-trash" class="h-3.5 w-3.5" />
-              </UButton>
               <UButton size="xs" @click="emit('execute', record)">
                 <UIcon name="i-heroicons-play" class="mr-1 h-3.5 w-3.5" />
                 {{ t("ai.sqlLab.history.execute") }}

@@ -2,9 +2,9 @@
 //!
 //! This module focuses on `.dat` image decryption used by several WeChat exports.
 
-use std::fs;
 use crate::error::{WeChatError, WeChatResult};
 use aes::cipher::{block_padding::Pkcs7, BlockDecryptMut, KeyIvInit};
+use std::fs;
 use std::path::{Path, PathBuf};
 
 type Aes128CbcDec = cbc::Decryptor<aes::Aes128>;
@@ -311,7 +311,8 @@ where
     I: IntoIterator<Item = P>,
     P: AsRef<Path>,
 {
-    paths.into_iter()
+    paths
+        .into_iter()
         .filter_map(|path| {
             let path = path.as_ref();
             let metadata = fs::metadata(path).ok()?;

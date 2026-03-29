@@ -132,18 +132,16 @@ fn discover_sources_for_platform_with_home(
 ) -> Vec<SourceCandidate> {
     let mut out = Vec::new();
     for (kind, label, path) in default_source_paths(platform, home) {
-        let exists = path.exists();
-        let readable = if exists { is_readable(&path) } else { false };
-        out.push(SourceCandidate {
-            platform: platform.clone(),
-            platform_id: platform_id(platform).to_string(),
-            label,
-            kind,
-            path,
-            exists,
-            readable,
-        });
+        push_source_candidate(&mut out, platform, kind, label, path);
     }
+
+    match platform {
+        Platform::WeChat => append_wechat_runtime_candidates(&mut out, home),
+        Platform::Qq => append_qq_runtime_candidates(&mut out, home),
+        Platform::Discord => append_discord_runtime_candidates(&mut out, home),
+        _ => {}
+    }
+
     out
 }
 
@@ -155,6 +153,20 @@ fn default_source_paths(platform: &Platform, home: &Path) -> Vec<(SourceKind, St
 
     match platform {
         Platform::WeChat => vec![
+            (
+                SourceKind::AppContainer,
+                "macOS WeChat sandbox root".to_string(),
+                library.join("Containers").join("com.tencent.xinWeChat"),
+            ),
+            (
+                SourceKind::AppContainer,
+                "macOS WeChat app documents".to_string(),
+                library
+                    .join("Containers")
+                    .join("com.tencent.xinWeChat")
+                    .join("Data")
+                    .join("Documents"),
+            ),
             (
                 SourceKind::AppContainer,
                 "macOS WeChat sandbox data".to_string(),
@@ -170,6 +182,16 @@ fn default_source_paths(platform: &Platform, home: &Path) -> Vec<(SourceKind, St
                 SourceKind::ExportDirectory,
                 "User export folder".to_string(),
                 documents.join("XenobotImports").join("wechat"),
+            ),
+            (
+                SourceKind::ExportDirectory,
+                "WeFlow exports in Documents".to_string(),
+                documents.join("WeFlow").join("exports"),
+            ),
+            (
+                SourceKind::ExportDirectory,
+                "WeFlow exports in Documents (capitalized)".to_string(),
+                documents.join("WeFlow").join("Exports"),
             ),
         ],
         Platform::WhatsApp => vec![
@@ -216,6 +238,17 @@ fn default_source_paths(platform: &Platform, home: &Path) -> Vec<(SourceKind, St
         Platform::Qq => vec![
             (
                 SourceKind::AppContainer,
+                "QQ sandbox app root".to_string(),
+                library
+                    .join("Containers")
+                    .join("com.tencent.qq")
+                    .join("Data")
+                    .join("Library")
+                    .join("Application Support")
+                    .join("QQ"),
+            ),
+            (
+                SourceKind::AppContainer,
                 "QQ sandbox app data".to_string(),
                 library
                     .join("Containers")
@@ -229,6 +262,11 @@ fn default_source_paths(platform: &Platform, home: &Path) -> Vec<(SourceKind, St
                 SourceKind::ExportDirectory,
                 "QQ exports in Documents".to_string(),
                 documents.join("QQExport"),
+            ),
+            (
+                SourceKind::ExportDirectory,
+                "QQ Chat Exporter canonical exports".to_string(),
+                home.join(".qq-chat-exporter").join("exports"),
             ),
         ],
         Platform::Discord => vec![
@@ -398,6 +436,163 @@ fn is_readable(path: &Path) -> bool {
     std::fs::metadata(path).is_ok()
 }
 
+fn push_source_candidate(
+    out: &mut Vec<SourceCandidate>,
+    platform: &Platform,
+    kind: SourceKind,
+    label: String,
+    path: PathBuf,
+) {
+    if out.iter().any(|item| item.path == path) {
+        return;
+    }
+
+    let exists = path.exists();
+    let readable = if exists { is_readable(&path) } else { false };
+    out.push(SourceCandidate {
+        platform: platform.clone(),
+        platform_id: platform_id(platform).to_string(),
+        label,
+        kind,
+        path,
+        exists,
+        readable,
+    });
+}
+
+fn append_wechat_runtime_candidates(out: &mut Vec<SourceCandidate>, home: &Path) {
+    let documents_root = home
+        .join("Library")
+        .join("Containers")
+        .join("com.tencent.xinWeChat")
+        .join("Data")
+        .join("Documents");
+
+    let app_data_root = documents_root.join("app_data");
+    push_source_candidate(
+        out,
+        &Platform::WeChat,
+        SourceKind::AppContainer,
+        "WeChat app_data root".to_string(),
+        app_data_root.clone(),
+    );
+    push_source_candidate(
+        out,
+        &Platform::WeChat,
+        SourceKind::AppContainer,
+        "WeChat xwechat_files root".to_string(),
+        documents_root.join("xwechat_files"),
+    );
+
+    if let Ok(entries) = std::fs::read_dir(&app_data_root) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let Some(name) = path.file_name().and_then(|value| value.to_str()) else {
+                continue;
+            };
+            if entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false)
+                && (name.starts_with("wxid_") || name == "all_users")
+            {
+                push_source_candidate(
+                    out,
+                    &Platform::WeChat,
+                    SourceKind::AppContainer,
+                    format!("WeChat app_data account workspace ({})", name),
+                    path,
+                );
+            }
+        }
+    }
+
+    let file_root = documents_root.join("xwechat_files");
+    if let Ok(entries) = std::fs::read_dir(&file_root) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let Some(name) = path.file_name().and_then(|value| value.to_str()) else {
+                continue;
+            };
+            if entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false)
+                && (name.starts_with("wxid_") || name == "all_users")
+            {
+                push_source_candidate(
+                    out,
+                    &Platform::WeChat,
+                    SourceKind::AppContainer,
+                    format!("WeChat file workspace ({})", name),
+                    path,
+                );
+            }
+        }
+    }
+}
+
+fn append_qq_runtime_candidates(out: &mut Vec<SourceCandidate>, home: &Path) {
+    let qq_root = home
+        .join("Library")
+        .join("Containers")
+        .join("com.tencent.qq")
+        .join("Data")
+        .join("Library")
+        .join("Application Support")
+        .join("QQ");
+
+    push_source_candidate(
+        out,
+        &Platform::Qq,
+        SourceKind::AppContainer,
+        "QQ global nt_db".to_string(),
+        qq_root.join("global").join("nt_db"),
+    );
+
+    if let Ok(entries) = std::fs::read_dir(&qq_root) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let Some(name) = path.file_name().and_then(|value| value.to_str()) else {
+                continue;
+            };
+            if entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false)
+                && name.starts_with("nt_qq_")
+            {
+                push_source_candidate(
+                    out,
+                    &Platform::Qq,
+                    SourceKind::AppContainer,
+                    format!("QQ account runtime root ({})", name),
+                    path.clone(),
+                );
+                push_source_candidate(
+                    out,
+                    &Platform::Qq,
+                    SourceKind::AppContainer,
+                    format!("QQ account nt_db ({})", name),
+                    path.join("nt_db"),
+                );
+            }
+        }
+    }
+}
+
+fn append_discord_runtime_candidates(out: &mut Vec<SourceCandidate>, home: &Path) {
+    let discord_root = home
+        .join("Library")
+        .join("Application Support")
+        .join("discord");
+    push_source_candidate(
+        out,
+        &Platform::Discord,
+        SourceKind::AppContainer,
+        "Discord Local Storage".to_string(),
+        discord_root.join("Local Storage").join("leveldb"),
+    );
+    push_source_candidate(
+        out,
+        &Platform::Discord,
+        SourceKind::AppContainer,
+        "Discord logs".to_string(),
+        discord_root.join("logs"),
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -505,5 +700,87 @@ mod tests {
                 required
             );
         }
+    }
+
+    #[test]
+    fn wechat_dynamic_runtime_candidates_include_account_workspaces() {
+        let root = std::env::temp_dir().join("xenobot_wechat_sources_test");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(
+            root.join("Library")
+                .join("Containers")
+                .join("com.tencent.xinWeChat")
+                .join("Data")
+                .join("Documents")
+                .join("app_data")
+                .join("wxid_test"),
+        )
+        .expect("create wechat app_data account dir");
+        std::fs::create_dir_all(
+            root.join("Library")
+                .join("Containers")
+                .join("com.tencent.xinWeChat")
+                .join("Data")
+                .join("Documents")
+                .join("xwechat_files")
+                .join("wxid_test_c001"),
+        )
+        .expect("create wechat file workspace dir");
+
+        let items = discover_sources_for_platform_with_home(&Platform::WeChat, &root);
+        assert!(items.iter().any(|item| {
+            item.label.contains("app_data account workspace") && item.path.ends_with("wxid_test")
+        }));
+        assert!(items.iter().any(|item| {
+            item.label.contains("file workspace") && item.path.ends_with("wxid_test_c001")
+        }));
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn qq_dynamic_runtime_candidates_include_nt_account_databases() {
+        let root = std::env::temp_dir().join("xenobot_qq_sources_test");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(
+            root.join("Library")
+                .join("Containers")
+                .join("com.tencent.qq")
+                .join("Data")
+                .join("Library")
+                .join("Application Support")
+                .join("QQ")
+                .join("nt_qq_account_1")
+                .join("nt_db"),
+        )
+        .expect("create qq account nt_db dir");
+
+        let items = discover_sources_for_platform_with_home(&Platform::Qq, &root);
+        assert!(items.iter().any(|item| {
+            item.label.contains("QQ account nt_db") && item.path.ends_with("nt_qq_account_1/nt_db")
+        }));
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn trio_default_paths_include_weflow_and_qce_export_roots() {
+        let home = PathBuf::from("/tmp/xeno-trio-export-home");
+
+        let wechat_items = discover_sources_for_platform_with_home(&Platform::WeChat, &home);
+        assert!(wechat_items.iter().any(|item| {
+            item.kind == SourceKind::ExportDirectory
+                && item.path == home.join("Documents").join("WeFlow").join("exports")
+        }));
+        assert!(wechat_items.iter().any(|item| {
+            item.kind == SourceKind::ExportDirectory
+                && item.path == home.join("Documents").join("WeFlow").join("Exports")
+        }));
+
+        let qq_items = discover_sources_for_platform_with_home(&Platform::Qq, &home);
+        assert!(qq_items.iter().any(|item| {
+            item.kind == SourceKind::ExportDirectory
+                && item.path == home.join(".qq-chat-exporter").join("exports")
+        }));
     }
 }

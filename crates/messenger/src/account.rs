@@ -139,7 +139,11 @@ mod tests {
     #[test]
     fn deduplicates_accounts_by_root_path() {
         let candidates = vec![
-            source(SourceKind::ExportDirectory, "Downloads export", "/tmp/export"),
+            source(
+                SourceKind::ExportDirectory,
+                "Downloads export",
+                "/tmp/export",
+            ),
             source(SourceKind::AppContainer, "Sandbox", "/tmp/export"),
         ];
 
@@ -151,7 +155,11 @@ mod tests {
     #[test]
     fn picks_primary_account_preferring_current() {
         let candidates = vec![
-            source(SourceKind::ExportDirectory, "Downloads export", "/tmp/export"),
+            source(
+                SourceKind::ExportDirectory,
+                "Downloads export",
+                "/tmp/export",
+            ),
             source(SourceKind::AppContainer, "Sandbox", "/tmp/app"),
         ];
 
@@ -170,10 +178,13 @@ mod tests {
 
     #[test]
     fn root_path_reflects_data_dir() {
-        let candidate = source(SourceKind::ExportDirectory, "Archive", "/tmp/messenger-root");
+        let candidate = source(
+            SourceKind::ExportDirectory,
+            "Archive",
+            "/tmp/messenger-root",
+        );
         let account = Account::from_source(&candidate);
 
         assert_eq!(account.root_path(), Path::new("/tmp/messenger-root"));
     }
-
 }

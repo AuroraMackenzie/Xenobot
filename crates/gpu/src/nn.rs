@@ -163,12 +163,7 @@ impl NeuralNetwork {
         let mut current = input.to_vec();
         let mps_mmul = MpsMatrixMultiplication::new(self.device.clone())?;
 
-        for ((layer, weights), bias) in self
-            .layers
-            .iter()
-            .zip(&self.weights)
-            .zip(&self.biases)
-        {
+        for ((layer, weights), bias) in self.layers.iter().zip(&self.weights).zip(&self.biases) {
             // Matrix multiplication: output = input * weights
             let batch_size = 1; // Single sample inference
             let output = mps_mmul.multiply(

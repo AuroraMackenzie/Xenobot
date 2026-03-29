@@ -65,7 +65,9 @@ pub fn transcode_audio_to_mp3(
     let output = Command::new(binary)
         .args(build_ffmpeg_args(input_path, output_path, options))
         .output()
-        .map_err(|error| LineError::Internal(anyhow::anyhow!("failed to start ffmpeg: {}", error)))?;
+        .map_err(|error| {
+            LineError::Internal(anyhow::anyhow!("failed to start ffmpeg: {}", error))
+        })?;
 
     if output.status.success() {
         return Ok(());
@@ -102,12 +104,17 @@ pub fn transcode_audio_bytes_to_mp3(
         .unwrap_or_else(|| std::ffi::OsStr::new("ffmpeg"));
 
     let mut child = Command::new(binary)
-        .args(build_ffmpeg_pipe_args(normalize_input_format(input_format), options))
+        .args(build_ffmpeg_pipe_args(
+            normalize_input_format(input_format),
+            options,
+        ))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|error| LineError::Internal(anyhow::anyhow!("failed to start ffmpeg: {}", error)))?;
+        .map_err(|error| {
+            LineError::Internal(anyhow::anyhow!("failed to start ffmpeg: {}", error))
+        })?;
 
     if let Some(mut stdin) = child.stdin.take() {
         stdin.write_all(input_bytes).map_err(|error| {
@@ -249,7 +256,8 @@ mod tests {
         let options = AudioTranscodeOptions::default();
         let input_path = Path::new("/tmp/line-missing-input.ogg");
         let output_path = Path::new("/tmp/line-missing-output.mp3");
-        let error = transcode_audio_to_mp3(input_path, output_path, &options).expect_err("missing input should fail");
+        let error = transcode_audio_to_mp3(input_path, output_path, &options)
+            .expect_err("missing input should fail");
 
         match error {
             LineError::Io(inner) => assert_eq!(inner.kind(), std::io::ErrorKind::NotFound),
@@ -310,5 +318,4 @@ mod tests {
             other => panic!("expected Internal error, got {other:?}"),
         }
     }
-
 }

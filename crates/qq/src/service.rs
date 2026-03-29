@@ -6,7 +6,9 @@ use xenobot_analysis::parsers::ParsedChat;
 use xenobot_core::platform_sources::SourceCandidate;
 
 use crate::account::{primary_account, Account};
-use crate::audio::{has_ffmpeg, transcode_audio_bytes_to_mp3, transcode_audio_to_mp3, AudioTranscodeOptions};
+use crate::audio::{
+    has_ffmpeg, transcode_audio_bytes_to_mp3, transcode_audio_to_mp3, AudioTranscodeOptions,
+};
 use crate::config::QQConfig;
 use crate::media::{collect_media_assets, QQMediaAsset};
 use crate::monitor::{FileMonitor, FileMonitorConfig};
@@ -140,10 +142,7 @@ impl QQService {
     }
 
     /// Build a legal-safe media inventory from explicitly authorized asset paths.
-    pub fn collect_media_inventory<I, P>(
-        &self,
-        paths: I,
-    ) -> Result<Vec<QQMediaAsset>, QQError>
+    pub fn collect_media_inventory<I, P>(&self, paths: I) -> Result<Vec<QQMediaAsset>, QQError>
     where
         I: IntoIterator<Item = P>,
         P: AsRef<Path>,
@@ -246,6 +245,8 @@ impl QQService {
         FileMonitor::new(FileMonitorConfig {
             watch_dir: watch_dir.to_path_buf(),
             file_patterns: FileMonitor::qq_export_patterns(),
+            debounce_ms: 1000,
+            max_wait_ms: 10000,
             recursive: true,
         })
     }
@@ -326,7 +327,9 @@ mod tests {
         let accounts = service.discover_accounts();
 
         assert!(!accounts.is_empty());
-        assert!(accounts.iter().all(|account| !account.name.trim().is_empty()));
+        assert!(accounts
+            .iter()
+            .all(|account| !account.name.trim().is_empty()));
     }
 
     #[test]
@@ -338,7 +341,6 @@ mod tests {
         assert_eq!(exposed, discovered);
     }
 
-
     #[test]
     fn build_authorized_workspace_rejects_unauthorized_media_paths() {
         let export_dir = tempdir().expect("tempdir");
@@ -348,16 +350,15 @@ mod tests {
         write_fixture(&export, r#"[2025-01-02 10:20:30] Alice hello qq"#);
         std::fs::write(&media, [1_u8, 2, 3]).expect("media fixture");
 
-        let service =
-            QQService::new(QQConfig::with_authorized_roots([export_dir.path().to_path_buf()]));
+        let service = QQService::new(QQConfig::with_authorized_roots([export_dir
+            .path()
+            .to_path_buf()]));
 
         match service.build_authorized_workspace([export.as_path()], [media.as_path()]) {
             Err(QQError::UnauthorizedPath { path }) => assert_eq!(path, media),
             _ => panic!("expected unauthorized media path"),
         }
     }
-
-
 
     #[test]
     fn build_authorized_workspace_rejects_unauthorized_export_paths() {
@@ -366,8 +367,9 @@ mod tests {
         let export = unauthorized_dir.path().join("qq_unauthorized_fixture.dat");
         std::fs::write(&export, [1_u8, 2, 3]).expect("export fixture");
 
-        let service =
-            QQService::new(QQConfig::with_authorized_roots([export_dir.path().to_path_buf()]));
+        let service = QQService::new(QQConfig::with_authorized_roots([export_dir
+            .path()
+            .to_path_buf()]));
 
         match service.build_authorized_workspace([export.as_path()], std::iter::empty::<&Path>()) {
             Err(QQError::UnauthorizedPath { path }) => assert_eq!(path, export),
@@ -426,7 +428,9 @@ mod tests {
         let export = input_dir.path().join("qq_fixture.txt");
         write_fixture(&export, "[2025-01-02 10:20:30] Alice hello qq");
 
-        let service = QQService::new(QQConfig::with_authorized_roots([input_dir.path().to_path_buf()]));
+        let service = QQService::new(QQConfig::with_authorized_roots([input_dir
+            .path()
+            .to_path_buf()]));
         match service.prepare_authorized_workspace(
             [export.as_path()],
             std::iter::empty::<&Path>(),
@@ -460,7 +464,9 @@ mod tests {
         let output = output_dir.path().join("voice.mp3");
         fs::write(&input, [1_u8, 2, 3]).expect("write input");
 
-        let service = QQService::new(QQConfig::with_authorized_roots([input_dir.path().to_path_buf()]));
+        let service = QQService::new(QQConfig::with_authorized_roots([input_dir
+            .path()
+            .to_path_buf()]));
         let error = service
             .transcode_audio_asset_to_mp3(&input, &output, &AudioTranscodeOptions::default())
             .expect_err("unauthorized output directory should fail");
@@ -481,7 +487,9 @@ mod tests {
         let output = output_dir.path().join("voice.mp3");
         fs::write(&input, [1_u8, 2, 3]).expect("write input");
 
-        let service = QQService::new(QQConfig::with_authorized_roots([output_dir.path().to_path_buf()]));
+        let service = QQService::new(QQConfig::with_authorized_roots([output_dir
+            .path()
+            .to_path_buf()]));
         let error = service
             .transcode_audio_asset_to_mp3(&input, &output, &AudioTranscodeOptions::default())
             .expect_err("unauthorized input path should fail");
@@ -498,8 +506,9 @@ mod tests {
     fn add_authorized_root_allows_runtime_monitor_creation() {
         let dir = tempdir().expect("tempdir");
         let other_dir = tempdir().expect("tempdir");
-        let mut service =
-            QQService::new(QQConfig::with_authorized_roots([other_dir.path().to_path_buf()]));
+        let mut service = QQService::new(QQConfig::with_authorized_roots([other_dir
+            .path()
+            .to_path_buf()]));
         assert!(service.create_export_monitor(dir.path()).is_err());
 
         service.add_authorized_root(dir.path().to_path_buf());
@@ -513,9 +522,9 @@ mod tests {
         let asset = dir.path().join("photo.jpg");
         fs::write(&asset, [1_u8, 2, 3]).expect("write asset");
 
-        let service = QQService::new(QQConfig::with_authorized_roots([
-            other_dir.path().to_path_buf(),
-        ]));
+        let service = QQService::new(QQConfig::with_authorized_roots([other_dir
+            .path()
+            .to_path_buf()]));
         let error = service
             .collect_media_inventory([asset.as_path()])
             .expect_err("unauthorized media asset should be rejected");
@@ -533,9 +542,9 @@ mod tests {
         let export = dir.path().join("qq_fixture.txt");
         write_fixture(&export, "[2025-01-02 10:20:30] Alice hello qq");
 
-        let mut service = QQService::new(QQConfig::with_authorized_roots([
-            other_dir.path().to_path_buf(),
-        ]));
+        let mut service = QQService::new(QQConfig::with_authorized_roots([other_dir
+            .path()
+            .to_path_buf()]));
         assert!(matches!(
             service.prepare_authorized_workspace(
                 [export.as_path()],
@@ -569,8 +578,9 @@ mod tests {
         write_fixture(&export, "[2025-01-02 10:20:30] Alice hello qq");
         fs::write(&asset, [1_u8, 2, 3]).expect("media fixture");
 
-        let mut service =
-            QQService::new(QQConfig::with_authorized_roots([other_dir.path().to_path_buf()]));
+        let mut service = QQService::new(QQConfig::with_authorized_roots([other_dir
+            .path()
+            .to_path_buf()]));
         assert!(matches!(
             service.build_authorized_workspace([export.as_path()], [asset.as_path()]),
             Err(QQError::UnauthorizedPath { .. })
@@ -593,8 +603,9 @@ mod tests {
         let export = dir.path().join("qq_fixture.txt");
         write_fixture(&export, "[2025-01-02 10:20:30] Alice hello qq");
 
-        let mut service =
-            QQService::new(QQConfig::with_authorized_roots([other_dir.path().to_path_buf()]));
+        let mut service = QQService::new(QQConfig::with_authorized_roots([other_dir
+            .path()
+            .to_path_buf()]));
         assert!(matches!(
             service.parse_authorized_export(&export),
             Err(QQError::UnauthorizedPath { .. })
@@ -615,8 +626,9 @@ mod tests {
         let export = dir.path().join("qq_fixture.txt");
         write_fixture(&export, "[2025-01-02 10:20:30] Alice hello qq");
 
-        let mut service =
-            QQService::new(QQConfig::with_authorized_roots([other_dir.path().to_path_buf()]));
+        let mut service = QQService::new(QQConfig::with_authorized_roots([other_dir
+            .path()
+            .to_path_buf()]));
         assert!(matches!(
             service.stage_authorized_exports([export.as_path()]),
             Err(QQError::UnauthorizedPath { .. })
@@ -637,8 +649,9 @@ mod tests {
         let output = other_dir.path().join("voice.mp3");
         fs::write(&input, []).expect("write empty input");
 
-        let mut service =
-            QQService::new(QQConfig::with_authorized_roots([other_dir.path().to_path_buf()]));
+        let mut service = QQService::new(QQConfig::with_authorized_roots([other_dir
+            .path()
+            .to_path_buf()]));
         assert!(matches!(
             service.transcode_audio_asset_to_mp3(
                 &input,
@@ -649,14 +662,16 @@ mod tests {
         ));
 
         service.add_authorized_root(input_dir.path().to_path_buf());
-        let result =
-            service.transcode_audio_asset_to_mp3(&input, &output, &AudioTranscodeOptions::default());
+        let result = service.transcode_audio_asset_to_mp3(
+            &input,
+            &output,
+            &AudioTranscodeOptions::default(),
+        );
         assert!(
             !matches!(result, Err(QQError::UnauthorizedPath { .. })),
             "runtime authorization should move audio validation beyond authorization checks"
         );
     }
-
 
     #[test]
     fn add_authorized_root_allows_runtime_media_inventory_collection() {
@@ -665,9 +680,9 @@ mod tests {
         let asset = dir.path().join("voice.amr");
         fs::write(&asset, [1_u8, 2, 3]).expect("write asset");
 
-        let mut service = QQService::new(QQConfig::with_authorized_roots([
-            other_dir.path().to_path_buf(),
-        ]));
+        let mut service = QQService::new(QQConfig::with_authorized_roots([other_dir
+            .path()
+            .to_path_buf()]));
         assert!(matches!(
             service.collect_media_inventory([asset.as_path()]),
             Err(QQError::UnauthorizedPath { .. })
@@ -689,24 +704,29 @@ mod tests {
         let output = output_dir.path().join("voice.mp3");
         fs::write(&input, []).expect("audio input");
 
-        let mut service = QQService::new(QQConfig::with_authorized_roots([
-            input_dir.path().to_path_buf(),
-        ]));
+        let mut service = QQService::new(QQConfig::with_authorized_roots([input_dir
+            .path()
+            .to_path_buf()]));
         assert!(matches!(
-            service.transcode_audio_asset_to_mp3(&input, &output, &AudioTranscodeOptions::default()),
+            service.transcode_audio_asset_to_mp3(
+                &input,
+                &output,
+                &AudioTranscodeOptions::default()
+            ),
             Err(QQError::UnauthorizedPath { .. })
         ));
 
         service.add_authorized_root(output_dir.path().to_path_buf());
-        let result =
-            service.transcode_audio_asset_to_mp3(&input, &output, &AudioTranscodeOptions::default());
+        let result = service.transcode_audio_asset_to_mp3(
+            &input,
+            &output,
+            &AudioTranscodeOptions::default(),
+        );
         assert!(
             !matches!(result, Err(QQError::UnauthorizedPath { .. })),
             "runtime authorization should move audio validation beyond output authorization checks"
         );
     }
-
-
 
     #[test]
     fn export_only_workspace_is_not_empty_and_preserves_account_views() {
@@ -805,8 +825,6 @@ mod tests {
         }
     }
 
-
-
     #[test]
     fn prepared_workspace_with_monitor_preserves_export_and_media_counts() {
         let dir = tempdir().expect("tempdir");
@@ -832,13 +850,19 @@ mod tests {
     fn authorized_roots_include_runtime_root_after_addition() {
         let dir = tempdir().expect("tempdir");
         let other_dir = tempdir().expect("tempdir");
-        let mut service = QQService::new(QQConfig::with_authorized_roots([
-            other_dir.path().to_path_buf(),
-        ]));
+        let mut service = QQService::new(QQConfig::with_authorized_roots([other_dir
+            .path()
+            .to_path_buf()]));
 
-        assert!(!service.authorized_roots().iter().any(|path| path == dir.path()));
+        assert!(!service
+            .authorized_roots()
+            .iter()
+            .any(|path| path == dir.path()));
         service.add_authorized_root(dir.path().to_path_buf());
-        assert!(service.authorized_roots().iter().any(|path| path == dir.path()));
+        assert!(service
+            .authorized_roots()
+            .iter()
+            .any(|path| path == dir.path()));
     }
 
     #[test]
@@ -848,9 +872,9 @@ mod tests {
         let export = unauthorized_dir.path().join("qq_fixture.txt");
         write_fixture(&export, r#"[2025-01-02 10:20:30] Alice hello qq"#);
 
-        let service = QQService::new(QQConfig::with_authorized_roots([
-            authorized_dir.path().to_path_buf(),
-        ]));
+        let service = QQService::new(QQConfig::with_authorized_roots([authorized_dir
+            .path()
+            .to_path_buf()]));
 
         match service.stage_authorized_exports([export.as_path()]) {
             Err(QQError::UnauthorizedPath { path }) => assert_eq!(path, export),
@@ -879,9 +903,9 @@ mod tests {
     fn create_export_monitor_rejects_unauthorized_directory() {
         let authorized_dir = tempdir().expect("tempdir");
         let unauthorized_dir = tempdir().expect("tempdir");
-        let service = QQService::new(QQConfig::with_authorized_roots([
-            authorized_dir.path().to_path_buf(),
-        ]));
+        let service = QQService::new(QQConfig::with_authorized_roots([authorized_dir
+            .path()
+            .to_path_buf()]));
 
         match service.create_export_monitor(unauthorized_dir.path()) {
             Err(QQError::UnauthorizedPath { path }) => {
@@ -891,5 +915,4 @@ mod tests {
             Ok(_) => panic!("unauthorized watch directory should fail"),
         }
     }
-
 }

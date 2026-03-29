@@ -3,10 +3,11 @@
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use regex::Regex;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{self, Receiver};
+use std::sync::mpsc::{self};
 use std::time::Duration;
 
 use crate::QQError;
+use xenobot_core::monitor::DebouncedReceiver;
 
 /// File system event types emitted by the QQ monitor.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -26,6 +27,10 @@ pub struct FileMonitorConfig {
     pub watch_dir: PathBuf,
     /// Regex patterns applied against file paths.
     pub file_patterns: Vec<Regex>,
+    /// Debounce interval applied after the latest matching event.
+    pub debounce_ms: u64,
+    /// Maximum total wait for a burst before forcing a flush.
+    pub max_wait_ms: u64,
     /// Whether recursive watching is enabled.
     pub recursive: bool,
 }
@@ -35,6 +40,8 @@ impl Default for FileMonitorConfig {
         Self {
             watch_dir: PathBuf::new(),
             file_patterns: vec![],
+            debounce_ms: 1000,
+            max_wait_ms: 10000,
             recursive: true,
         }
     }
@@ -44,7 +51,7 @@ impl Default for FileMonitorConfig {
 pub struct FileMonitor {
     config: FileMonitorConfig,
     watcher: RecommendedWatcher,
-    event_rx: Receiver<FileEvent>,
+    event_rx: DebouncedReceiver<FileEvent>,
 }
 
 impl FileMonitor {
@@ -60,9 +67,13 @@ impl FileMonitor {
         })?;
 
         Ok(Self {
+            event_rx: DebouncedReceiver::new(
+                event_rx,
+                Duration::from_millis(config.debounce_ms),
+                Duration::from_millis(config.max_wait_ms),
+            ),
             config,
             watcher,
-            event_rx,
         })
     }
 
@@ -86,16 +97,10 @@ impl FileMonitor {
 
     /// Get the next event, waiting up to the provided timeout.
     pub fn next_event_timeout(
-        &self,
+        &mut self,
         timeout: Duration,
     ) -> Result<Option<FileEvent>, std::sync::mpsc::RecvTimeoutError> {
-        self.event_rx.recv_timeout(timeout).map(Some).or_else(|err| {
-            if matches!(err, std::sync::mpsc::RecvTimeoutError::Timeout) {
-                Ok(None)
-            } else {
-                Err(err)
-            }
-        })
+        self.event_rx.recv_timeout(timeout)
     }
 
     fn handle_event(event: &Event, config: &FileMonitorConfig, event_tx: &mpsc::Sender<FileEvent>) {
@@ -155,26 +160,36 @@ mod tests {
         let export_path = Path::new("/tmp/Export/qq.zip");
         let image_path = Path::new("/tmp/Media/avatar.png");
 
-        assert!(patterns.iter().any(|pattern| pattern.is_match(&export_path.to_string_lossy())));
-        assert!(patterns.iter().any(|pattern| pattern.is_match(&image_path.to_string_lossy())));
+        assert!(patterns
+            .iter()
+            .any(|pattern| pattern.is_match(&export_path.to_string_lossy())));
+        assert!(patterns
+            .iter()
+            .any(|pattern| pattern.is_match(&image_path.to_string_lossy())));
     }
     #[test]
     fn export_patterns_do_not_match_unrelated_assets() {
         let patterns = FileMonitor::qq_export_patterns();
         let unrelated_path = Path::new("/tmp/Media/readme.exe");
 
-        assert!(!patterns.iter().any(|pattern| pattern.is_match(&unrelated_path.to_string_lossy())));
+        assert!(!patterns
+            .iter()
+            .any(|pattern| pattern.is_match(&unrelated_path.to_string_lossy())));
     }
 
     #[test]
     fn empty_pattern_configuration_matches_any_path() {
         let config = FileMonitorConfig::default();
-        assert!(FileMonitor::matches_pattern(Path::new("/tmp/random.asset"), &config));
+        assert!(FileMonitor::matches_pattern(
+            Path::new("/tmp/random.asset"),
+            &config
+        ));
     }
 
     #[test]
     fn next_event_timeout_returns_none_when_idle() {
-        let monitor = FileMonitor::new(FileMonitorConfig::default()).expect("monitor should build");
+        let mut monitor =
+            FileMonitor::new(FileMonitorConfig::default()).expect("monitor should build");
         let event = monitor
             .next_event_timeout(Duration::from_millis(5))
             .expect("timeout should not error");
@@ -193,7 +208,10 @@ mod tests {
             attrs: Default::default(),
         };
         FileMonitor::handle_event(&create, &config, &tx);
-        assert_eq!(rx.recv().expect("create event"), FileEvent::Created(path.clone()));
+        assert_eq!(
+            rx.recv().expect("create event"),
+            FileEvent::Created(path.clone())
+        );
 
         let modify = Event {
             kind: EventKind::Modify(ModifyKind::Data(notify::event::DataChange::Any)),
@@ -201,7 +219,10 @@ mod tests {
             attrs: Default::default(),
         };
         FileMonitor::handle_event(&modify, &config, &tx);
-        assert_eq!(rx.recv().expect("modify event"), FileEvent::Modified(path.clone()));
+        assert_eq!(
+            rx.recv().expect("modify event"),
+            FileEvent::Modified(path.clone())
+        );
 
         let remove = Event {
             kind: EventKind::Remove(RemoveKind::File),
@@ -228,5 +249,4 @@ mod tests {
         FileMonitor::handle_event(&event, &config, &tx);
         assert!(rx.try_recv().is_err());
     }
-
 }

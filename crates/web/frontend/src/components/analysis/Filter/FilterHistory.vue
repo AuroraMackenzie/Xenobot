@@ -86,12 +86,6 @@ function saveHistory() {
 }
 
 // English engineering note.
-function deleteHistory(id: string) {
-  historyList.value = historyList.value.filter((h) => h.id !== id);
-  saveHistory();
-}
-
-// English engineering note.
 function loadCondition(item: FilterHistoryItem) {
   emit("load", {
     mode: item.mode,
@@ -280,14 +274,6 @@ defineExpose({
                     @click="loadCondition(item)"
                   >
                     {{ t("common.load") }}
-                  </UButton>
-                  <UButton
-                    size="xs"
-                    variant="ghost"
-                    color="red"
-                    @click="deleteHistory(item.id)"
-                  >
-                    <UIcon name="i-heroicons-trash" class="w-4 h-4" />
                   </UButton>
                 </div>
               </div>

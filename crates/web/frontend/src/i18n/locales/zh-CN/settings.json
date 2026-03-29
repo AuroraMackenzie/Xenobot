@@ -355,7 +355,7 @@
     "noConfigs": "暂无配置，点击上方按钮添加",
     "active": "使用中",
     "setActive": "设为使用",
-    "deleteConfirm": "确定删除配置「{name}」吗？",
+    "deleteConfirm": "安全模式下已禁用配置「{name}」的移除操作。",
     "configName": "配置名称",
     "configNamePlaceholder": "如：Ollama Embedding",
     "apiSource": "API 来源",
@@ -379,6 +379,6 @@
     "cached": "已缓存",
     "size": "占用",
     "clear": "清空",
-    "clearVectorStoreConfirm": "确定清空所有向量缓存吗？这将导致下次搜索时重新计算。"
+    "clearVectorStoreConfirm": "安全模式下已禁用向量缓存重置。"
   }
 }

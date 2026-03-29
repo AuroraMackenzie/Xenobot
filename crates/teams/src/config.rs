@@ -39,6 +39,8 @@ impl TeamsConfig {
             return path.is_file();
         }
 
-        self.authorized_roots.iter().any(|root| path.starts_with(root))
+        self.authorized_roots
+            .iter()
+            .any(|root| path.starts_with(root))
     }
 }

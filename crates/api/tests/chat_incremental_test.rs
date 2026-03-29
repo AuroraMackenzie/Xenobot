@@ -10,6 +10,7 @@ use tower::util::ServiceExt;
 use xenobot_api::chat;
 use xenobot_api::database::repository::ChatMeta;
 use xenobot_api::database::Repository;
+use xenobot_api::{build_router, ApiConfig};
 use xenobot_core::config::DatabaseConfig;
 
 static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -2429,7 +2430,7 @@ fn analysis_platform_fixtures() -> Vec<(&'static str, &'static str, &'static str
         (
             "wechat",
             "json",
-            r#"[{"msg_id":"1","type":1,"is_sender":false,"sender_name":"Alice","sender_id":"wxid_alice","create_time":1735813230,"content":"hello wechat"}]"#,
+            r#"{"success":true,"talker":"launch-room@chatroom","count":2,"hasMore":false,"messages":[{"localId":1,"serverId":"456","localType":1,"createTime":1738713600,"isSend":0,"senderUsername":"wxid_member","content":"你好","rawContent":"你好","parsedContent":"hello wechat from weflow http api"},{"localId":2,"localType":3,"createTime":1738713660,"isSend":0,"senderUsername":"wxid_member","content":"[图片]","parsedContent":"[图片]","mediaType":"image","mediaFileName":"abc123.jpg","mediaLocalPath":"/tmp/weflow/api-media/launch-room/images/abc123.jpg"}]}"#,
             "analysis-wechat",
         ),
         (
@@ -2446,8 +2447,8 @@ fn analysis_platform_fixtures() -> Vec<(&'static str, &'static str, &'static str
         ),
         (
             "qq",
-            "txt",
-            "[2025-01-02 10:20:30] Alice hello qq",
+            "json",
+            r#"{"chatInfo":{"name":"Bridge Ops","type":"group","participantCount":2},"statistics":{"totalMessages":2},"messages":[{"id":"msg-1","seq":"1","timestamp":1735813230000,"time":"2025-01-02T10:20:30.000Z","type":"text","recalled":false,"system":false,"sender":{"uid":"uid-alice","uin":"10001","name":"Alice Account","nickname":"Alice","groupCard":"Captain Alice"},"content":{"text":"hello qq\nwith multiline body","html":"<p>hello qq</p>","elements":[{"type":"text","data":{"text":"hello qq"}}],"resources":[{"type":"image","filename":"diagram.png","size":2048}]}},{"id":"msg-2","seq":"2","timestamp":1735813265000,"time":"2025-01-02T10:21:05.000Z","type":"system","recalled":false,"system":true,"sender":{"uid":"uid-bot","name":"Bridge Bot"},"content":{"text":"Bob pinned a launch checklist","html":"","elements":[],"resources":[]}}]}"#,
             "analysis-qq",
         ),
         (
@@ -2459,7 +2460,7 @@ fn analysis_platform_fixtures() -> Vec<(&'static str, &'static str, &'static str
         (
             "discord",
             "json",
-            r#"[{"ID":"1","Timestamp":"2025-01-02T10:20:30Z","Author":{"ID":"u1","Name":"Alice"},"Content":"hello discord"}]"#,
+            r#"{"guild":{"id":"g1","name":"Launch Guild"},"channel":{"id":"c1","type":"GuildTextChat","name":"release-war-room"},"messages":[{"id":"1","type":"Default","timestamp":"2025-01-02T10:20:30Z","author":{"id":"u1","name":"Alice","nickname":"Alice"},"content":"hello discord","attachments":[{"id":"a1","fileName":"diagram.png"}],"embeds":[{"title":"Launch checklist"}],"stickers":[{"id":"s1","name":"Ready"}]},{"id":"2","type":"ChannelPinnedMessage","timestamp":"2025-01-02T10:21:30Z","author":{"id":"u2","name":"Bob"},"content":""}]}"#,
             "analysis-discord",
         ),
         (
@@ -3158,6 +3159,384 @@ async fn test_import_batch_separate_mode_jsonl_no_messages_failure_then_recovery
         .fetch_one(&*pool)
         .await?;
     assert_eq!(message_count, 1);
+
+    let _ = fs::remove_dir_all(&test_root);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_analysis_import_persists_member_profiles_and_name_history_for_qq_export(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let _test_guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+    let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .canonicalize()?;
+    let _cwd_guard = WorkingDirGuard::change_to(&workspace_root)?;
+
+    let test_root = unique_test_root();
+    fs::create_dir_all(&test_root)?;
+    let db_path = test_root.join("xenobot_api_member_profile_history.db");
+
+    let mut db_config = DatabaseConfig::default();
+    db_config.sqlite_path = db_path;
+    xenobot_api::database::init_database_with_config(&db_config).await?;
+
+    let app = chat::router();
+    let export_path = test_root.join("qq_reference_export.txt");
+    fs::write(
+        &export_path,
+        "消息记录（此消息记录为文本格式，不支持重新导入）\n消息对象:Bridge Ops\n2025-01-02 10:20:30 【管理员】Alice(10001)\nhello qq\nthis spans multiple lines\n2025-01-02 10:21:00 Bob<bot@example.com>\n[图片]",
+    )?;
+
+    let (status, import_resp) = post_json(
+        &app,
+        "/import",
+        json!({ "file_path": export_path.to_string_lossy().to_string() }),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(import_resp["success"], true);
+    let session_id = import_resp["sessionId"]
+        .as_str()
+        .and_then(|value| value.parse::<i64>().ok())
+        .expect("import should return sessionId");
+
+    let (status, members_resp) = get_json(&app, &format!("/sessions/{session_id}/members")).await?;
+    assert_eq!(status, StatusCode::OK);
+    let members = members_resp
+        .as_array()
+        .expect("members route should return an array");
+    let alice = members
+        .iter()
+        .find(|item| item["platform_id"] == "qq:10001")
+        .expect("alice member should exist");
+    assert_eq!(alice["account_name"], "Alice");
+    assert_eq!(alice["group_nickname"], "Alice");
+
+    let bob = members
+        .iter()
+        .find(|item| item["platform_id"] == "qq:bot@example.com")
+        .expect("bob member should exist");
+    assert_eq!(bob["account_name"], "Bob");
+    assert_eq!(bob["group_nickname"], "Bob");
+
+    let alice_member_id = alice["id"]
+        .as_i64()
+        .expect("alice member should expose numeric id");
+    let (status, history_resp) = get_json(
+        &app,
+        &format!("/sessions/{session_id}/member-name-history/{alice_member_id}"),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    let history = history_resp
+        .as_array()
+        .expect("member name history should be an array");
+    assert!(
+        history
+            .iter()
+            .any(|row| row["nameType"] == "account_name" && row["name"] == "Alice"),
+        "account_name history should include the cleaned QQ nickname"
+    );
+    assert!(
+        history
+            .iter()
+            .any(|row| row["nameType"] == "group_nickname" && row["name"] == "Alice"),
+        "group_nickname history should include the cleaned QQ nickname"
+    );
+
+    let _ = fs::remove_dir_all(&test_root);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_analysis_import_excludes_wechat_system_sender_from_member_views(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let _test_guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+    let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .canonicalize()?;
+    let _cwd_guard = WorkingDirGuard::change_to(&workspace_root)?;
+
+    let test_root = unique_test_root();
+    fs::create_dir_all(&test_root)?;
+    let db_path = test_root.join("xenobot_api_wechat_system_member_filter.db");
+
+    let mut db_config = DatabaseConfig::default();
+    db_config.sqlite_path = db_path;
+    xenobot_api::database::init_database_with_config(&db_config).await?;
+
+    let app = chat::router();
+    let export_path = test_root.join("weflow_member_filter.json");
+    fs::write(
+        &export_path,
+        r#"{"weflow":{"version":"1.0.0"},"session":{"wxid":"launch-room@chatroom","nickname":"Launch Room","remark":"","displayName":"Launch Room","type":"群聊"},"messages":[{"localId":1,"createTime":1735813230,"type":"文本消息","content":"hello wechat","isSend":0,"senderUsername":"wxid_alice","senderDisplayName":"Alice"},{"localId":2,"createTime":1735813290,"type":"系统消息","content":"Bob joined the room","isSend":null,"senderUsername":"system","senderDisplayName":"System"}]}"#,
+    )?;
+
+    let (status, import_resp) = post_json(
+        &app,
+        "/import",
+        json!({ "file_path": export_path.to_string_lossy().to_string() }),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(import_resp["success"], true);
+    let session_id = import_resp["sessionId"]
+        .as_str()
+        .and_then(|value| value.parse::<i64>().ok())
+        .expect("import should return sessionId");
+
+    let (status, members_resp) = get_json(&app, &format!("/sessions/{session_id}/members")).await?;
+    assert_eq!(status, StatusCode::OK);
+    let members = members_resp
+        .as_array()
+        .expect("members route should return an array");
+    assert_eq!(members.len(), 1);
+    assert_eq!(members[0]["platform_id"], "wechat:wxid_alice");
+    assert_eq!(members[0]["account_name"], "Alice");
+    assert!(
+        !members
+            .iter()
+            .any(|item| item["account_name"] == "系统消息" || item["group_nickname"] == "系统消息"),
+        "system sender should not leak into members route"
+    );
+
+    let (status, activity_resp) =
+        get_json(&app, &format!("/sessions/{session_id}/member-activity")).await?;
+    assert_eq!(status, StatusCode::OK);
+    let activity = activity_resp
+        .as_array()
+        .expect("member activity should return an array");
+    assert_eq!(activity.len(), 1);
+    assert_eq!(activity[0]["platform_id"], "wechat:wxid_alice");
+
+    let _ = fs::remove_dir_all(&test_root);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_analysis_import_excludes_discord_system_events_from_member_views(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let _test_guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+    let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .canonicalize()?;
+    let _cwd_guard = WorkingDirGuard::change_to(&workspace_root)?;
+
+    let test_root = unique_test_root();
+    fs::create_dir_all(&test_root)?;
+    let db_path = test_root.join("xenobot_api_discord_system_event_filter.db");
+
+    let mut db_config = DatabaseConfig::default();
+    db_config.sqlite_path = db_path;
+    xenobot_api::database::init_database_with_config(&db_config).await?;
+
+    let app = chat::router();
+    let export_path = test_root.join("discord_system_event_filter.json");
+    fs::write(
+        &export_path,
+        r#"{"guild":{"id":"g1","name":"Launch Guild"},"channel":{"id":"c1","type":"GuildTextChat","name":"release-room"},"messages":[{"id":"1","type":"Default","timestamp":"2025-01-02T10:20:30Z","author":{"id":"u1","name":"Alice","nickname":"Alice"},"content":"hello discord"},{"id":"2","type":"ChannelPinnedMessage","timestamp":"2025-01-02T10:21:00Z","author":{"id":"u2","name":"Bob"},"content":""}]}"#,
+    )?;
+
+    let (status, import_resp) = post_json(
+        &app,
+        "/import",
+        json!({ "file_path": export_path.to_string_lossy().to_string() }),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(import_resp["success"], true);
+    let session_id = import_resp["sessionId"]
+        .as_str()
+        .and_then(|value| value.parse::<i64>().ok())
+        .expect("import should return sessionId");
+
+    let (status, members_resp) = get_json(&app, &format!("/sessions/{session_id}/members")).await?;
+    assert_eq!(status, StatusCode::OK);
+    let members = members_resp
+        .as_array()
+        .expect("members route should return an array");
+    assert_eq!(members.len(), 1);
+    assert_eq!(members[0]["platform_id"], "discord:u1");
+    assert_eq!(members[0]["account_name"], "Alice");
+
+    let (status, paginated_resp) = get_json(
+        &app,
+        &format!("/sessions/{session_id}/members-paginated?page=1&page_size=10"),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    let paginated_members = paginated_resp["members"]
+        .as_array()
+        .expect("members-paginated should return members array");
+    assert_eq!(paginated_members.len(), 1);
+    assert_eq!(paginated_members[0]["platform_id"], "discord:u1");
+    assert_eq!(paginated_members[0]["message_count"], 1);
+
+    let (status, activity_resp) =
+        get_json(&app, &format!("/sessions/{session_id}/member-activity")).await?;
+    assert_eq!(status, StatusCode::OK);
+    let activity = activity_resp
+        .as_array()
+        .expect("member activity should return an array");
+    assert_eq!(activity.len(), 1);
+    assert_eq!(activity[0]["platform_id"], "discord:u1");
+    assert_eq!(activity[0]["message_count"], 1);
+
+    let _ = fs::remove_dir_all(&test_root);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_analysis_import_persists_discord_account_and_display_names(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let _test_guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+    let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .canonicalize()?;
+    let _cwd_guard = WorkingDirGuard::change_to(&workspace_root)?;
+
+    let test_root = unique_test_root();
+    fs::create_dir_all(&test_root)?;
+    let db_path = test_root.join("xenobot_api_discord_member_names.db");
+
+    let mut db_config = DatabaseConfig::default();
+    db_config.sqlite_path = db_path;
+    xenobot_api::database::init_database_with_config(&db_config).await?;
+
+    let app = chat::router();
+    let export_path = test_root.join("discord_member_names.json");
+    fs::write(
+        &export_path,
+        r#"{"guild":{"id":"g1","name":"Launch Guild"},"channel":{"id":"c1","type":"GuildTextChat","name":"release-room"},"messages":[{"id":"1","type":"Default","timestamp":"2025-01-02T10:20:30Z","author":{"id":"u1","name":"alice.user","nickname":"Captain Alice","globalName":"Alice Global"},"content":"status looks good"},{"id":"2","type":"Default","timestamp":"2025-01-02T10:21:00Z","author":{"id":"u1","name":"alice.user","globalName":"Alice Global"},"content":"second message to keep member persistence stable"}]}"#,
+    )?;
+
+    let (status, import_resp) = post_json(
+        &app,
+        "/import",
+        json!({ "file_path": export_path.to_string_lossy().to_string() }),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(import_resp["success"], true);
+    let session_id = import_resp["sessionId"]
+        .as_str()
+        .and_then(|value| value.parse::<i64>().ok())
+        .expect("import should return sessionId");
+
+    let (status, members_resp) = get_json(&app, &format!("/sessions/{session_id}/members")).await?;
+    assert_eq!(status, StatusCode::OK);
+    let members = members_resp
+        .as_array()
+        .expect("members route should return an array");
+    let alice = members
+        .iter()
+        .find(|item| item["platform_id"] == "discord:u1")
+        .expect("discord member should exist");
+    assert_eq!(alice["account_name"], "alice.user");
+    assert_eq!(alice["group_nickname"], "Captain Alice");
+
+    let alice_member_id = alice["id"]
+        .as_i64()
+        .expect("discord member should expose numeric id");
+    let (status, history_resp) = get_json(
+        &app,
+        &format!("/sessions/{session_id}/member-name-history/{alice_member_id}"),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    let history = history_resp
+        .as_array()
+        .expect("member name history should be an array");
+    assert!(
+        history
+            .iter()
+            .any(|row| row["nameType"] == "account_name" && row["name"] == "alice.user"),
+        "account_name history should retain the Discord username"
+    );
+    assert!(
+        history
+            .iter()
+            .any(|row| row["nameType"] == "group_nickname" && row["name"] == "Captain Alice"),
+        "group_nickname history should retain the Discord display name"
+    );
+
+    let _ = fs::remove_dir_all(&test_root);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_generate_summary_excludes_wechat_system_messages_from_summary_text(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let _test_guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+    let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .canonicalize()?;
+    let _cwd_guard = WorkingDirGuard::change_to(&workspace_root)?;
+
+    let test_root = unique_test_root();
+    fs::create_dir_all(&test_root)?;
+    let db_path = test_root.join("xenobot_api_wechat_summary_filter.db");
+
+    let mut db_config = DatabaseConfig::default();
+    db_config.sqlite_path = db_path;
+    xenobot_api::database::init_database_with_config(&db_config).await?;
+
+    let app = build_router(&ApiConfig::default());
+    let export_path = test_root.join("weflow_summary_filter.json");
+    fs::write(
+        &export_path,
+        r#"{"weflow":{"version":"1.0.0"},"session":{"wxid":"launch-room@chatroom","nickname":"Launch Room","remark":"","displayName":"Launch Room","type":"群聊"},"messages":[{"localId":1,"createTime":1735813230,"type":"文本消息","content":"Launch readiness looks good.","isSend":0,"senderUsername":"wxid_alice","senderDisplayName":"Alice"},{"localId":2,"createTime":1735813290,"type":"文本消息","content":"I still want one more launch checklist pass.","isSend":0,"senderUsername":"wxid_bob","senderDisplayName":"Bob"},{"localId":3,"createTime":1735813350,"type":"文本消息","content":"Please remember the blocker about the payment webhook.","isSend":0,"senderUsername":"wxid_alice","senderDisplayName":"Alice"},{"localId":4,"createTime":1735813410,"type":"系统消息","content":"Room notice: reminder banner refreshed.","isSend":null,"senderUsername":"system","senderDisplayName":"System"}]}"#,
+    )?;
+
+    let (status, import_resp) = post_json(
+        &app,
+        "/chat/import",
+        json!({ "file_path": export_path.to_string_lossy().to_string() }),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(import_resp["success"], true);
+    let session_id = import_resp["sessionId"]
+        .as_str()
+        .and_then(|value| value.parse::<u64>().ok())
+        .expect("import should return sessionId");
+
+    let (status, generate_resp) =
+        post_json(&app, &format!("/session/generate/{session_id}"), json!({})).await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(generate_resp, json!(1));
+
+    let (status, sessions_resp) =
+        get_json(&app, &format!("/session/sessions/{session_id}")).await?;
+    assert_eq!(status, StatusCode::OK);
+    let chat_session_id = sessions_resp
+        .as_array()
+        .and_then(|rows| rows.first())
+        .and_then(|row| row["id"].as_u64())
+        .expect("session list should expose first chat session id");
+
+    let (status, summary_resp) = post_json(
+        &app,
+        &format!("/session/generate-summary/{session_id}/{chat_session_id}"),
+        json!({ "locale": "en-US", "forceRegenerate": true }),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(summary_resp["success"], true);
+    let summary = summary_resp["summary"]
+        .as_str()
+        .expect("summary route should return summary text");
+    assert!(summary.contains("3 messages"));
+    assert!(summary.contains("Alice"));
+    assert!(summary.contains("Bob"));
+    assert!(!summary.contains("系统消息"));
+    assert!(!summary.contains("System"));
 
     let _ = fs::remove_dir_all(&test_root);
     Ok(())

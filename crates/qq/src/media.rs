@@ -61,7 +61,8 @@ where
     I: IntoIterator<Item = P>,
     P: AsRef<Path>,
 {
-    paths.into_iter()
+    paths
+        .into_iter()
         .filter_map(|path| {
             let path = path.as_ref();
             let metadata = fs::metadata(path).ok()?;
@@ -91,10 +92,22 @@ mod tests {
 
     #[test]
     fn classifies_common_media_extensions() {
-        assert_eq!(classify_media_path(Path::new("photo.jpg")), QQMediaKind::Image);
-        assert_eq!(classify_media_path(Path::new("video.mp4")), QQMediaKind::Video);
-        assert_eq!(classify_media_path(Path::new("audio.ogg")), QQMediaKind::Audio);
-        assert_eq!(classify_media_path(Path::new("report.pdf")), QQMediaKind::Document);
+        assert_eq!(
+            classify_media_path(Path::new("photo.jpg")),
+            QQMediaKind::Image
+        );
+        assert_eq!(
+            classify_media_path(Path::new("video.mp4")),
+            QQMediaKind::Video
+        );
+        assert_eq!(
+            classify_media_path(Path::new("audio.ogg")),
+            QQMediaKind::Audio
+        );
+        assert_eq!(
+            classify_media_path(Path::new("report.pdf")),
+            QQMediaKind::Document
+        );
     }
 
     #[test]
@@ -110,7 +123,10 @@ mod tests {
     }
     #[test]
     fn classifies_unknown_extensions_as_unknown() {
-        assert_eq!(classify_media_path(Path::new("mystery.bin")), QQMediaKind::Unknown);
+        assert_eq!(
+            classify_media_path(Path::new("mystery.bin")),
+            QQMediaKind::Unknown
+        );
     }
 
     #[test]
@@ -122,5 +138,4 @@ mod tests {
         let assets = collect_media_assets([nested_dir.as_path()]);
         assert!(assets.is_empty());
     }
-
 }

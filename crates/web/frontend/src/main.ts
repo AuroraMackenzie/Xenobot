@@ -7,6 +7,17 @@ import ui from "@nuxt/ui/vue-plugin";
 import i18n from "./i18n";
 import "./assets/styles/main.css";
 
+const THEME_STORAGE_KEY = "vueuse-color-scheme";
+const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+
+if (!savedTheme) {
+  window.localStorage.setItem(THEME_STORAGE_KEY, "dark");
+}
+
+if ((savedTheme ?? "dark") === "dark") {
+  document.documentElement.classList.add("dark");
+}
+
 const app = createApp(App);
 
 const pinia = createPinia();

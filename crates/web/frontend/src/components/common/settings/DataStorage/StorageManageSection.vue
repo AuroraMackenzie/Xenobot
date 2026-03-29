@@ -26,7 +26,6 @@ interface CacheInfo {
 // English engineering note.
 const cacheInfo = ref<CacheInfo | null>(null);
 const isLoading = ref(false);
-const clearingId = ref<string | null>(null);
 const dataDir = ref("");
 const isCustomDataDir = ref(false);
 const isUpdatingDataDir = ref(false);
@@ -78,27 +77,6 @@ async function loadDataDir() {
       "[StorageManageSection] Failed to load data directory:",
       error,
     );
-  }
-}
-
-// English engineering note.
-async function clearCache(cacheId: string) {
-  clearingId.value = cacheId;
-  try {
-    const result = await window.cacheApi.clear(cacheId);
-    if (result.success) {
-      // English engineering note.
-      await loadCacheInfo();
-    } else {
-      console.error(
-        "[StorageManageSection] Failed to clear cache:",
-        result.error,
-      );
-    }
-  } catch (error) {
-    console.error("[StorageManageSection] Failed to clear cache:", error);
-  } finally {
-    clearingId.value = null;
   }
 }
 
@@ -305,18 +283,6 @@ defineExpose({
             </div>
             <!-- English UI note -->
             <div class="ml-4 flex w-36 shrink-0 items-center justify-end gap-1">
-              <UButton
-                v-if="dir.canClear && dir.size > 0"
-                icon="i-heroicons-trash"
-                variant="soft"
-                color="red"
-                size="xs"
-                :loading="clearingId === dir.id"
-                :disabled="clearingId !== null"
-                @click="clearCache(dir.id)"
-              >
-                {{ t("settings.storage.clear") }}
-              </UButton>
               <UButton
                 icon="i-heroicons-folder-open"
                 variant="ghost"

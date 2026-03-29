@@ -46,23 +46,6 @@ async function handleModalSaved() {
   emit("config-changed");
 }
 
-async function deleteConfig(id: string) {
-  try {
-    const result = await window.llmApi.deleteConfig(id);
-    if (result.success) {
-      await llmStore.refreshConfigs();
-      emit("config-changed");
-    } else {
-      console.error(
-        "[AIModelConfigTab] Failed to delete configuration:",
-        result.error,
-      );
-    }
-  } catch (error) {
-    console.error("[AIModelConfigTab] Failed to delete configuration:", error);
-  }
-}
-
 async function setActive(id: string) {
   const success = await llmStore.setActiveConfig(id);
   if (success) {
@@ -191,13 +174,6 @@ onMounted(() => {
             variant="ghost"
             icon="i-heroicons-pencil-square"
             @click="openEditModal(config)"
-          />
-          <UButton
-            size="xs"
-            color="error"
-            variant="ghost"
-            icon="i-heroicons-trash"
-            @click="deleteConfig(config.id)"
           />
         </div>
       </div>

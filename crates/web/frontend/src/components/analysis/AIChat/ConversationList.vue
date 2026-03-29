@@ -33,7 +33,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   select: [id: string];
   create: [];
-  delete: [id: string];
 }>();
 
 // State
@@ -101,17 +100,6 @@ async function saveTitle(convId: string) {
     }
   }
   editingId.value = null;
-}
-
-// English engineering note.
-async function handleDelete(convId: string) {
-  try {
-    await window.aiApi.deleteConversation(convId);
-    conversations.value = conversations.value.filter((c) => c.id !== convId);
-    emit("delete", convId);
-  } catch (error) {
-    console.error("[ConversationList] Failed to delete conversation:", error);
-  }
 }
 
 // English engineering note.
@@ -385,14 +373,6 @@ defineExpose({
                     size="2xs"
                     class="text-gray-400 hover:text-primary-500 dark:hover:text-primary-400"
                     @click="startEditing(conv)"
-                  />
-                  <UButton
-                    icon="i-heroicons-trash"
-                    color="gray"
-                    variant="ghost"
-                    size="2xs"
-                    class="text-gray-400 hover:text-primary-500 dark:hover:text-primary-400"
-                    @click="handleDelete(conv.id)"
                   />
                 </div>
               </div>

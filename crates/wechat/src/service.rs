@@ -203,7 +203,8 @@ impl WeChatService {
         I: IntoIterator<Item = P>,
         P: AsRef<Path>,
     {
-        paths.into_iter()
+        paths
+            .into_iter()
             .map(|path| {
                 let source_path = path.as_ref().to_path_buf();
                 let parsed = self.parse_authorized_export(&source_path)?;
@@ -234,7 +235,9 @@ impl WeChatService {
             })
             .collect::<Result<_, WeChatError>>()?;
 
-        Ok(collect_media_assets(authorized_paths.iter().map(PathBuf::as_path)))
+        Ok(collect_media_assets(
+            authorized_paths.iter().map(PathBuf::as_path),
+        ))
     }
 
     /// Build an aggregated legal-safe workspace from explicit exports and assets.
@@ -863,10 +866,7 @@ mod tests {
         }
 
         fn extract_keys(&self, _pid: u32) -> Result<(String, String), String> {
-            self.key_result
-                .lock()
-                .expect("mock detector lock")
-                .clone()
+            self.key_result.lock().expect("mock detector lock").clone()
         }
     }
 
@@ -899,7 +899,9 @@ mod tests {
         )
     }
 
-    fn account_signatures(accounts: &[Account]) -> Vec<(u32, String, String, String, String, String, bool)> {
+    fn account_signatures(
+        accounts: &[Account],
+    ) -> Vec<(u32, String, String, String, String, String, bool)> {
         accounts.iter().map(account_signature).collect()
     }
 
@@ -944,7 +946,9 @@ mod tests {
         let accounts = service.discover_accounts();
 
         assert!(!accounts.is_empty());
-        assert!(accounts.iter().all(|account| !account.name.trim().is_empty()));
+        assert!(accounts
+            .iter()
+            .all(|account| !account.name.trim().is_empty()));
     }
 
     #[test]
@@ -953,7 +957,10 @@ mod tests {
         let discovered = service.discover_accounts();
         let exposed = service.get_accounts();
 
-        assert_eq!(account_signatures(&exposed), account_signatures(&discovered));
+        assert_eq!(
+            account_signatures(&exposed),
+            account_signatures(&discovered)
+        );
     }
 
     #[test]
@@ -969,7 +976,10 @@ mod tests {
             .expect("authorized media inventory");
 
         assert_eq!(inventory.len(), 1);
-        assert_eq!(inventory[0].kind, crate::media::WeChatMediaKind::EncryptedDatImage);
+        assert_eq!(
+            inventory[0].kind,
+            crate::media::WeChatMediaKind::EncryptedDatImage
+        );
     }
 
     #[test]
@@ -999,19 +1009,21 @@ mod tests {
         assert!(service.create_export_monitor(dir.path()).is_ok());
     }
 
-
     #[test]
     fn build_authorized_workspace_rejects_unauthorized_media_paths() {
         let export_dir = tempdir().expect("tempdir");
         let media_dir = tempdir().expect("tempdir");
         let export = export_dir.path().join("wechat_fixture.json");
         let media = media_dir.path().join("preview.jpg");
-        write_fixture(&export, r#"[{"msgSvrId":"1","type":1,"createTime":1735813230,"talker":"alice","content":"hello wechat"}]"#);
+        write_fixture(
+            &export,
+            r#"[{"msgSvrId":"1","type":1,"createTime":1735813230,"talker":"alice","content":"hello wechat"}]"#,
+        );
         std::fs::write(&media, [1_u8, 2, 3]).expect("media fixture");
 
-        let service = WeChatService::new(WeChatConfig::with_authorized_roots([
-            export_dir.path().to_path_buf(),
-        ]))
+        let service = WeChatService::new(WeChatConfig::with_authorized_roots([export_dir
+            .path()
+            .to_path_buf()]))
         .expect("service");
 
         match service.build_authorized_workspace([export.as_path()], [media.as_path()]) {
@@ -1024,12 +1036,14 @@ mod tests {
     fn build_authorized_workspace_rejects_unauthorized_export_paths() {
         let export_dir = tempdir().expect("tempdir");
         let unauthorized_dir = tempdir().expect("tempdir");
-        let export = unauthorized_dir.path().join("wechat_unauthorized_fixture.dat");
+        let export = unauthorized_dir
+            .path()
+            .join("wechat_unauthorized_fixture.dat");
         std::fs::write(&export, [1_u8, 2, 3]).expect("export fixture");
 
-        let service = WeChatService::new(WeChatConfig::with_authorized_roots([
-            export_dir.path().to_path_buf(),
-        ]))
+        let service = WeChatService::new(WeChatConfig::with_authorized_roots([export_dir
+            .path()
+            .to_path_buf()]))
         .expect("service");
 
         match service.build_authorized_workspace([export.as_path()], std::iter::empty::<&Path>()) {
@@ -1130,7 +1144,11 @@ mod tests {
         let service = WeChatService::new(WeChatConfig::with_authorized_roots([dir.path()]))
             .expect("service should build");
         let (workspace, monitor) = service
-            .prepare_authorized_workspace([export.as_path()], std::iter::empty::<&Path>(), Some(dir.path()))
+            .prepare_authorized_workspace(
+                [export.as_path()],
+                std::iter::empty::<&Path>(),
+                Some(dir.path()),
+            )
             .expect("workspace and monitor should build");
         let workspace_accounts: Vec<_> = workspace
             .accounts
@@ -1225,7 +1243,10 @@ mod tests {
         let output = output_dir.path().join("voice.mp3");
         fs::write(&input, [1_u8, 2, 3]).expect("write input");
 
-        let service = WeChatService::new(WeChatConfig::with_authorized_roots([input_dir.path().to_path_buf()])).expect("service should build");
+        let service = WeChatService::new(WeChatConfig::with_authorized_roots([input_dir
+            .path()
+            .to_path_buf()]))
+        .expect("service should build");
         let error = service
             .transcode_audio_asset_to_mp3(&input, &output, &AudioTranscodeOptions::default())
             .expect_err("unauthorized output directory should fail");
@@ -1246,9 +1267,9 @@ mod tests {
         let output = output_dir.path().join("voice.mp3");
         fs::write(&input, [1_u8, 2, 3]).expect("write input");
 
-        let service = WeChatService::new(WeChatConfig::with_authorized_roots([
-            output_dir.path().to_path_buf(),
-        ]))
+        let service = WeChatService::new(WeChatConfig::with_authorized_roots([output_dir
+            .path()
+            .to_path_buf()]))
         .expect("service should build");
         let error = service
             .transcode_audio_asset_to_mp3(&input, &output, &AudioTranscodeOptions::default())
@@ -1362,8 +1383,11 @@ mod tests {
         ));
 
         service.add_authorized_root(input_dir.path().to_path_buf());
-        let result =
-            service.transcode_audio_asset_to_mp3(&input, &output, &AudioTranscodeOptions::default());
+        let result = service.transcode_audio_asset_to_mp3(
+            &input,
+            &output,
+            &AudioTranscodeOptions::default(),
+        );
         assert!(
             !matches!(result, Err(WeChatError::UnauthorizedPath { .. })),
             "runtime authorization should move audio validation beyond authorization checks"
@@ -1377,9 +1401,9 @@ mod tests {
         let asset = dir.path().join("image.dat");
         fs::write(&asset, [1_u8, 2, 3]).expect("write media asset");
 
-        let mut service = WeChatService::new(WeChatConfig::with_authorized_roots([
-            other_dir.path().to_path_buf(),
-        ]))
+        let mut service = WeChatService::new(WeChatConfig::with_authorized_roots([other_dir
+            .path()
+            .to_path_buf()]))
         .expect("service should build");
         assert!(matches!(
             service.collect_media_inventory([asset.as_path()]),
@@ -1402,24 +1426,30 @@ mod tests {
         let output = output_dir.path().join("voice.mp3");
         fs::write(&input, []).expect("audio input");
 
-        let mut service = WeChatService::new(WeChatConfig::with_authorized_roots([
-            input_dir.path().to_path_buf(),
-        ]))
+        let mut service = WeChatService::new(WeChatConfig::with_authorized_roots([input_dir
+            .path()
+            .to_path_buf()]))
         .expect("service should build");
         assert!(matches!(
-            service.transcode_audio_asset_to_mp3(&input, &output, &AudioTranscodeOptions::default()),
+            service.transcode_audio_asset_to_mp3(
+                &input,
+                &output,
+                &AudioTranscodeOptions::default()
+            ),
             Err(WeChatError::UnauthorizedPath { .. })
         ));
 
         service.add_authorized_root(output_dir.path().to_path_buf());
-        let result =
-            service.transcode_audio_asset_to_mp3(&input, &output, &AudioTranscodeOptions::default());
+        let result = service.transcode_audio_asset_to_mp3(
+            &input,
+            &output,
+            &AudioTranscodeOptions::default(),
+        );
         assert!(
             !matches!(result, Err(WeChatError::UnauthorizedPath { .. })),
             "runtime authorization should move audio validation beyond output authorization checks"
         );
     }
-
 
     #[test]
     fn export_only_workspace_is_not_empty_and_preserves_account_views() {
@@ -1430,8 +1460,10 @@ mod tests {
             r#"[{"msg_id":"1","type":1,"is_sender":false,"sender_name":"Alice","sender_id":"wxid_alice","create_time":1735813230,"content":"hello wechat"}]"#,
         );
 
-        let service = WeChatService::new(WeChatConfig::with_authorized_roots([dir.path().to_path_buf()]))
-            .expect("service should initialize");
+        let service = WeChatService::new(WeChatConfig::with_authorized_roots([dir
+            .path()
+            .to_path_buf()]))
+        .expect("service should initialize");
         let workspace = service
             .build_authorized_workspace([export.as_path()], std::iter::empty::<&Path>())
             .expect("export-only workspace should build");
@@ -1440,7 +1472,9 @@ mod tests {
         assert_eq!(workspace.media_count(), 0);
         assert!(!workspace.is_empty());
         assert_eq!(workspace.accounts.len(), service.discover_accounts().len());
-        let expected_primary = service.primary_account().map(|account| account_signature(&account));
+        let expected_primary = service
+            .primary_account()
+            .map(|account| account_signature(&account));
         let actual_primary = workspace.primary_account.as_ref().map(account_signature);
         assert_eq!(actual_primary, expected_primary);
     }
@@ -1461,7 +1495,10 @@ mod tests {
         assert_eq!(workspace.export_count(), 0);
         assert_eq!(workspace.media_count(), 1);
         assert!(!workspace.is_empty());
-        assert_eq!(account_signatures(&workspace.accounts), account_signatures(&service.discover_accounts()));
+        assert_eq!(
+            account_signatures(&workspace.accounts),
+            account_signatures(&service.discover_accounts())
+        );
         assert_eq!(
             workspace.primary_account.as_ref().map(account_signature),
             service.primary_account().as_ref().map(account_signature)
@@ -1481,7 +1518,10 @@ mod tests {
 
         assert!(monitor.is_none());
         assert!(workspace.watch_dir.is_none());
-        assert_eq!(account_signatures(&workspace.accounts), account_signatures(&service.discover_accounts()));
+        assert_eq!(
+            account_signatures(&workspace.accounts),
+            account_signatures(&service.discover_accounts())
+        );
         assert_eq!(
             workspace.primary_account.as_ref().map(account_signature),
             service.primary_account().as_ref().map(account_signature)
@@ -1516,7 +1556,10 @@ mod tests {
         let workspace = service
             .build_authorized_workspace(std::iter::empty::<&Path>(), std::iter::empty::<&Path>())
             .expect("workspace should build");
-        assert_eq!(account_signatures(&workspace.accounts), account_signatures(&service.discover_accounts()));
+        assert_eq!(
+            account_signatures(&workspace.accounts),
+            account_signatures(&service.discover_accounts())
+        );
         assert_eq!(
             workspace.primary_account.as_ref().map(account_signature),
             service.primary_account().as_ref().map(account_signature)
@@ -1574,15 +1617,18 @@ mod tests {
         let dir = tempdir().expect("tempdir");
         let input = dir.path().join("message.db");
 
-        let output = build_output_path_from_work_dir(
-            dir.path().to_string_lossy().as_ref(),
-            &input,
-            7788,
-        );
+        let output =
+            build_output_path_from_work_dir(dir.path().to_string_lossy().as_ref(), &input, 7788);
 
-        assert_eq!(output.file_name().and_then(|name| name.to_str()), Some("message.db"));
         assert_eq!(
-            output.parent().and_then(|path| path.file_name()).and_then(|name| name.to_str()),
+            output.file_name().and_then(|name| name.to_str()),
+            Some("message.db")
+        );
+        assert_eq!(
+            output
+                .parent()
+                .and_then(|path| path.file_name())
+                .and_then(|name| name.to_str()),
             Some("7788")
         );
     }
@@ -1591,7 +1637,10 @@ mod tests {
     async fn detect_instances_updates_runtime_account_cache() {
         let dir = tempdir().expect("tempdir");
         let account = running_account(42, dir.path());
-        let detector = Arc::new(MockDetector::new(vec![account.clone()], Err("unused".into())));
+        let detector = Arc::new(MockDetector::new(
+            vec![account.clone()],
+            Err("unused".into()),
+        ));
         let service = WeChatService::new_with_detector(WeChatConfig::default(), detector);
 
         let instances = service.detect_instances().await.expect("detect instances");
@@ -1736,7 +1785,11 @@ mod tests {
         fs::write(&input, [0u8; 16]).expect("write input");
 
         let mut config = WeChatConfig::with_authorized_roots([input_dir.path()]);
-        config.work_dir = output_dir.path().join("wechat-out").to_string_lossy().into_owned();
+        config.work_dir = output_dir
+            .path()
+            .join("wechat-out")
+            .to_string_lossy()
+            .into_owned();
         let service = WeChatService::new(config).expect("service should build");
         service.keys.insert(88, (vec![0x11; 32], vec![0x22; 16]));
 
@@ -1761,7 +1814,8 @@ mod tests {
         fs::write(&input, [0u8; 16]).expect("write input");
 
         let work_root = work_dir.path().join("wechat-work");
-        let mut config = WeChatConfig::with_authorized_roots([input_dir.path(), work_root.as_path()]);
+        let mut config =
+            WeChatConfig::with_authorized_roots([input_dir.path(), work_root.as_path()]);
         config.work_dir = work_root.to_string_lossy().into_owned();
 
         let mut service = WeChatService::new(config).expect("service should build");
@@ -1802,7 +1856,8 @@ mod tests {
 
     #[test]
     fn primary_account_belongs_to_discovered_accounts_when_present() {
-        let service = WeChatService::new(WeChatConfig::default()).expect("service should initialize");
+        let service =
+            WeChatService::new(WeChatConfig::default()).expect("service should initialize");
         let accounts = service.discover_accounts();
         let account_signatures = account_signatures(&accounts);
 
@@ -1813,7 +1868,8 @@ mod tests {
 
     #[test]
     fn workspace_primary_account_belongs_to_workspace_accounts_when_present() {
-        let service = WeChatService::new(WeChatConfig::default()).expect("service should initialize");
+        let service =
+            WeChatService::new(WeChatConfig::default()).expect("service should initialize");
         let workspace = service
             .build_authorized_workspace(std::iter::empty::<&Path>(), std::iter::empty::<&Path>())
             .expect("workspace should build");
@@ -1823,8 +1879,6 @@ mod tests {
             assert!(account_signatures.contains(&account_signature(&primary)));
         }
     }
-
-
 
     #[test]
     fn prepared_workspace_with_monitor_preserves_export_and_media_counts() {
@@ -1837,8 +1891,10 @@ mod tests {
         );
         fs::write(&asset, [1_u8, 2, 3]).expect("write media");
 
-        let service = WeChatService::new(WeChatConfig::with_authorized_roots([dir.path().to_path_buf()]))
-            .expect("service should initialize");
+        let service = WeChatService::new(WeChatConfig::with_authorized_roots([dir
+            .path()
+            .to_path_buf()]))
+        .expect("service should initialize");
         let (workspace, monitor) = service
             .prepare_authorized_workspace([export.as_path()], [asset.as_path()], Some(dir.path()))
             .expect("workspace and monitor should build");
@@ -1848,12 +1904,10 @@ mod tests {
         assert_eq!(workspace.media_count(), 1);
         assert_eq!(workspace.watch_dir.as_deref(), Some(dir.path()));
         assert_eq!(workspace.accounts.len(), service.discover_accounts().len());
-        let expected_primary = service.primary_account().map(|account| account_signature(&account));
-        let actual_primary = workspace
-            .primary_account
-            .as_ref()
-            .map(account_signature);
+        let expected_primary = service
+            .primary_account()
+            .map(|account| account_signature(&account));
+        let actual_primary = workspace.primary_account.as_ref().map(account_signature);
         assert_eq!(actual_primary, expected_primary);
     }
-
 }
