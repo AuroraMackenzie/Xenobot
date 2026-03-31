@@ -14,7 +14,8 @@
 
 ---
 
-## English
+<details open>
+<summary><strong id="english">English</strong></summary>
 
 ### Scope
 Xenobot is a Rust-native chat data engineering project for authorized exports, incremental database ingestion, analytics, and LLM-assisted workflows.
@@ -294,7 +295,10 @@ Notes:
 
 ---
 
-## Español
+</details>
+
+<details>
+<summary><strong id="español">Español</strong></summary>
 
 ### Alcance
 Xenobot es un proyecto de ingeniería de datos de chat, nativo en Rust, orientado a exportaciones autorizadas, ingestión incremental en base de datos, analítica y flujos de trabajo asistidos por LLM.
@@ -574,7 +578,10 @@ Notas:
 
 ---
 
-## 中文
+</details>
+
+<details>
+<summary><strong id="中文">中文</strong></summary>
 
 ### 项目范围
 Xenobot 是一个以 Rust 为底层的聊天数据工程项目，面向授权导出、增量数据库导入、分析能力以及 LLM 辅助工作流。
@@ -851,3 +858,5 @@ scripts/xb quality gate --messages 1200
 - 质量门禁默认包含进程内 API smoke 合同（`/health` + SQL generate + SQL execute`）。
 - `--skip-mcp` 仅应用于事故排查时的 MCP 临时隔离。
 - `--skip-smoke` 仅应用于事故排查时的 smoke 临时隔离。
+
+</details>
