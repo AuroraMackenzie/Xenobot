@@ -1,16 +1,12 @@
-<div align="center">
-  <img src="docs/assets/xenobot.png" width="260" alt="Xenobot">
+# Xenobot
 
-  <h1>Xenobot</h1>
-  <p><strong>Don’t Lose Memories, Xenobot Keeps Them</strong></p>
-  <p>Rust-native chat data engineering for authorized exports, incremental database ingestion, analytics, and LLM-assisted workflows.</p>
+![Xenobot](docs/assets/xenobot.png)
 
-  <p>
-    <a href="#english">English</a> |
-    <a href="#español">Español</a> |
-    <a href="#中文">中文</a>
-  </p>
-</div>
+**Don’t Lose Memories, Xenobot Keeps Them**
+
+Rust-native chat data engineering for authorized exports, incremental database ingestion, analytics, and LLM-assisted workflows.
+
+[English](#english) | [Español](#español) | [中文](#中文)
 
 ---
 
