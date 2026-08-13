@@ -1,3 +1,5 @@
+
+
 <div align="center">
   <img src="docs/assets/xenobot.png" width="260" alt="Xenobot">
 
@@ -97,7 +99,7 @@ Latest execution evidence (2026-03-05 UTC in current environment):
 ```bash
 git clone https://github.com/AuroraMackenzie/Xenobot.git
 cd Xenobot
-export DATABASE_URL="sqlite://$(pwd)/test.db"
+export DATABASE_URL="sqlite:test.db"
 cargo test -p xenobot-api -p xenobot-cli --features "api,analysis" --offline
 cargo run -p xenobot-cli --features "api,analysis" -- api smoke
 ```
@@ -218,7 +220,7 @@ scripts/xb api status --format json
 
 # 2) If sqlx macros require DATABASE_URL during test/build:
 cd Xenobot
-export DATABASE_URL="sqlite://$(pwd)/test.db"
+export DATABASE_URL="sqlite:test.db"
 cargo test -p xenobot-api -p xenobot-cli --features "api,analysis" --offline
 
 # 3) If transient rust metadata cache error appears (missing .rmeta):
